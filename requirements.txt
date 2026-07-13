@@ -8,7 +8,7 @@ Pillow>=10.0.0
 imageio>=2.30.0
 
 # 3DGS & COLMAP libraries
-pycolmap>=0.6.0
+pycolmap==4.1.0
 ninja
 jaxtyping
 rich
