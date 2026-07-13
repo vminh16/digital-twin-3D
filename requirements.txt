@@ -17,7 +17,7 @@ rich
 gsplat==1.4.0
 
 # Evaluation metrics
-lpips>=0.1.4
+lpips==0.1.4
 torchmetrics>=1.0.0
 
 # CLI and Config parsing
