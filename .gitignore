@@ -38,9 +38,9 @@ env/
 *.swo
 
 # Project specific ignores
-data/
-runs/
-outputs/
+/data/
+/runs/
+/outputs/
 __MACOSX/
 *.zip
 *.rar
