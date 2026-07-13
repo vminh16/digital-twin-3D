@@ -1,0 +1,29 @@
+# PyTorch and CUDA dependencies (assumed pre-installed in Docker or installed manually)
+# Note: For local or VM setup, install PyTorch with appropriate CUDA support first.
+
+# Core numeric & vision libraries
+numpy==1.26.4
+opencv-python>=4.8.0
+Pillow>=10.0.0
+imageio>=2.30.0
+
+# 3DGS & COLMAP libraries
+pycolmap>=0.6.0
+ninja
+jaxtyping
+rich
+
+# gsplat - pinned to version 1.4.0
+gsplat==1.4.0
+
+# Evaluation metrics
+lpips>=0.1.4
+torchmetrics>=1.0.0
+
+# CLI and Config parsing
+tyro>=0.5.0
+PyYAML>=6.0
+
+# Logging & Testing
+tensorboard>=2.15.0
+pytest>=7.4.0
