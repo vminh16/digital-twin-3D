@@ -55,7 +55,7 @@ def test_gsplat_smoke():
         # Quaternions [w, x, y, z]
         quats = torch.tensor([[1.0, 0.0, 0.0, 0.0]] * N, dtype=torch.float32, device="cuda", requires_grad=True)
         scales = torch.ones(N, 3, dtype=torch.float32, device="cuda", requires_grad=True)
-        opacities = torch.sigmoid(torch.randn(N, 1, dtype=torch.float32, device="cuda", requires_grad=True))
+        opacities = torch.sigmoid(torch.randn(N, dtype=torch.float32, device="cuda", requires_grad=True))
         colors = torch.rand(N, 3, dtype=torch.float32, device="cuda", requires_grad=True)
         
         # Setup dummy Camera Extrinsics (World-to-Camera, 4x4 matrix)
