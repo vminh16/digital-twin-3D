@@ -31,7 +31,6 @@ def test_gpu_cuda():
             print(f"  Device {i}: {torch.cuda.get_device_name(i)}")
     else:
         print("WARNING: CUDA is not available. Running on CPU.")
-    return cuda_available
 
 def test_gsplat_smoke():
     print("\n=== Test 3: gsplat Forward & Backward Smoke Test ===")
@@ -108,6 +107,6 @@ def test_gsplat_smoke():
 
 if __name__ == "__main__":
     test_package_import()
-    cuda_ok = test_gpu_cuda()
+    test_gpu_cuda()
     test_gsplat_smoke()
     print("\n=== Smoke Tests Finished ===")
