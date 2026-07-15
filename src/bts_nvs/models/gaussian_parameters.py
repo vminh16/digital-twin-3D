@@ -1,12 +1,46 @@
+from collections.abc import Iterator, MutableMapping
+
 import torch
 import torch.nn as nn
 
 
+_PARAMETER_NAMES = ("means", "scales", "quats", "opacities", "sh0", "shN")
+
+
+class GaussianParameterMap(MutableMapping[str, nn.Parameter]):
+    """Mutable view that keeps gsplat parameter replacement attached to the module."""
+
+    def __init__(self, owner: "GaussianParameters") -> None:
+        self._owner = owner
+
+    def __getitem__(self, name: str) -> nn.Parameter:
+        if name not in _PARAMETER_NAMES:
+            raise KeyError(name)
+        return getattr(self._owner, name)
+
+    def __setitem__(self, name: str, parameter: nn.Parameter) -> None:
+        if name not in _PARAMETER_NAMES:
+            raise KeyError(name)
+        if not isinstance(parameter, nn.Parameter):
+            raise TypeError("Gaussian parameters must be torch.nn.Parameter instances")
+        setattr(self._owner, name, parameter)
+
+    def __delitem__(self, name: str) -> None:
+        raise TypeError("Gaussian parameters cannot be deleted")
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(_PARAMETER_NAMES)
+
+    def __len__(self) -> int:
+        return len(_PARAMETER_NAMES)
+
+
 class GaussianParameters(nn.Module):
     """Container for 3D Gaussian Representation parameters.
-    
+
     Manages parameters optimized during training and exposes physical attributes.
     """
+
     def __init__(
         self,
         means: torch.Tensor,
@@ -17,7 +51,7 @@ class GaussianParameters(nn.Module):
         shN: torch.Tensor,
     ) -> None:
         """Initializes raw parameters as PyTorch nn.Parameters.
-        
+
         Args:
             means (torch.Tensor): Initial coordinates of shape (N, 3).
             scales (torch.Tensor): Initial log-scales of shape (N, 3).
@@ -27,7 +61,7 @@ class GaussianParameters(nn.Module):
             shN (torch.Tensor): Higher-order SH coefficients of shape (N, 15, 3).
         """
         super().__init__()
-        
+
         # Verify shapes
         if means.ndim != 2 or means.shape[1] != 3:
             raise ValueError(f"means must have shape (N, 3), got {means.shape}")
@@ -56,13 +90,17 @@ class GaussianParameters(nn.Module):
                 raise ValueError(f"{name} must be finite")
         if torch.any(torch.linalg.vector_norm(quats, dim=-1) < 1e-12):
             raise ValueError("quaternion norm is too small")
-            
+
         self.means = nn.Parameter(means.float())
         self.scales = nn.Parameter(scales.float())
         self.quats = nn.Parameter(quats.float())
         self.opacities = nn.Parameter(opacities.float())
         self.sh0 = nn.Parameter(sh0.float())
         self.shN = nn.Parameter(shN.float())
+
+    def parameter_map(self) -> GaussianParameterMap:
+        """Return the canonical mutable mapping expected by gsplat strategies."""
+        return GaussianParameterMap(self)
 
     @property
     def num_gaussians(self) -> int:
@@ -78,7 +116,9 @@ class GaussianParameters(nn.Module):
 
     def get_quats(self) -> torch.Tensor:
         """Computes normalized quaternions of shape (N, 4) with unit norm."""
-        return self.quats / torch.norm(self.quats, dim=-1, keepdim=True).clamp_min(1e-12)
+        return self.quats / torch.norm(self.quats, dim=-1, keepdim=True).clamp_min(
+            1e-12
+        )
 
     def get_opacities(self) -> torch.Tensor:
         """Computes opacities sigmoid(o) of shape (N,) in (0, 1)."""
@@ -92,43 +132,46 @@ class GaussianParameters(nn.Module):
         """Computes the 3D covariance matrix Sigma = R S S^T R^T of shape (N, 3, 3)."""
         q = self.get_quats()
         qw, qx, qy, qz = q[:, 0], q[:, 1], q[:, 2], q[:, 3]
-        
+
         # Precompute quaternion products
         qw2 = qw * qw
         qx2 = qx * qx
         qy2 = qy * qy
         qz2 = qz * qz
-        
+
         qwx = qw * qx
         qwy = qw * qy
         qwz = qw * qz
         qxy = qx * qy
         qxz = qx * qz
         qyz = qy * qz
-        
+
         # Compute components of rotation matrix R
         r00 = 1.0 - 2.0 * (qy2 + qz2)
         r01 = 2.0 * (qxy - qwz)
         r02 = 2.0 * (qxz + qwy)
-        
+
         r10 = 2.0 * (qxy + qwz)
         r11 = 1.0 - 2.0 * (qx2 + qz2)
         r12 = 2.0 * (qyz - qwx)
-        
+
         r20 = 2.0 * (qxz - qwy)
         r21 = 2.0 * (qyz + qwx)
         r22 = 1.0 - 2.0 * (qx2 + qy2)
-        
+
         # Stack into rotation matrix R: (N, 3, 3)
-        R = torch.stack([
-            torch.stack([r00, r01, r02], dim=-1),
-            torch.stack([r10, r11, r12], dim=-1),
-            torch.stack([r20, r21, r22], dim=-1)
-        ], dim=-2)
-        
+        R = torch.stack(
+            [
+                torch.stack([r00, r01, r02], dim=-1),
+                torch.stack([r10, r11, r12], dim=-1),
+                torch.stack([r20, r21, r22], dim=-1),
+            ],
+            dim=-2,
+        )
+
         scales = self.get_scales()  # (N, 3)
         S = torch.diag_embed(scales)  # (N, 3, 3)
-        
+
         R_S = R @ S
         covariance = R_S @ R_S.transpose(-1, -2)
         return covariance

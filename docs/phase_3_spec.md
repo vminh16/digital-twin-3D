@@ -159,15 +159,16 @@ B0 sử dụng lớp quản lý `gsplat.DefaultStrategy` để thực hiện cá
 
 ### 6.1. Quy tắc quyết định mật độ
 * **Tích lũy gradient**: Tính trung bình chuẩn gradient của projected mean $g_i$.
-* **Duplicate**: Nếu $g_i > 0.0002$ và Gaussian có kích thước nhỏ hơn 1% kích thước scene ($\frac{\max(\hat{s}_i)}{\text{scene\_scale}} < 0.01$).
-* **Split**: Nếu $g_i > 0.0002$ và Gaussian lớn ($\frac{\max(\hat{s}_i)}{\text{scene\_scale}} \ge 0.01$). Chia Gaussian lớn làm hai với hướng ngẫu nhiên và phân rã scale theo hệ số $1.6$.
-* **Pruning**: Loại bỏ các Gaussian có độ mờ thực tế thấp: $\alpha_i < 0.005$.
+* **Duplicate**: Nếu $g_i > 0.0002$ và Gaussian có kích thước không quá 1% kích thước scene ($\frac{\max(\hat{s}_i)}{\text{scene\_scale}} \le 0.01$).
+* **Split**: Nếu $g_i > 0.0002$ và Gaussian lớn ($\frac{\max(\hat{s}_i)}{\text{scene\_scale}} > 0.01$). Chia Gaussian lớn làm hai với hướng ngẫu nhiên và phân rã scale theo hệ số $1.6$.
+* **Pruning**: Chỉ loại bỏ các Gaussian có độ mờ thực tế thấp: $\alpha_i < 0.005$. Scale-based pruning của `DefaultStrategy` được vô hiệu hóa trong B0.
 * **Opacity Reset**: Mỗi $3,000$ steps, thiết lập lại toàn bộ opacity của Gaussian về giá trị cực thấp để làm sạch các điểm ảo và cho phép các vùng bị che khuất tối ưu lại.
 
 ### 6.2. Lịch trình Density Control
-* Bắt đầu densification từ step **500**.
+* Step dùng chỉ số **1-based**; không gọi strategy với step 0.
+* Bắt đầu densification tại step **500**.
 * Thực hiện densification mỗi **100** steps.
-* Dừng densification sau step **15,000**.
+* Lần densification cuối là step **14,900** và dừng tại step **15,000**.
 
 ---
 
