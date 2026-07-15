@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+import cv2
 import numpy as np
 import pytest
 import torch
@@ -246,6 +247,27 @@ def test_environment_snapshot_records_rendering_dependencies(
         "pycolmap_version",
     ):
         assert environment[key]
+
+
+def test_environment_snapshot_does_not_require_gui_opencv_distribution(
+    tmp_path: Path,
+    manifest_artifact: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    real_version = trainer_module.version
+
+    def reject_gui_opencv(package: str) -> str:
+        if package == "opencv-python":
+            raise AssertionError("GUI OpenCV distribution must not be queried")
+        return real_version(package)
+
+    monkeypatch.setattr(trainer_module, "version", reject_gui_opencv)
+    _trainer(tmp_path / "run", manifest_artifact, _MockDataset())
+    environment = json.loads(
+        (tmp_path / "run" / "environment.json").read_text(encoding="utf-8")
+    )
+
+    assert environment["opencv_version"] == cv2.__version__
 
 
 def test_train_view_diagnostic_writes_preview_and_masked_metrics(

@@ -9,6 +9,7 @@ from importlib.metadata import version
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+import cv2
 import numpy as np
 import torch
 import yaml
@@ -244,7 +245,7 @@ class Trainer:
             "pytorch_version": torch.__version__,
             "gsplat_version": version("gsplat"),
             "numpy_version": version("numpy"),
-            "opencv_version": version("opencv-python"),
+            "opencv_version": cv2.__version__,
             "pillow_version": version("Pillow"),
             "pycolmap_version": version("pycolmap"),
             "cuda_available": torch.cuda.is_available(),
