@@ -7,7 +7,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV FORCE_CUDA=1
 # SM 8.9 is for Ada Lovelace (e.g., L4, RTX 4090)
 # SM 8.0 is for Ampere (e.g., A100), SM 7.5 for Turing (e.g., T4)
-ENV TORCH_CUDA_ARCH_LIST="8.0;8.9"
+ENV TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9"
 
 # Install system dependencies (including OpenGL dependencies for OpenCV)
 RUN apt-get update && apt-get install -y --no-install-recommends \

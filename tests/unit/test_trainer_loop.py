@@ -229,6 +229,71 @@ def test_trainer_moves_loss_module_to_training_device(
     assert moved_to == [torch.device("cpu")]
 
 
+def test_environment_snapshot_records_rendering_dependencies(
+    tmp_path: Path,
+    manifest_artifact: Path,
+) -> None:
+    _trainer(tmp_path / "run", manifest_artifact, _MockDataset())
+    environment = json.loads(
+        (tmp_path / "run" / "environment.json").read_text(encoding="utf-8")
+    )
+
+    for key in (
+        "gsplat_version",
+        "numpy_version",
+        "opencv_version",
+        "pillow_version",
+        "pycolmap_version",
+    ):
+        assert environment[key]
+
+
+def test_train_view_diagnostic_writes_preview_and_masked_metrics(
+    tmp_path: Path,
+    manifest_artifact: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(trainer_module, "render_gaussians", _differentiable_render)
+    trainer = _trainer(tmp_path / "run", manifest_artifact, _MockDataset())
+    render_path = tmp_path / "preview" / "initial.png"
+    reference_path = tmp_path / "preview" / "reference.png"
+
+    metrics = trainer.evaluate_train_view(
+        0,
+        render_path=render_path,
+        reference_path=reference_path,
+    )
+
+    assert render_path.is_file()
+    assert reference_path.is_file()
+    assert metrics["psnr_db"] is not None
+    assert -1.0 <= metrics["ssim"] <= 1.0
+    assert 0.0 <= metrics["alpha_coverage"] <= 1.0
+    assert metrics["valid_fraction"] == 1.0
+
+
+def test_train_view_diagnostic_metrics_match_clamped_preview(
+    tmp_path: Path,
+    manifest_artifact: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def overbright_render(**kwargs) -> RenderResult:
+        rgb = torch.full((16, 16, 3), 2.0)
+        alpha = torch.ones((16, 16, 1))
+        return RenderResult(rgb=rgb, alpha=alpha, info={})
+
+    monkeypatch.setattr(trainer_module, "render_gaussians", overbright_render)
+    trainer = _trainer(tmp_path / "run", manifest_artifact, _MockDataset())
+
+    metrics = trainer.evaluate_train_view(
+        1,
+        render_path=tmp_path / "preview.png",
+    )
+
+    assert metrics["psnr_is_infinite"] is True
+    assert metrics["psnr_db"] is None
+
+
 def test_fresh_trainers_use_config_seed_for_camera_sampling(
     tmp_path: Path,
     manifest_artifact: Path,
@@ -262,6 +327,20 @@ def test_trainer_uses_completed_step_numbers_in_metrics(
         for line in (tmp_path / "run" / "metrics.jsonl").read_text().splitlines()
     ]
     assert [record["step"] for record in records] == [1, 2]
+
+
+def test_summary_records_total_wall_time_and_peak_vram(
+    tmp_path: Path,
+    manifest_artifact: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(trainer_module, "render_gaussians", _differentiable_render)
+    trainer = _trainer(tmp_path / "run", manifest_artifact, _MockDataset())
+    trainer.train(stop_step=1, checkpoint_every=1)
+
+    summary = json.loads((tmp_path / "run" / "summary.json").read_text())
+    assert summary["total_time_seconds"] >= 0.0
+    assert summary["max_vram_mb"] == 0.0
 
 
 @pytest.mark.parametrize("checkpoint_every", [0, -1, True])
@@ -516,3 +595,25 @@ def test_fresh_resume_matches_continuous_training_with_real_updates(
     assert compute_config_sha256(config) == resumed.config_hash
     timing = json.loads((tmp_path / "split" / "timing.json").read_text())
     assert list(timing) == ["1", "2", "3", "4"]
+
+
+def test_resume_discards_records_newer_than_checkpoint(
+    tmp_path: Path,
+    manifest_artifact: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(trainer_module, "render_gaussians", _differentiable_render)
+    output = tmp_path / "run"
+    config = _config(max_steps=4)
+    first = _trainer(output, manifest_artifact, _MockDataset(), config=config)
+    first.train(stop_step=3, checkpoint_every=1)
+
+    resumed = _trainer(output, manifest_artifact, _MockDataset(), config=config)
+    resumed.resume(output / "checkpoints" / "step_000000002.pt")
+
+    metrics = [
+        json.loads(line) for line in (output / "metrics.jsonl").read_text().splitlines()
+    ]
+    timing = json.loads((output / "timing.json").read_text())
+    assert [record["step"] for record in metrics] == [1, 2]
+    assert list(timing) == ["1", "2"]

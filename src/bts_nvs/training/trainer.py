@@ -1,15 +1,18 @@
 import hashlib
 import json
+import os
 import platform
 import random
 import sys
 import time
+from importlib.metadata import version
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 import numpy as np
 import torch
 import yaml
+from PIL import Image
 
 from bts_nvs.cameras.poses import camera_center_from_world_to_camera
 from bts_nvs.data.dataset import SceneDataset
@@ -19,6 +22,42 @@ from bts_nvs.models.optimizer import setup_mean_scheduler, setup_optimizers
 from bts_nvs.rendering.density_strategy import GsplatStrategy
 from bts_nvs.rendering.gsplat_renderer import render_gaussians
 from bts_nvs.training.checkpoint import load_checkpoint, save_checkpoint, set_rng_states
+
+
+def _atomic_write_text(path: Path, text: str) -> None:
+    temporary = path.with_name(f".{path.name}.tmp")
+    temporary.write_text(text, encoding="utf-8")
+    os.replace(temporary, path)
+
+
+def _truncate_run_records(output_dir: Path, completed_step: int) -> None:
+    metrics_path = output_dir / "metrics.jsonl"
+    if metrics_path.is_file():
+        records = [
+            json.loads(line)
+            for line in metrics_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        retained = [
+            record for record in records if record.get("step", -1) <= completed_step
+        ]
+        text = "".join(
+            json.dumps(record, allow_nan=False) + "\n" for record in retained
+        )
+        _atomic_write_text(metrics_path, text)
+
+    timing_path = output_dir / "timing.json"
+    if timing_path.is_file():
+        timing = json.loads(timing_path.read_text(encoding="utf-8"))
+        if not isinstance(timing, dict):
+            raise ValueError("timing.json must contain an object")
+        retained_timing = {
+            key: value for key, value in timing.items() if int(key) <= completed_step
+        }
+        _atomic_write_text(
+            timing_path,
+            json.dumps(retained_timing, indent=2, allow_nan=False),
+        )
 
 
 def compute_file_sha256(filepath: Path) -> str:
@@ -166,6 +205,8 @@ class Trainer:
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.gaussians.to(self.device)
+        if self.device.type == "cuda":
+            torch.cuda.reset_peak_memory_stats(self.device)
 
         # Calculate SHA256 of manifest
         if not self.manifest_json_path.is_file():
@@ -201,9 +242,23 @@ class Trainer:
             "python_version": sys.version,
             "platform": platform.platform(),
             "pytorch_version": torch.__version__,
+            "gsplat_version": version("gsplat"),
+            "numpy_version": version("numpy"),
+            "opencv_version": version("opencv-python"),
+            "pillow_version": version("Pillow"),
+            "pycolmap_version": version("pycolmap"),
             "cuda_available": torch.cuda.is_available(),
+            "cuda_runtime": torch.version.cuda,
+            "device": str(self.device),
             "device_name": (
-                torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU"
+                torch.cuda.get_device_name(self.device)
+                if self.device.type == "cuda"
+                else "CPU"
+            ),
+            "device_capability": (
+                list(torch.cuda.get_device_capability(self.device))
+                if self.device.type == "cuda"
+                else None
             ),
         }
         environment_path = self.output_dir / "environment.json"
@@ -261,6 +316,75 @@ class Trainer:
         self.start_step = 0
         self.active_sh_degree = 0
 
+    @torch.no_grad()
+    def evaluate_train_view(
+        self,
+        index: int,
+        *,
+        render_path: str | Path,
+        reference_path: str | Path | None = None,
+    ) -> dict[str, float | bool | None]:
+        """Render one fixed train camera and report masked smoke metrics."""
+        sample = self.dataset[index]
+        if sample.distortion.model != "PINHOLE":
+            raise ValueError("diagnostics require an undistorted PINHOLE sample")
+        normalized_w2c = _normalize_world_to_camera(
+            sample.world_to_camera,
+            self.dataset.manifest.normalization_transform,
+        )
+        result = render_gaussians(
+            gaussians=self.gaussians,
+            viewmat=torch.from_numpy(normalized_w2c).to(self.device),
+            intrinsics=sample.intrinsics,
+            active_sh_degree=self.active_sh_degree,
+            render_mode="RGB",
+        )
+        prediction = result.rgb.float()
+        target = (
+            torch.from_numpy(sample.image).to(device=self.device, dtype=torch.float32)
+            / 255.0
+        )
+        mask = torch.from_numpy(sample.valid_mask).to(self.device)
+        if (
+            not torch.isfinite(prediction).all()
+            or not torch.isfinite(result.alpha).all()
+        ):
+            raise FloatingPointError("non-finite diagnostic render")
+
+        metric_prediction = prediction.clamp(0.0, 1.0)
+        valid_prediction = metric_prediction[mask]
+        valid_target = target[mask]
+        mse = torch.mean((valid_prediction - valid_target).square()).item()
+        psnr_db = None if mse == 0.0 else float(-10.0 * np.log10(mse))
+        ssim = float(
+            1.0
+            - self.loss_fn.ssim_loss(metric_prediction, target, mask)
+            .detach()
+            .cpu()
+            .item()
+        )
+        alpha = result.alpha[..., 0] if result.alpha.ndim == 3 else result.alpha
+        alpha_coverage = float(((alpha > 1e-4) & mask).sum().item() / mask.sum().item())
+        rgb_std = float(valid_prediction.std(unbiased=False).item())
+
+        render_file = Path(render_path)
+        render_file.parent.mkdir(parents=True, exist_ok=True)
+        rendered_uint8 = metric_prediction.mul(255.0).round().byte().cpu().numpy()
+        Image.fromarray(rendered_uint8).save(render_file)
+        if reference_path is not None:
+            reference_file = Path(reference_path)
+            reference_file.parent.mkdir(parents=True, exist_ok=True)
+            Image.fromarray(sample.image).save(reference_file)
+
+        return {
+            "psnr_db": psnr_db,
+            "psnr_is_infinite": mse == 0.0,
+            "ssim": ssim,
+            "alpha_coverage": alpha_coverage,
+            "rgb_std": rgb_std,
+            "valid_fraction": float(mask.float().mean().item()),
+        }
+
     def resume(self, checkpoint_path: str | Path) -> None:
         """Loads states from a checkpoint and validates SHA256 integrity.
 
@@ -312,6 +436,9 @@ class Trainer:
         # 6. Restore RNG state
         set_rng_states(checkpoint_state["rng_states"])
 
+        # 7. Remove records written after the resumed checkpoint.
+        _truncate_run_records(self.output_dir, self.start_step)
+
     def train(
         self,
         *,
@@ -343,6 +470,9 @@ class Trainer:
             raise ValueError("checkpoint_every must be a positive integer")
         metrics_file = self.output_dir / "metrics.jsonl"
         timing_file = self.output_dir / "timing.json"
+        if self.device.type == "cuda":
+            torch.cuda.synchronize(self.device)
+        training_start_time = time.perf_counter()
 
         if timing_file.exists():
             timing_records = json.loads(timing_file.read_text(encoding="utf-8"))
@@ -498,6 +628,10 @@ class Trainer:
                     config_hash=self.config_hash,
                 )
 
+        if self.device.type == "cuda":
+            torch.cuda.synchronize(self.device)
+        total_time_seconds = time.perf_counter() - training_start_time
+
         # Write final outputs
         # 1. timing.json
         with open(timing_file, "w", encoding="utf-8") as f:
@@ -506,11 +640,12 @@ class Trainer:
         # 2. summary.json
         summary = {
             "total_steps": target_step,
+            "total_time_seconds": total_time_seconds,
             "final_loss": loss.item(),
             "final_num_gaussians": self.gaussians.num_gaussians,
             "max_vram_mb": (
-                torch.cuda.max_memory_allocated() / (1024 * 1024)
-                if torch.cuda.is_available()
+                torch.cuda.max_memory_allocated(self.device) / (1024 * 1024)
+                if self.device.type == "cuda"
                 else 0.0
             ),
         }
