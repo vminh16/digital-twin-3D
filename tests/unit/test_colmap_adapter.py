@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 import bts_nvs.data.colmap as colmap_module
-from bts_nvs.data.colmap import read_colmap_model
+from bts_nvs.data.colmap import ColmapImageRecord, read_colmap_model
 
 
 class _Rigid:
@@ -37,6 +37,18 @@ def test_pycolmap_adapter_converts_objects_to_internal_records(tmp_path, monkeyp
         name="image.JPG",
         camera_id=1,
         cam_from_world=lambda: _Rigid(),
+        points2D=[
+            SimpleNamespace(
+                xy=np.asarray([10.5, 20.25]),
+                point3D_id=100,
+                has_point3D=lambda: True,
+            ),
+            SimpleNamespace(
+                xy=np.asarray([30.0, 40.0]),
+                point3D_id=200,
+                has_point3D=lambda: True,
+            ),
+        ],
     )
     point = SimpleNamespace(
         xyz=np.array([1.0, 2.0, 3.0]),
@@ -61,6 +73,23 @@ def test_pycolmap_adapter_converts_objects_to_internal_records(tmp_path, monkeyp
     np.testing.assert_allclose(model.images[7].world_to_camera[:3, 3], [1, 2, 3])
     assert model.points3d[100].image_ids == (7, 8)
     assert model.points3d[100].rgb.dtype == np.uint8
+    np.testing.assert_array_equal(model.images[7].point3d_ids, [100, 200])
+    np.testing.assert_allclose(
+        model.images[7].points2d_xy, [[10.5, 20.25], [30, 40]]
+    )
+    assert not model.images[7].points2d_xy.flags.writeable
+
+
+def test_colmap_image_record_rejects_invalid_observation_arrays():
+    with pytest.raises(ValueError, match="observation"):
+        ColmapImageRecord(
+            1,
+            "image.JPG",
+            1,
+            np.eye(4),
+            points2d_xy=np.zeros((2, 2)),
+            point3d_ids=np.zeros((1,), dtype=np.int64),
+        )
 
 
 def test_pycolmap_adapter_rejects_wrong_installed_version(tmp_path, monkeypatch):

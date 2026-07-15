@@ -43,6 +43,7 @@ class SceneDataset:
         manifest: SceneManifest,
         scene_root: Path,
         *,
+        image_names: tuple[str, ...] | None = None,
         undistort: bool = False,
         resize: tuple[int, int] | None = None,
     ) -> None:
@@ -55,11 +56,25 @@ class SceneDataset:
         self.scene_root = Path(scene_root)
         self.undistort = bool(undistort)
         self.resize = resize
+        if image_names is None:
+            self._indices = tuple(range(len(manifest.train_image_names)))
+        else:
+            names = tuple(image_names)
+            if len(names) != len(set(names)):
+                raise ValueError("image_names must not contain duplicates")
+            index_by_name = {
+                name: index for index, name in enumerate(manifest.train_image_names)
+            }
+            unknown = [name for name in names if name not in index_by_name]
+            if unknown:
+                raise ValueError(f"image_names contains unknown train images: {unknown}")
+            self._indices = tuple(index_by_name[name] for name in names)
 
     def __len__(self) -> int:
-        return len(self.manifest.train_image_names)
+        return len(self._indices)
 
     def __getitem__(self, index: int) -> CameraSample:
+        index = self._indices[index]
         path = self.scene_root / self.manifest.train_image_paths[index]
         with Image.open(path) as source:
             image = np.asarray(source.convert("RGB"), dtype=np.uint8).copy()

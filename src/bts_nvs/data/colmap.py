@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from types import MappingProxyType
@@ -46,13 +46,30 @@ class ColmapImageRecord:
     name: str
     camera_id: int
     world_to_camera: np.ndarray
+    points2d_xy: np.ndarray = field(
+        default_factory=lambda: np.empty((0, 2), dtype=np.float64)
+    )
+    point3d_ids: np.ndarray = field(
+        default_factory=lambda: np.empty((0,), dtype=np.int64)
+    )
 
     def __post_init__(self) -> None:
         if not self.name:
             raise ValueError("COLMAP image name must not be empty")
         transform = _readonly(self.world_to_camera, np.float64)
         invert_rigid_transform(transform)
+        points2d_xy = _readonly(self.points2d_xy, np.float64)
+        point3d_ids = _readonly(self.point3d_ids, np.int64)
+        if (
+            points2d_xy.ndim != 2
+            or points2d_xy.shape[1:] != (2,)
+            or point3d_ids.shape != (len(points2d_xy),)
+            or not np.all(np.isfinite(points2d_xy))
+        ):
+            raise ValueError("COLMAP observation arrays must have aligned shapes")
         object.__setattr__(self, "world_to_camera", transform)
+        object.__setattr__(self, "points2d_xy", points2d_xy)
+        object.__setattr__(self, "point3d_ids", point3d_ids)
 
 
 @dataclass(frozen=True)
@@ -182,6 +199,16 @@ def read_colmap_model(sparse_dir: Path) -> ColmapModel:
             name=str(image.name),
             camera_id=int(image.camera_id),
             world_to_camera=world_to_camera,
+            points2d_xy=np.asarray(
+                [point.xy for point in image.points2D], dtype=np.float64
+            ).reshape(-1, 2),
+            point3d_ids=np.asarray(
+                [
+                    int(point.point3D_id) if point.has_point3D() else -1
+                    for point in image.points2D
+                ],
+                dtype=np.int64,
+            ),
         )
     points = {
         int(point_id): ColmapPointRecord(

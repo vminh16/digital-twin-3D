@@ -65,8 +65,9 @@ manifest geometry and tampered partition fail load.
 
 - [ ] **Step 5: Implement canonical hash/save/load**
 
-Hash scene ID plus sorted `(image_name, C2W)` records and normalization as
-little-endian float64 with length-prefixed UTF-8 names. JSON stores only schema,
+Hash scene ID plus sorted train-domain records (name, relative path, C2W,
+intrinsics and distortion) and normalization as little-endian float64 with
+length-prefixed UTF-8 strings. JSON stores only schema,
 scene, hash, algorithm and three name lists. Load reconstructs the dataclass,
 checks schema/hash/invariants, then compares against a freshly rebuilt split.
 
@@ -158,7 +159,9 @@ changing validation pixels cannot change output colors.
 Validate the split against the manifest, read the COLMAP model, map exact train
 names to registrations, and stream each internal-train image once. Bilinearly
 sample raw distorted coordinates; ignore non-finite/out-of-frame/unregistered
-observations. Aggregate colors by point ID, take channel median, round nonnegative
+observations. Infer integer X/Y observation-domain scale from the 99.9th
+percentile across physical-train registration geometry before bounds checks;
+do not hardcode the observed factor 4. Aggregate colors by point ID, take channel median, round nonnegative
 values half-up, and retain finite points with at least one sampled train color.
 
 - [ ] **Step 5: Run GREEN and source-data regression**

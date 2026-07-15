@@ -264,6 +264,11 @@ cách pose để giảm near-duplicate leakage.
 - Guard và validation observations không được dùng để tính color.
 - Mỗi train observation sample RGB tại raw distorted image coordinate bằng
   bilinear interpolation; invalid/out-of-frame observation bị bỏ.
+- Dữ liệu hiện tại có `points2D.xy` trong `images.bin` ở domain ảnh gốc trong
+  khi physical train image và camera calibration đã downsample. Builder suy ra
+  integer scale X/Y từ percentile 99.9 của toàn bộ physical-train observation
+  geometry, chuyển tọa độ về physical image domain trước bounds check và
+  fail-fast nếu scale vượt 64. Không hardcode factor 4 theo scene.
 - Point color là channel-wise median của valid train observation colors, round
   và cast `uint8`.
 - Point không còn valid train color observation bị loại.
