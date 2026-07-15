@@ -47,58 +47,49 @@ def test_gsplat_smoke():
         return
 
     try:
-        from gsplat import rasterization
-        
+        from bts_nvs.cameras.intrinsics import CameraIntrinsics
+        from bts_nvs.models.gaussian_parameters import GaussianParameters
+        from bts_nvs.rendering.gsplat_renderer import render_gaussians
+
         # Setup small dummy Gaussian properties
         N = 10
-        means = torch.randn(N, 3, dtype=torch.float32, device="cuda", requires_grad=True)
+        means = torch.randn(N, 3, dtype=torch.float32, device="cuda")
+        means[:, 2] += 5.0
         # Quaternions [w, x, y, z]
-        quats = torch.tensor([[1.0, 0.0, 0.0, 0.0]] * N, dtype=torch.float32, device="cuda", requires_grad=True)
-        scales = torch.ones(N, 3, dtype=torch.float32, device="cuda", requires_grad=True)
-        opacities = torch.sigmoid(torch.randn(N, dtype=torch.float32, device="cuda", requires_grad=True))
-        colors = torch.rand(N, 3, dtype=torch.float32, device="cuda", requires_grad=True)
-        
+        quats = torch.tensor([[1.0, 0.0, 0.0, 0.0]] * N, dtype=torch.float32, device="cuda")
+        scales = torch.full((N, 3), -3.0, dtype=torch.float32, device="cuda")
+        opacities = torch.zeros(N, dtype=torch.float32, device="cuda")
+        sh0 = torch.zeros((N, 1, 3), dtype=torch.float32, device="cuda")
+        shN = torch.zeros((N, 15, 3), dtype=torch.float32, device="cuda")
+        gaussians = GaussianParameters(means, scales, quats, opacities, sh0, shN)
+
         # Setup dummy Camera Extrinsics (World-to-Camera, 4x4 matrix)
         viewmat = torch.eye(4, dtype=torch.float32, device="cuda")
-        viewmats = viewmat.unsqueeze(0) # [1, 4, 4]
-        
+
         # Setup dummy Camera Intrinsics (3x3 matrix)
         # fx=500, fy=500, cx=256, cy=256
-        K = torch.tensor([
-            [500.0, 0.0, 256.0],
-            [0.0, 500.0, 256.0],
-            [0.0, 0.0, 1.0]
-        ], dtype=torch.float32, device="cuda")
-        intrinsics = K.unsqueeze(0) # [1, 3, 3]
-        
         width = 512
         height = 512
-        
+        intrinsics = CameraIntrinsics(width, height, 500.0, 500.0, 256.0, 256.0)
+
         print("Running gsplat.rasterization forward pass...")
         # Render colors [1, H, W, 3] or [H, W, 3], alphas [1, H, W, 1] or [H, W, 1]
         # depending on version of gsplat. Let's run and catch outputs.
-        res = rasterization(
-            means=means,
-            quats=quats,
-            scales=scales,
-            opacities=opacities,
-            colors=colors,
-            viewmats=viewmats,
+        result = render_gaussians(
+            gaussians=gaussians,
+            viewmat=viewmat,
             intrinsics=intrinsics,
-            width=width,
-            height=height
+            active_sh_degree=0,
         )
-        
-        # Unpack outputs based on return tuple length (usually 3 elements)
-        render_colors = res[0]
+        render_colors = result.rgb
         print(f"Forward pass completed. Render output shape: {render_colors.shape}")
-        
+
         print("Running backward pass...")
         loss = render_colors.sum()
         loss.backward()
         print("Backward pass completed successfully!")
-        print(f"Gradients computed: means.grad is not None: {means.grad is not None}")
-        
+        print(f"Gradients computed: means.grad is not None: {gaussians.means.grad is not None}")
+
     except Exception as e:
         print(f"FAILED: gsplat smoke test encountered an error:\n{e}")
         import traceback
