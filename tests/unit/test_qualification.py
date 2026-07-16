@@ -12,8 +12,10 @@ from bts_nvs.data.dataset import CameraSample
 from bts_nvs.rendering.render_result import RenderResult
 from bts_nvs.training.qualification import (
     CALIBRATION_SCENES,
+    build_full_length_report,
     build_qualification_decision,
     evaluate_internal_validation,
+    save_full_length_report,
     save_qualification_decision,
 )
 
@@ -147,3 +149,94 @@ def test_internal_validation_reports_every_image_and_ignores_invalid_border(
     assert report["valid_fraction_mean"] == pytest.approx(15 / 16)
     assert "validation.JPG" in report["images"]
     assert (tmp_path / "renders" / "validation.png").is_file()
+
+
+def test_internal_validation_can_skip_render_files(tmp_path, monkeypatch):
+    image = np.zeros((16, 16, 3), dtype=np.uint8)
+    sample = CameraSample(
+        image=image,
+        world_to_camera=np.eye(4),
+        intrinsics=CameraIntrinsics(16, 16, 8.0, 8.0, 8.0, 8.0),
+        distortion=CameraDistortion("PINHOLE", ()),
+        valid_mask=np.ones((16, 16), dtype=bool),
+        image_name="validation.JPG",
+    )
+
+    class Dataset:
+        manifest = SimpleNamespace(normalization_transform=np.eye(4))
+
+        def __len__(self):
+            return 1
+
+        def __getitem__(self, index):
+            return sample
+
+    monkeypatch.setattr(
+        qualification,
+        "render_gaussians",
+        lambda **kwargs: RenderResult(
+            torch.full((16, 16, 3), 0.1), torch.ones((16, 16, 1)), None, {}
+        ),
+    )
+    trainer = SimpleNamespace(
+        gaussians=object(), device=torch.device("cpu"), active_sh_degree=0
+    )
+    backend = lambda prediction, target: 0.0
+
+    report = evaluate_internal_validation(trainer, Dataset(), backend, None)
+
+    assert report["image_count"] == 1
+    assert tuple(tmp_path.iterdir()) == ()
+
+
+def test_full_length_report_applies_quality_and_resource_gates(tmp_path):
+    initial = {
+        "psnr_db_mean": 18.0,
+        "ssim_mean": 0.60,
+        "lpips_mean": 0.30,
+    }
+    final_train = {"psnr_db_mean": 27.0}
+    final_validation = {
+        "image_count": 8,
+        "psnr_db_mean": 23.0,
+        "ssim_mean": 0.70,
+        "lpips_mean": 0.20,
+    }
+    metrics = [
+        {"step": step, "loss": 0.1, "num_gaussians": 5_000_000}
+        for step in range(1, 30_001)
+    ]
+    timing = {str(step): {"total": 0.1} for step in range(1, 30_001)}
+
+    report = build_full_length_report(
+        scene_id="HCM0181",
+        git_commit="a" * 40,
+        initial_validation=initial,
+        final_train=final_train,
+        final_validation=final_validation,
+        summary={"total_steps": 30_000, "max_vram_mb": 8_000.0},
+        metric_records=metrics,
+        timing_records=timing,
+        convergence={"final_render_non_blank": True},
+    )
+    path = tmp_path / "report.json"
+    save_full_length_report(report, path)
+
+    assert report["automated_gates_passed"] is True
+    assert report["validation_psnr_delta_db"] == pytest.approx(5.0)
+    assert report["train_validation_psnr_gap_db"] == pytest.approx(4.0)
+    assert json.loads(path.read_text()) == report
+
+    final_validation["lpips_mean"] = 0.27
+    failed = build_full_length_report(
+        scene_id="HCM0181",
+        git_commit="a" * 40,
+        initial_validation=initial,
+        final_train=final_train,
+        final_validation=final_validation,
+        summary={"total_steps": 30_000, "max_vram_mb": 8_000.0},
+        metric_records=metrics,
+        timing_records=timing,
+        convergence={"final_render_non_blank": True},
+    )
+    assert failed["automated_gates_passed"] is False

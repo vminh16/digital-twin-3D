@@ -1,6 +1,7 @@
 import argparse
 import json
 import math
+import subprocess
 import sys
 from dataclasses import replace
 from pathlib import Path
@@ -22,10 +23,13 @@ from bts_nvs.cameras.intrinsics import CameraIntrinsics
 from bts_nvs.models.gaussian_parameters import GaussianParameters
 from bts_nvs.models.initialization import initialize_from_manifest
 from bts_nvs.rendering.gsplat_renderer import render_gaussians
+from bts_nvs.training.checkpoint import load_checkpoint
 from bts_nvs.training.trainer import Trainer
 from bts_nvs.training.qualification import (
     CALIBRATION_SCENES,
+    build_full_length_report,
     evaluate_internal_validation,
+    save_full_length_report,
     save_qualification_report,
 )
 from bts_nvs.evaluation.metrics import LpipsBackend
@@ -114,6 +118,11 @@ def parse_args():
         default=None,
         help="Run one locked Phase 4.4 candidate on the internal holdout.",
     )
+    parser.add_argument(
+        "--full_length_qualification",
+        action="store_true",
+        help="Run the locked HCM0181 Phase 4.5 30k internal-holdout dry run.",
+    )
     return parser.parse_args()
 
 
@@ -158,11 +167,94 @@ def validate_qualification_args(args) -> None:
         )
 
 
+def validate_full_length_args(args) -> None:
+    if not args.full_length_qualification:
+        return
+    if args.qualification_candidate is not None:
+        raise ValueError("full-length qualification is mutually exclusive with candidate mode")
+    if (
+        args.max_steps != 30_000
+        or args.resize_factor != 1
+        or args.checkpoint_every != 3_000
+        or args.seed != 0
+        or not args.cache_images
+        or not args.pinned_transfer
+    ):
+        raise ValueError(
+            "full-length qualification requires factor-1, seed-0, 30000 steps, "
+            "3000-step checkpoints, cached images, and pinned transfer"
+        )
+    if args.resume is not None:
+        expected = Path(args.output_dir) / "checkpoints" / "recovery.pt"
+        if Path(args.resume).resolve() != expected.resolve():
+            raise ValueError("full-length resume must use output checkpoints/recovery.pt")
+
+
+def validate_full_length_scene(scene_id: str, args) -> None:
+    if args.full_length_qualification and scene_id != "HCM0181":
+        raise ValueError("full-length qualification requires HCM0181")
+
+
+def read_clean_git_commit(repo_root: Path) -> str:
+    commit = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=repo_root, text=True
+    ).strip()
+    dirty = subprocess.check_output(
+        ["git", "status", "--porcelain", "--untracked-files=no"],
+        cwd=repo_root,
+        text=True,
+    ).strip()
+    if dirty:
+        raise RuntimeError("full-length qualification rejects a dirty tracked worktree")
+    if len(commit) != 40:
+        raise RuntimeError("git did not return a full commit SHA")
+    return commit
+
+
+def validate_recovery_checkpoint(
+    path: Path,
+    manifest_hash: str,
+    config_hash: str,
+    expected_step: int,
+) -> None:
+    state = load_checkpoint(
+        path,
+        expected_manifest_hash=manifest_hash,
+        expected_config_hash=config_hash,
+    )
+    required = {
+        "step",
+        "gaussians",
+        "optimizers",
+        "scheduler",
+        "strategy_state",
+        "active_sh_degree",
+        "rng_states",
+        "manifest_hash",
+        "config_hash",
+    }
+    missing = sorted(required.difference(state))
+    if missing:
+        raise ValueError(f"recovery checkpoint is missing: {', '.join(missing)}")
+    if state["step"] != expected_step:
+        raise ValueError(
+            f"recovery checkpoint ended at step {state['step']}, "
+            f"expected {expected_step}"
+        )
+
+
+def optimization_required(start_step: int, target_step: int) -> bool:
+    if start_step > target_step:
+        raise ValueError("checkpoint step is beyond the requested target")
+    return start_step < target_step
+
+
 def internal_holdout_enabled(args) -> bool:
     return bool(
         args.internal_holdout
         or args.profile_input
         or args.qualification_candidate is not None
+        or args.full_length_qualification
     )
 
 
@@ -268,6 +360,7 @@ def build_training_config(
         "cache_images": bool(args.cache_images),
         "pinned_transfer": bool(args.pinned_transfer),
         "profile_input": bool(args.profile_input),
+        "full_length_qualification": bool(args.full_length_qualification),
         "internal_holdout": split is not None,
         "seed": args.seed,
         "max_steps": args.max_steps,
@@ -357,7 +450,13 @@ def main():
     validate_resize_factor(args.resize_factor)
     validate_profile_args(args)
     validate_qualification_args(args)
+    validate_full_length_args(args)
     validate_output_directory(Path(args.output_dir), args.resume)
+    source_commit = (
+        read_clean_git_commit(Path(__file__).resolve().parents[3])
+        if args.full_length_qualification
+        else None
+    )
     run_cuda_preflight()
 
     scene_root = Path(args.scene_dir)
@@ -379,6 +478,7 @@ def main():
         and manifest.scene_id not in CALIBRATION_SCENES
     ):
         raise ValueError("qualification scene is not in the locked calibration set")
+    validate_full_length_scene(manifest.scene_id, args)
     split = load_internal_holdout(
         manifest_dir,
         manifest,
@@ -429,7 +529,11 @@ def main():
             resize=resize,
             cache_images=args.cache_images,
         )
-        if args.qualification_candidate is not None and split is not None
+        if (
+            args.qualification_candidate is not None
+            or args.full_length_qualification
+        )
+        and split is not None
         else None
     )
 
@@ -472,13 +576,31 @@ def main():
         )
         write_json_record(initial_metrics_path, initial_metrics)
 
+    lpips_backend = None
+    initial_validation = None
+    if args.full_length_qualification:
+        lpips_backend = LpipsBackend(backbone="alex", device=str(trainer.device))
+        initial_validation_path = Path(args.output_dir) / "initial_validation.json"
+        if args.resume:
+            initial_validation = read_json_record(initial_validation_path)
+        else:
+            assert validation_dataset is not None
+            initial_validation = evaluate_internal_validation(
+                trainer, validation_dataset, lpips_backend, None
+            )
+            write_json_record(initial_validation_path, initial_validation)
+
     # 8. Start optimization run
-    print(f"Starting optimization for {args.max_steps} iterations...")
-    trainer.train(
-        stop_step=args.max_steps,
-        checkpoint_every=args.checkpoint_every,
-        save_checkpoints=should_save_checkpoints(args),
-    )
+    if optimization_required(trainer.start_step, args.max_steps):
+        print(f"Starting optimization through step {args.max_steps}...")
+        trainer.train(
+            stop_step=args.max_steps,
+            checkpoint_every=args.checkpoint_every,
+            save_checkpoints=should_save_checkpoints(args),
+            rolling_checkpoint=args.full_length_qualification,
+        )
+    else:
+        print(f"Checkpoint is already at step {args.max_steps}; finalizing artifacts...")
     final_metrics = trainer.evaluate_train_view(
         0,
         render_path=previews / f"step_{args.max_steps:09d}.png",
@@ -494,7 +616,59 @@ def main():
         f"SSIM delta={report['ssim_delta']:.6f}, "
         f"non_blank={report['final_render_non_blank']}"
     )
-    if validation_dataset is not None:
+    if args.full_length_qualification:
+        assert validation_dataset is not None
+        assert lpips_backend is not None
+        assert initial_validation is not None
+        final_train = evaluate_internal_validation(
+            trainer, dataset, lpips_backend, None
+        )
+        final_validation = evaluate_internal_validation(
+            trainer,
+            validation_dataset,
+            lpips_backend,
+            Path(args.output_dir) / "validation_renders",
+        )
+        summary = read_json_record(Path(args.output_dir) / "summary.json")
+        timing_records = read_json_record(Path(args.output_dir) / "timing.json")
+        convergence = read_json_record(Path(args.output_dir) / "convergence.json")
+        recovery_path = Path(args.output_dir) / "checkpoints" / "recovery.pt"
+        validate_recovery_checkpoint(
+            recovery_path,
+            trainer.manifest_hash,
+            trainer.config_hash,
+            args.max_steps,
+        )
+        metric_records = [
+            json.loads(line)
+            for line in (Path(args.output_dir) / "metrics.jsonl")
+            .read_text(encoding="utf-8")
+            .splitlines()
+            if line
+        ]
+        full_length_report = build_full_length_report(
+            scene_id=manifest.scene_id,
+            git_commit=source_commit,
+            initial_validation=initial_validation,
+            final_train=final_train,
+            final_validation=final_validation,
+            summary=summary,
+            metric_records=metric_records,
+            timing_records=timing_records,
+            convergence=convergence,
+        )
+        save_full_length_report(
+            full_length_report,
+            Path(args.output_dir) / "full_length_report.json",
+        )
+        print(
+            "Full-length validation: "
+            f"PSNR={final_validation['psnr_db_mean']:.4f}, "
+            f"SSIM={final_validation['ssim_mean']:.6f}, "
+            f"LPIPS={final_validation['lpips_mean']:.6f}, "
+            f"automated_gates={full_length_report['automated_gates_passed']}"
+        )
+    elif validation_dataset is not None:
         validation = evaluate_internal_validation(
             trainer,
             validation_dataset,

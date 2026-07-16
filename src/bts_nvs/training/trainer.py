@@ -47,6 +47,13 @@ def _atomic_write_text(path: Path, text: str) -> None:
     os.replace(temporary, path)
 
 
+def _write_timing_records(path: Path, records: dict[str, Any]) -> None:
+    _atomic_write_text(
+        path,
+        json.dumps(records, indent=2, allow_nan=False) + "\n",
+    )
+
+
 def _truncate_run_records(output_dir: Path, completed_step: int) -> None:
     metrics_path = output_dir / "metrics.jsonl"
     if metrics_path.is_file():
@@ -466,6 +473,7 @@ class Trainer:
         stop_step: int | None = None,
         checkpoint_every: int = 3000,
         save_checkpoints: bool = True,
+        rolling_checkpoint: bool = False,
     ) -> None:
         """Runs the main optimization training loop.
 
@@ -473,6 +481,7 @@ class Trainer:
             stop_step (int, optional): Completed step at which this invocation stops.
             checkpoint_every (int): Frequency in steps to save checkpoints.
             save_checkpoints (bool): Disable large artifacts for controlled profiles.
+            rolling_checkpoint (bool): Reuse one atomic recovery checkpoint path.
         """
         target_step = self.max_steps if stop_step is None else stop_step
         if (
@@ -676,7 +685,14 @@ class Trainer:
                 completed_step % checkpoint_every == 0
                 or completed_step == target_step
             ):
-                checkpoint_name = f"step_{completed_step:09d}.pt"
+                # Keep resume diagnostics durable even if the large checkpoint
+                # write fails (for example, because the disk becomes full).
+                _write_timing_records(timing_file, timing_records)
+                checkpoint_name = (
+                    "recovery.pt"
+                    if rolling_checkpoint
+                    else f"step_{completed_step:09d}.pt"
+                )
                 checkpoint_path = self.output_dir / "checkpoints" / checkpoint_name
                 require_checkpoint_path_capacity(
                     checkpoint_path,
@@ -760,8 +776,7 @@ class Trainer:
 
         # Write final outputs
         # 1. timing.json
-        with open(timing_file, "w", encoding="utf-8") as f:
-            json.dump(timing_records, f, indent=2, allow_nan=False)
+        _write_timing_records(timing_file, timing_records)
 
         # 2. summary.json
         summary = {

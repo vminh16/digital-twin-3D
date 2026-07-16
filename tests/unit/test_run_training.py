@@ -26,6 +26,7 @@ def _args(**changes):
         "profile_input": False,
         "internal_holdout": False,
         "qualification_candidate": None,
+        "full_length_qualification": False,
     }
     values.update(changes)
     return Namespace(**values)
@@ -112,6 +113,131 @@ def test_qualification_candidate_locks_run_contract():
     ):
         with pytest.raises(ValueError, match="qualification"):
             run_training.validate_qualification_args(_args(**(vars(valid) | change)))
+
+
+def test_full_length_qualification_locks_30k_contract(tmp_path):
+    output = tmp_path / "run"
+    valid = _args(
+        output_dir=str(output),
+        full_length_qualification=True,
+        resize_factor=1,
+        max_steps=30_000,
+        checkpoint_every=3_000,
+        seed=0,
+        cache_images=True,
+        pinned_transfer=True,
+    )
+
+    run_training.validate_full_length_args(valid)
+    assert run_training.internal_holdout_enabled(valid)
+    assert run_training.should_save_checkpoints(valid)
+    run_training.validate_full_length_scene("HCM0181", valid)
+
+    for change in (
+        {"max_steps": 7_000},
+        {"resize_factor": 2},
+        {"checkpoint_every": 6_000},
+        {"seed": 1},
+        {"cache_images": False},
+        {"pinned_transfer": False},
+        {"qualification_candidate": "B0-reference"},
+    ):
+        with pytest.raises(ValueError, match="full-length"):
+            run_training.validate_full_length_args(_args(**(vars(valid) | change)))
+
+    with pytest.raises(ValueError, match="HCM0181"):
+        run_training.validate_full_length_scene("HCM0421", valid)
+
+
+def test_full_length_resume_is_fixed_to_rolling_checkpoint(tmp_path):
+    output = tmp_path / "run"
+    recovery = output / "checkpoints" / "recovery.pt"
+    recovery.parent.mkdir(parents=True)
+    recovery.write_bytes(b"checkpoint")
+    valid = _args(
+        output_dir=str(output),
+        full_length_qualification=True,
+        resize_factor=1,
+        max_steps=30_000,
+        checkpoint_every=3_000,
+        seed=0,
+        cache_images=True,
+        pinned_transfer=True,
+        resume=str(recovery),
+    )
+
+    run_training.validate_full_length_args(valid)
+
+    valid.resume = str(output / "checkpoints" / "other.pt")
+    with pytest.raises(ValueError, match="recovery.pt"):
+        run_training.validate_full_length_args(valid)
+
+
+def test_recovery_checkpoint_must_be_complete_and_at_expected_step(
+    monkeypatch, tmp_path
+):
+    complete = {
+        "step": 30_000,
+        "gaussians": {},
+        "optimizers": {},
+        "scheduler": {},
+        "strategy_state": {},
+        "active_sh_degree": 3,
+        "rng_states": {},
+        "manifest_hash": "manifest",
+        "config_hash": "config",
+    }
+    monkeypatch.setattr(
+        run_training,
+        "load_checkpoint",
+        lambda *args, **kwargs: complete,
+    )
+
+    run_training.validate_recovery_checkpoint(
+        tmp_path / "recovery.pt", "manifest", "config", 30_000
+    )
+
+    monkeypatch.setattr(
+        run_training,
+        "load_checkpoint",
+        lambda *args, **kwargs: {
+            key: value for key, value in complete.items() if key != "rng_states"
+        },
+    )
+    with pytest.raises(ValueError, match="rng_states"):
+        run_training.validate_recovery_checkpoint(
+            tmp_path / "recovery.pt", "manifest", "config", 30_000
+        )
+
+
+def test_completed_resume_skips_optimization_but_allows_finalization():
+    assert run_training.optimization_required(27_000, 30_000) is True
+    assert run_training.optimization_required(30_000, 30_000) is False
+
+    with pytest.raises(ValueError, match="beyond"):
+        run_training.optimization_required(30_001, 30_000)
+
+
+def test_clean_git_commit_rejects_tracked_changes(monkeypatch, tmp_path):
+    responses = iter(("abc123\n", " M src/file.py\n"))
+    monkeypatch.setattr(
+        run_training.subprocess,
+        "check_output",
+        lambda *args, **kwargs: next(responses),
+    )
+
+    with pytest.raises(RuntimeError, match="dirty"):
+        run_training.read_clean_git_commit(tmp_path)
+
+
+def test_full_length_config_uses_reference_threshold():
+    args = _args(full_length_qualification=True)
+    config = run_training.build_training_config(
+        args, SimpleNamespace(scene_id="HCM0181"), resize=(1320, 989)
+    )
+
+    assert config["full_length_qualification"] is True
+    assert config["grow_grad2d"] == pytest.approx(0.0002)
 
 
 def test_training_config_applies_locked_candidate_threshold():

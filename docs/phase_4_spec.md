@@ -509,6 +509,19 @@ feature centroid nhất, dùng internal holdout cố định.
 - Gaussian/VRAM/time curves qua mốc 15k;
 - resume test từ recovery checkpoint trên một short continuation branch.
 
+**Runbook:**
+
+```bash
+./scripts/run_phase4_30k_dry_run.sh
+
+# Chỉ dùng sau khi một run dở đã có checkpoints/recovery.pt
+BTS_RESUME=1 ./scripts/run_phase4_30k_dry_run.sh
+```
+
+Runner chỉ giữ một rolling atomic checkpoint, không tạo chuỗi checkpoint theo
+mốc. Internal validation được đo tại initialization và 30k nhưng chỉ lần 30k
+ghi render; public test RGB không được đọc trong phase này.
+
 **Acceptance:**
 
 - 30,000 ordered finite metric/timing records;

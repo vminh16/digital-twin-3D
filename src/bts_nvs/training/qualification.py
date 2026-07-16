@@ -20,9 +20,12 @@ CANDIDATES = ("B0-reference", "B0-compact")
 
 
 @torch.no_grad()
-def evaluate_internal_validation(trainer, dataset, lpips_backend, render_dir: Path) -> dict:
-    output = Path(render_dir)
-    output.mkdir(parents=True, exist_ok=True)
+def evaluate_internal_validation(
+    trainer, dataset, lpips_backend, render_dir: Path | None
+) -> dict:
+    output = Path(render_dir) if render_dir is not None else None
+    if output is not None:
+        output.mkdir(parents=True, exist_ok=True)
     metric_config = MetricConfig(psnr_max=100.0)
     image_reports: dict[str, dict] = {}
     valid_fractions = []
@@ -55,9 +58,10 @@ def evaluate_internal_validation(trainer, dataset, lpips_backend, render_dir: Pa
         }
         image_reports[sample.image_name] = metrics
         valid_fractions.append(float(mask.mean()))
-        Image.fromarray((prediction * 255.0).round().astype(np.uint8)).save(
-            output / Path(sample.image_name).with_suffix(".png").name
-        )
+        if output is not None:
+            Image.fromarray((prediction * 255.0).round().astype(np.uint8)).save(
+                output / Path(sample.image_name).with_suffix(".png").name
+            )
     if not image_reports:
         raise ValueError("qualification validation set is empty")
     values = tuple(image_reports.values())
@@ -69,6 +73,102 @@ def evaluate_internal_validation(trainer, dataset, lpips_backend, render_dir: Pa
         "valid_fraction_mean": float(np.mean(valid_fractions)),
         "images": image_reports,
     }
+
+
+def build_full_length_report(
+    *,
+    scene_id: str,
+    git_commit: str,
+    initial_validation: dict,
+    final_train: dict,
+    final_validation: dict,
+    summary: dict,
+    metric_records: list[dict],
+    timing_records: dict[str, dict],
+    convergence: dict,
+) -> dict:
+    if scene_id != "HCM0181":
+        raise ValueError("full-length qualification requires HCM0181")
+    if len(git_commit) != 40:
+        raise ValueError("git_commit must be a full SHA-1")
+    if len(metric_records) != 30_000 or [
+        item.get("step") for item in metric_records
+    ] != list(range(1, 30_001)):
+        raise ValueError("full-length qualification requires 30000 ordered records")
+    if summary.get("total_steps") != 30_000:
+        raise ValueError("full-length qualification summary must end at step 30000")
+    if list(timing_records) != [str(step) for step in range(1, 30_001)]:
+        raise ValueError("full-length qualification requires 30000 ordered timings")
+    if any(
+        not math.isfinite(float(item.get("total", math.nan)))
+        for item in timing_records.values()
+    ):
+        raise ValueError("full-length qualification contains non-finite timing")
+    for item in metric_records:
+        if not math.isfinite(float(item.get("loss", math.nan))):
+            raise ValueError("full-length qualification contains non-finite loss")
+
+    psnr_delta = float(final_validation["psnr_db_mean"]) - float(
+        initial_validation["psnr_db_mean"]
+    )
+    ssim_delta = float(final_validation["ssim_mean"]) - float(
+        initial_validation["ssim_mean"]
+    )
+    lpips_improvement = float(initial_validation["lpips_mean"]) - float(
+        final_validation["lpips_mean"]
+    )
+    train_validation_gap = float(final_train["psnr_db_mean"]) - float(
+        final_validation["psnr_db_mean"]
+    )
+    peak_gaussians = max(int(item["num_gaussians"]) for item in metric_records)
+    max_vram_mb = float(summary["max_vram_mb"])
+    values = (
+        psnr_delta,
+        ssim_delta,
+        lpips_improvement,
+        train_validation_gap,
+        max_vram_mb,
+    )
+    if not all(math.isfinite(value) for value in values):
+        raise ValueError("full-length qualification report contains non-finite value")
+
+    gates = {
+        "psnr_improved": psnr_delta > 3.0,
+        "ssim_improved": ssim_delta > 0.05,
+        "lpips_improved": lpips_improvement > 0.05,
+        "train_validation_gap_bounded": train_validation_gap < 8.0,
+        "peak_gaussians_bounded": peak_gaussians < 10_000_000,
+        "peak_vram_bounded": max_vram_mb < 20 * 1024,
+        "final_render_non_blank": bool(convergence.get("final_render_non_blank")),
+    }
+    return {
+        "schema_version": 1,
+        "scene_id": scene_id,
+        "step": 30_000,
+        "git_commit": git_commit,
+        "automated_gates": gates,
+        "automated_gates_passed": all(gates.values()),
+        "validation_psnr_delta_db": psnr_delta,
+        "validation_ssim_delta": ssim_delta,
+        "validation_lpips_improvement": lpips_improvement,
+        "train_validation_psnr_gap_db": train_validation_gap,
+        "peak_gaussians": peak_gaussians,
+        "max_vram_mb": max_vram_mb,
+        "timing_record_count": len(timing_records),
+        "manual_visual_review_required": True,
+        "initial_validation": initial_validation,
+        "final_train": final_train,
+        "final_validation": final_validation,
+    }
+
+
+def save_full_length_report(report: dict, path: Path) -> None:
+    output = Path(path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    text = json.dumps(report, indent=2, sort_keys=True, allow_nan=False) + "\n"
+    temporary = output.with_name(f".{output.name}.tmp")
+    temporary.write_text(text, encoding="utf-8", newline="\n")
+    os.replace(temporary, output)
 
 
 def _validate_report(report: dict) -> None:

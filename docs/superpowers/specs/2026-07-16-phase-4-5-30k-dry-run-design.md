@@ -50,8 +50,9 @@ The Python entry point receives one new explicit
 `--full_length_qualification` flag. It is mutually exclusive with the existing
 `--qualification_candidate` flag and locks factor 1, seed 0, 30,000 steps,
 internal holdout, `B0-reference`, cached images, pinned transfer, rolling
-checkpoints, and a fresh run. This keeps Phase 4.4 behavior unchanged and avoids
-assembling a qualification configuration from loosely related CLI switches.
+checkpoints, and either a fresh run or the fixed recovery resume described
+above. This keeps Phase 4.4 behavior unchanged and avoids assembling a
+qualification configuration from loosely related CLI switches.
 
 Before training, the script must:
 

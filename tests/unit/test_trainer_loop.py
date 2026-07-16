@@ -92,6 +92,13 @@ def fake_density_backend(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(density_strategy, "DefaultStrategy", _FakeDefaultStrategy)
 
 
+@pytest.fixture(autouse=True)
+def isolate_checkpoint_tests_from_host_disk(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        trainer_module, "require_checkpoint_path_capacity", lambda *args: None
+    )
+
+
 @pytest.fixture
 def manifest_artifact(tmp_path: Path) -> Path:
     artifact = tmp_path / "manifest"
@@ -588,6 +595,87 @@ def test_resume_rejects_changed_training_config(
 
     with pytest.raises(ValueError, match="Config hash mismatch"):
         resumed.resume(checkpoint)
+
+
+def test_rolling_checkpoint_retains_only_latest_recovery(
+    tmp_path: Path,
+    manifest_artifact: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(trainer_module, "render_gaussians", _differentiable_render)
+    output = tmp_path / "run"
+    trainer = _trainer(
+        output,
+        manifest_artifact,
+        _MockDataset(),
+        config=_config(max_steps=2),
+    )
+
+    trainer.train(
+        stop_step=2,
+        checkpoint_every=1,
+        rolling_checkpoint=True,
+    )
+
+    checkpoints = tuple((output / "checkpoints").iterdir())
+    assert [path.name for path in checkpoints] == ["recovery.pt"]
+    assert load_checkpoint(
+        checkpoints[0], expected_manifest_hash=trainer.manifest_hash
+    )["step"] == 2
+
+
+def test_trainer_checks_capacity_before_checkpoint_save(
+    tmp_path: Path,
+    manifest_artifact: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(trainer_module, "render_gaussians", _differentiable_render)
+    calls: list[tuple[Path, int]] = []
+    monkeypatch.setattr(
+        trainer_module,
+        "require_checkpoint_path_capacity",
+        lambda path, count: calls.append((Path(path), count)),
+    )
+    output = tmp_path / "run"
+    trainer = _trainer(
+        output,
+        manifest_artifact,
+        _MockDataset(),
+        config=_config(max_steps=1),
+    )
+
+    trainer.train(stop_step=1, checkpoint_every=1, rolling_checkpoint=True)
+
+    assert calls == [(output / "checkpoints" / "recovery.pt", 5)]
+
+
+def test_checkpoint_persists_timing_before_save_failure(
+    tmp_path: Path,
+    manifest_artifact: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(trainer_module, "render_gaussians", _differentiable_render)
+    def fail_save_checkpoint(**kwargs: object) -> None:
+        raise RuntimeError("simulated checkpoint failure")
+
+    monkeypatch.setattr(trainer_module, "save_checkpoint", fail_save_checkpoint)
+    output = tmp_path / "run"
+    trainer = _trainer(
+        output,
+        manifest_artifact,
+        _MockDataset(),
+        config=_config(max_steps=2),
+    )
+
+    with pytest.raises(RuntimeError, match="simulated checkpoint failure"):
+        trainer.train(
+            stop_step=2,
+            checkpoint_every=2,
+            rolling_checkpoint=True,
+        )
+
+    timing = json.loads((output / "timing.json").read_text(encoding="utf-8"))
+    assert list(timing) == ["1", "2"]
 
 
 def test_existing_run_config_is_not_overwritten(
