@@ -23,6 +23,12 @@ from bts_nvs.models.gaussian_parameters import GaussianParameters
 from bts_nvs.models.initialization import initialize_from_manifest
 from bts_nvs.rendering.gsplat_renderer import render_gaussians
 from bts_nvs.training.trainer import Trainer
+from bts_nvs.training.qualification import (
+    CALIBRATION_SCENES,
+    evaluate_internal_validation,
+    save_qualification_report,
+)
+from bts_nvs.evaluation.metrics import LpipsBackend
 from bts_nvs.training.resources import (
     linux_memory_status,
     require_cache_capacity,
@@ -102,6 +108,12 @@ def parse_args():
         action="store_true",
         help="Train only on the prepared leakage-controlled internal split.",
     )
+    parser.add_argument(
+        "--qualification_candidate",
+        choices=("B0-reference", "B0-compact"),
+        default=None,
+        help="Run one locked Phase 4.4 candidate on the internal holdout.",
+    )
     return parser.parse_args()
 
 
@@ -129,8 +141,33 @@ def validate_profile_args(args) -> None:
         raise ValueError("--profile_input requires a fresh run without --resume")
 
 
+def validate_qualification_args(args) -> None:
+    if args.qualification_candidate is None:
+        return
+    if (
+        args.max_steps != 7000
+        or args.resize_factor != 1
+        or args.seed != 0
+        or not args.cache_images
+        or not args.pinned_transfer
+        or args.resume is not None
+    ):
+        raise ValueError(
+            "qualification requires a fresh factor-1, seed-0, 7000-step run "
+            "with cached images and pinned transfer"
+        )
+
+
 def internal_holdout_enabled(args) -> bool:
-    return bool(args.internal_holdout or args.profile_input)
+    return bool(
+        args.internal_holdout
+        or args.profile_input
+        or args.qualification_candidate is not None
+    )
+
+
+def should_save_checkpoints(args) -> bool:
+    return not args.profile_input and args.qualification_candidate is None
 
 
 def load_internal_holdout(
@@ -235,7 +272,9 @@ def build_training_config(
         "seed": args.seed,
         "max_steps": args.max_steps,
         "prune_opa": 0.005,
-        "grow_grad2d": 0.0002,
+        "grow_grad2d": (
+            0.0003 if args.qualification_candidate == "B0-compact" else 0.0002
+        ),
         "grow_scale3d": 0.01,
         "refine_start_step": 500,
         "refine_stop_step": 15000,
@@ -244,6 +283,8 @@ def build_training_config(
         "lambda_dssim": 0.2,
         "data_range": 1.0,
     }
+    if args.qualification_candidate is not None:
+        config["qualification_candidate"] = args.qualification_candidate
     if split is not None:
         config.update(
             {
@@ -315,6 +356,7 @@ def main():
     args = parse_args()
     validate_resize_factor(args.resize_factor)
     validate_profile_args(args)
+    validate_qualification_args(args)
     validate_output_directory(Path(args.output_dir), args.resume)
     run_cuda_preflight()
 
@@ -332,6 +374,11 @@ def main():
     else:
         print(f"Loading scene manifest from: {manifest_json}")
         manifest = load_scene_manifest(manifest_json, scene_root)
+    if (
+        args.qualification_candidate is not None
+        and manifest.scene_id not in CALIBRATION_SCENES
+    ):
+        raise ValueError("qualification scene is not in the locked calibration set")
     split = load_internal_holdout(
         manifest_dir,
         manifest,
@@ -372,6 +419,18 @@ def main():
         undistort=True,
         resize=resize,
         cache_images=args.cache_images,
+    )
+    validation_dataset = (
+        SceneDataset(
+            manifest,
+            scene_root,
+            image_names=split.validation_image_names,
+            undistort=True,
+            resize=resize,
+            cache_images=args.cache_images,
+        )
+        if args.qualification_candidate is not None and split is not None
+        else None
     )
 
     # 4. Initialize adaptively from sparse point cloud
@@ -418,7 +477,7 @@ def main():
     trainer.train(
         stop_step=args.max_steps,
         checkpoint_every=args.checkpoint_every,
-        save_checkpoints=not args.profile_input,
+        save_checkpoints=should_save_checkpoints(args),
     )
     final_metrics = trainer.evaluate_train_view(
         0,
@@ -435,6 +494,48 @@ def main():
         f"SSIM delta={report['ssim_delta']:.6f}, "
         f"non_blank={report['final_render_non_blank']}"
     )
+    if validation_dataset is not None:
+        validation = evaluate_internal_validation(
+            trainer,
+            validation_dataset,
+            LpipsBackend(backbone="alex", device=str(trainer.device)),
+            Path(args.output_dir) / "validation_renders",
+        )
+        summary = read_json_record(Path(args.output_dir) / "summary.json")
+        metric_records = [
+            json.loads(line)
+            for line in (Path(args.output_dir) / "metrics.jsonl")
+            .read_text(encoding="utf-8")
+            .splitlines()
+            if line
+        ]
+        qualification_report = {
+            "schema_version": 1,
+            "scene_id": manifest.scene_id,
+            "candidate_id": args.qualification_candidate,
+            "step": args.max_steps,
+            "image_count": validation["image_count"],
+            "psnr_db_mean": validation["psnr_db_mean"],
+            "ssim_mean": validation["ssim_mean"],
+            "lpips_mean": validation["lpips_mean"],
+            "valid_fraction_mean": validation["valid_fraction_mean"],
+            "peak_gaussians": max(item["num_gaussians"] for item in metric_records),
+            "max_vram_mb": summary["max_vram_mb"],
+            "total_time_seconds": summary["total_time_seconds"],
+            "config_sha256": trainer.config_hash,
+            "holdout_sha256": split.manifest_sha256,
+            "images": validation["images"],
+        }
+        save_qualification_report(
+            qualification_report,
+            Path(args.output_dir) / "qualification_report.json",
+        )
+        print(
+            "Validation: "
+            f"PSNR={validation['psnr_db_mean']:.4f}, "
+            f"SSIM={validation['ssim_mean']:.6f}, "
+            f"LPIPS={validation['lpips_mean']:.6f}"
+        )
     print(f"Optimization run completed. Outputs saved to: {args.output_dir}")
 
 

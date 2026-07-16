@@ -174,7 +174,7 @@ def build_pose_holdout(manifest: SceneManifest) -> HoldoutSplit:
         )
         validation.append(candidate)
 
-    minimum_train = max(120, math.ceil(0.70 * count))
+    minimum_train = math.ceil(0.70 * count)
     while True:
         guard = _guard_indices(validation, distances, names)
         train = set(range(count)) - set(validation) - guard
@@ -229,7 +229,7 @@ def _validate_partition(split: HoldoutSplit, manifest: SceneManifest) -> None:
         raise DataContractError("holdout contains official test names")
     if len(validation) < 8:
         raise DataContractError("holdout requires at least 8 validation images")
-    if len(train) < max(120, math.ceil(0.70 * len(manifest.train_image_names))):
+    if len(train) < math.ceil(0.70 * len(manifest.train_image_names)):
         raise DataContractError("holdout does not retain enough internal train images")
 
 

@@ -253,7 +253,7 @@ cách pose để giảm near-duplicate leakage.
 - Train, validation và guard pairwise disjoint.
 - Hợp ba tập bằng exact physical train image names trong manifest.
 - Không có official test name trong ba tập.
-- Tối thiểu 120 train images và 70% physical train images.
+- Tối thiểu 70% physical train images.
 - Tối thiểu 8 validation images.
 - Cùng manifest luôn tạo cùng JSON byte-for-byte.
 - Đổi thứ tự input manifest nhưng giữ cùng camera/name mapping không đổi split.
@@ -275,31 +275,17 @@ cách pose để giảm near-duplicate leakage.
 - XYZ tiếp tục dùng provided COLMAP geometry và giữ `float64` trước khi chuyển
   sang trainer.
 
-## 7. Chọn calibration và confirmation scenes
+## 7. Chọn calibration scenes
 
-Không chọn scene dựa trên holdout score. Khi đủ toàn bộ 13 scene, tạo feature
-chỉ từ inventory:
+Pool chuẩn gồm 18 BTS scenes dưới `data/bts_scenes`. Sáu calibration scenes được
+khóa trước khi đọc metric: `hcm0031`, `HCM0181`, `HCM0421`, `HCM1439`,
+`HNI0131`, `HNI0265`. Tập này bao phủ nguồn public/private/new, distortion
+thấp/cao và scene 103/200/205/240 ảnh. `bonsai` và `chair` thuộc
+`data/auxiliary`, khác domain và không tham gia qualification.
 
-```text
-f(scene) = [
-    log(train_image_count),
-    log(sparse_point_count / train_image_count),
-    trajectory_nn_p90,
-    distortion_abs_max,
-]
-```
-
-Mỗi feature robust-standardize bằng median và IQR; nếu IQR bằng 0 thì dùng scale
-1 cho feature đó. Enumerate toàn bộ bộ ba scene; chọn bộ ba giảm tổng L1 distance
-từ mỗi scene tới medoid gần nhất. Tie break bằng tuple scene IDs đã sort. Đây là
-ba **calibration scenes**.
-
-Trong các scene còn lại, chọn hai scene có distance lớn nhất tới calibration
-medoid gần nhất làm **confirmation scenes**. Chúng chỉ được đánh giá một lần sau
-khi config đã chọn. Các scene khác là production cohort.
-
-Nếu chưa có đủ 13 scene, có thể phát triển và smoke test Phase 4.1–4.3, nhưng
-không được khóa cohort, B0 hoặc bắt đầu multi-scene production.
+Phase 4 baseline không dùng confirmation stage riêng. Sau candidate decision,
+config thắng đi qua one-scene 30k qualification rồi được dùng để train độc lập
+toàn bộ 18 BTS scenes.
 
 ## 8. Baseline và bounded hyperparameter search
 
@@ -327,7 +313,7 @@ không được khóa cohort, B0 hoặc bắt đầu multi-scene production.
 
 ### 8.2. Candidate set
 
-Chỉ thử hai candidate ở 7,000 steps trên ba calibration scenes:
+Chỉ thử hai candidate ở 7,000 steps trên sáu calibration scenes:
 
 | Candidate | `grow_grad2d` | Mục đích |
 |---|---:|---|
@@ -400,7 +386,7 @@ deterministic cho toàn bộ scene.
 - `SceneInventory` và JSON report tổng;
 - kiểm tra manifest availability, physical train images, native resolutions;
 - estimate cache RAM, Gaussian/checkpoint disk và render output disk;
-- deterministic calibration/confirmation cohort khi đủ 13 scene.
+- deterministic six-scene calibration matrix trên pool 18 BTS scenes.
 
 **Acceptance:**
 
@@ -471,12 +457,12 @@ timing đúng.
 **Mục đích:** chọn resource/quality trade-off mà không overfit validation hoặc
 biến Phase 4 thành open-ended HPO.
 
-**Mục tiêu triển khai riêng:** chạy đúng hai candidate trên ba calibration scenes
-với split, seed và 7k horizon cố định.
+**Mục tiêu triển khai riêng:** chạy đúng hai candidate trên sáu calibration
+scenes đã khóa trước khi đọc metric, với split, seed và 7k horizon cố định.
 
 **Deliverables:**
 
-- six run artifacts;
+- twelve run artifacts;
 - per-image và per-scene PSNR/SSIM/LPIPS reports;
 - Gaussian/VRAM/time comparison;
 - machine-readable candidate decision với rule Mục 8.2.
@@ -486,12 +472,12 @@ với split, seed và 7k horizon cố định.
 - mọi run có 7,000 finite steps và phục hồi sau reset step 6,000;
 - không candidate nào được thêm sau khi nhìn validation result;
 - decision code tái tạo đúng từ raw reports;
-- config được chọn trước khi mở confirmation scores;
-- hai confirmation scenes được đánh giá đúng một lần và không có metric
-  catastrophic regression: PSNR delta `> 3 dB`, SSIM delta `> 0.05`, LPIPS
-  delta `< -0.05` so với initialization.
+- sáu scene cố định là `hcm0031`, `HCM0181`, `HCM0421`, `HCM1439`, `HNI0131`
+  và `HNI0265`;
+- không có confirmation stage riêng trong baseline; candidate thắng chuyển sang
+  one-scene 30k qualification.
 
-**Điểm dừng:** red review decision và confirmation; chưa chạy 30k.
+**Điểm dừng:** red review candidate decision; chưa chạy 30k.
 
 ### Phiên 4.5 — Full-length 30k qualification
 
@@ -647,7 +633,7 @@ checkpoint. Atomic recovery write cần temporary sibling và rename.
 
 Phase 4 chỉ complete khi:
 
-- đủ expected 13 scene và mọi manifest pass;
+- đủ expected 18 BTS scenes và mọi manifest pass;
 - holdout algorithm, split artifacts và leakage tests pass;
 - một 30k qualification pass quality/resource gates;
 - baseline bundle đã freeze và hash;

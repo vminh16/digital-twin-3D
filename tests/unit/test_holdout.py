@@ -90,13 +90,21 @@ def test_pose_holdout_satisfies_partition_and_minimums() -> None:
     guard = set(split.guard_image_names)
     assert split.algorithm == ALGORITHM
     assert len(validation) >= 8
-    assert len(train) >= 120
     assert len(train) >= int(np.ceil(0.70 * len(manifest.train_image_names)))
     assert train.isdisjoint(validation)
     assert train.isdisjoint(guard)
     assert validation.isdisjoint(guard)
     assert train | validation | guard == set(manifest.train_image_names)
     assert not (train | validation | guard) & set(manifest.test_image_names)
+
+
+def test_pose_holdout_supports_small_valid_scene() -> None:
+    manifest = _manifest(103)
+
+    split = build_pose_holdout(manifest)
+
+    assert len(split.validation_image_names) >= 8
+    assert len(split.train_image_names) >= int(np.ceil(0.70 * 103))
 
 
 def test_holdout_is_order_independent_and_rejects_official_test_overlap() -> None:

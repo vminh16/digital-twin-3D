@@ -38,7 +38,7 @@ docker run --rm --gpus all \
   -v "$PWD/data:/workspace/digital-twin-3D/data" \
   -v "$PWD/runs:/workspace/digital-twin-3D/runs" \
   bts-nvs:phase3 python src/bts_nvs/training/run_training.py \
-    --scene_dir data/phase1/public_set/HCM0181 \
+    --scene_dir data/bts_scenes/HCM0181 \
     --manifest_dir runs/manifests/HCM0181 \
     --output_dir runs/HCM0181/run_a_factor4_500 \
     --resize_factor 4 --max_steps 500 --checkpoint_every 100 --seed 0
@@ -61,7 +61,7 @@ docker run --rm --gpus all \
   -v "$PWD/data:/workspace/digital-twin-3D/data" \
   -v "$PWD/runs:/workspace/digital-twin-3D/runs" \
   bts-nvs:phase3 python src/bts_nvs/training/run_training.py \
-    --scene_dir data/phase1/public_set/HCM0181 \
+    --scene_dir data/bts_scenes/HCM0181 \
     --manifest_dir runs/manifests/HCM0181 \
     --output_dir runs/HCM0181/run_b_factor2_7000 \
     --resize_factor 2 --max_steps 7000 --checkpoint_every 500 --seed 0
@@ -86,7 +86,7 @@ docker run --rm --gpus all \
   -v "$PWD/data:/workspace/digital-twin-3D/data" \
   -v "$PWD/runs:/workspace/digital-twin-3D/runs" \
   bts-nvs:phase3 python src/bts_nvs/training/run_training.py \
-    --scene_dir data/phase1/public_set/HCM0181 \
+    --scene_dir data/bts_scenes/HCM0181 \
     --manifest_dir runs/manifests/HCM0181 \
     --output_dir runs/HCM0181/run_b_factor2_7000 \
     --resize_factor 2 --max_steps 7000 --checkpoint_every 500 --seed 0 \

@@ -1,0 +1,26 @@
+{
+  "bts_scenes": {
+    "hcm0031": "public_set",
+    "hcm0034": "public_set",
+    "HCM0181": "public_set",
+    "HCM0193": "public_set",
+    "HCM0204": "public_set",
+    "HCM0249": "private_set1",
+    "HCM0254": "private_set1",
+    "HCM0276": "private_set1",
+    "HCM0421": "new_collection",
+    "HCM0539": "new_collection",
+    "HCM0540": "new_collection",
+    "HCM0644": "new_collection",
+    "HCM0674": "new_collection",
+    "HCM1439": "private_set1",
+    "HNI0131": "private_set1",
+    "HNI0265": "private_set1",
+    "HNI0366": "private_set1",
+    "HNI0437": "private_set1"
+  },
+  "auxiliary": {
+    "bonsai": "non_bts",
+    "chair": "non_bts"
+  }
+}

@@ -11,7 +11,7 @@ from bts_nvs.data.manifest import load_scene_manifest
 @pytest.mark.real_data
 def test_hcm0181_holdout_is_deterministic_and_leakage_controlled() -> None:
     root = Path(__file__).resolve().parents[2]
-    scene_root = root / "data" / "phase1" / "public_set" / "HCM0181"
+    scene_root = root / "data" / "bts_scenes" / "HCM0181"
     manifest_json = root / "runs" / "manifests" / "HCM0181" / "manifest.json"
     if not scene_root.is_dir() or not manifest_json.is_file():
         pytest.skip("HCM0181 scene or manifest is unavailable")

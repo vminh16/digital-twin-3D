@@ -4,13 +4,13 @@ from pathlib import Path
 
 import pytest
 
-from bts_nvs.data.inventory import audit_phase4_inventory
+from bts_nvs.data.inventory import EXPECTED_SCENE_COUNT, audit_phase4_inventory
 
 
 @pytest.mark.real_data
 def test_phase4_inventory_reads_available_public_scenes() -> None:
     root = Path(__file__).resolve().parents[2]
-    scenes_root = root / "data" / "phase1" / "public_set"
+    scenes_root = root / "data" / "bts_scenes"
     manifests_root = root / "runs" / "manifests"
     if not scenes_root.is_dir() or not manifests_root.is_dir():
         pytest.skip("local public scenes or manifests are unavailable")
@@ -23,7 +23,7 @@ def test_phase4_inventory_reads_available_public_scenes() -> None:
     report = audit_phase4_inventory(scenes_root, manifests_root)
 
     assert len(report.scenes) <= physical_count
-    assert all(scene.train_image_count >= 150 for scene in report.scenes)
-    if physical_count != 13:
+    assert all(scene.train_image_count >= 100 for scene in report.scenes)
+    if physical_count != EXPECTED_SCENE_COUNT:
         assert report.status == "incomplete_cohort"
         assert report.cohort is None

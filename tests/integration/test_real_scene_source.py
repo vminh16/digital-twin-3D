@@ -16,7 +16,7 @@ def test_public_scene_source_smoke():
         pytest.skip(f"requires pycolmap==4.1.0, found {installed_version}")
 
     repo_root = Path(__file__).resolve().parents[2]
-    scene_root = repo_root / "data" / "phase1" / "public_set" / "HCM0181"
+    scene_root = repo_root / "data" / "bts_scenes" / "HCM0181"
     if not scene_root.is_dir():
         pytest.skip("local public dataset is not available")
 

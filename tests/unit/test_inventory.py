@@ -123,7 +123,7 @@ def _inventories() -> tuple[SceneInventory, ...]:
             native_widths=(100 + index,),
             native_heights=(80 + index,),
         )
-        for index in range(13)
+        for index in range(18)
     )
 
 
@@ -152,7 +152,7 @@ def test_cohort_is_deterministic_and_ignores_test_metadata() -> None:
     assert select_scene_cohort(changed_test_metadata) == expected
     assert len(expected.calibration_scene_ids) == 3
     assert len(expected.confirmation_scene_ids) == 2
-    assert len(expected.production_scene_ids) == 8
+    assert len(expected.production_scene_ids) == 13
     assert set(
         expected.calibration_scene_ids
         + expected.confirmation_scene_ids
@@ -161,7 +161,7 @@ def test_cohort_is_deterministic_and_ignores_test_metadata() -> None:
 
 
 def test_cohort_requires_complete_unique_scene_set() -> None:
-    with pytest.raises(ValueError, match="exactly 13"):
+    with pytest.raises(ValueError, match="exactly 18"):
         select_scene_cohort(_inventories()[:-1])
     with pytest.raises(ValueError, match="unique"):
         select_scene_cohort(_inventories()[:-1] + (_inventories()[0],))

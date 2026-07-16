@@ -15,8 +15,16 @@ from .validation import DataContractError
 
 
 SCHEMA_VERSION = 1
-EXPECTED_SCENE_COUNT = 13
-MIN_TRAIN_IMAGES = 150
+EXPECTED_SCENE_COUNT = 18
+MIN_TRAIN_IMAGES = 100
+CALIBRATION_SCENE_IDS = (
+    "hcm0031",
+    "HCM0181",
+    "HCM0421",
+    "HCM1439",
+    "HNI0131",
+    "HNI0265",
+)
 MAX_ESTIMATED_GAUSSIANS = 10_000_000
 GAUSSIAN_GROWTH_FACTOR = 30
 FULL_CHECKPOINT_BYTES_PER_GAUSSIAN = 768
@@ -314,9 +322,20 @@ def audit_phase4_inventory(
         status = "incomplete_cohort"
     else:
         try:
-            cohort = select_scene_cohort(
-                inventories, expected_scene_count=expected_scene_count
-            )
+            scene_ids = {item.scene_id for item in inventories}
+            if (
+                expected_scene_count == EXPECTED_SCENE_COUNT
+                and set(CALIBRATION_SCENE_IDS) <= scene_ids
+            ):
+                cohort = CohortAssignment(
+                    CALIBRATION_SCENE_IDS,
+                    (),
+                    tuple(sorted(scene_ids - set(CALIBRATION_SCENE_IDS))),
+                )
+            else:
+                cohort = select_scene_cohort(
+                    inventories, expected_scene_count=expected_scene_count
+                )
             status = "ready"
         except ValueError as error:
             issues.append(InventoryIssue("", "invalid_cohort", str(error)))

@@ -21,7 +21,7 @@ def test_smoke_hcm0181_real_cuda(tmp_path: Path) -> None:
         pytest.skip("real HCM0181 smoke requires CUDA-enabled PyTorch")
     pytest.importorskip("gsplat")
 
-    scene_root = Path("data/phase1/public_set/HCM0181")
+    scene_root = Path("data/bts_scenes/HCM0181")
     if not scene_root.is_dir():
         pytest.skip(f"HCM0181 scene not found at {scene_root}")
 

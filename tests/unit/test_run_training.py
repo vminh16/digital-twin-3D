@@ -25,6 +25,7 @@ def _args(**changes):
         "pinned_transfer": False,
         "profile_input": False,
         "internal_holdout": False,
+        "qualification_candidate": None,
     }
     values.update(changes)
     return Namespace(**values)
@@ -88,6 +89,45 @@ def test_profile_implies_internal_holdout():
     )
     assert run_training.internal_holdout_enabled(_args(internal_holdout=True))
     assert not run_training.internal_holdout_enabled(_args())
+
+
+def test_qualification_candidate_locks_run_contract():
+    valid = _args(
+        qualification_candidate="B0-compact",
+        resize_factor=1,
+        max_steps=7000,
+        seed=0,
+        cache_images=True,
+        pinned_transfer=True,
+    )
+    run_training.validate_qualification_args(valid)
+    assert run_training.internal_holdout_enabled(valid)
+
+    for change in (
+        {"max_steps": 6999},
+        {"resize_factor": 2},
+        {"seed": 1},
+        {"cache_images": False},
+        {"pinned_transfer": False},
+    ):
+        with pytest.raises(ValueError, match="qualification"):
+            run_training.validate_qualification_args(_args(**(vars(valid) | change)))
+
+
+def test_training_config_applies_locked_candidate_threshold():
+    manifest = SimpleNamespace(scene_id="HCM0181")
+    config = run_training.build_training_config(
+        _args(qualification_candidate="B0-compact"),
+        manifest,
+        resize=(8, 6),
+    )
+
+    assert config["qualification_candidate"] == "B0-compact"
+    assert config["grow_grad2d"] == pytest.approx(0.0003)
+    assert run_training.should_save_checkpoints(_args()) is True
+    assert run_training.should_save_checkpoints(
+        _args(qualification_candidate="B0-compact")
+    ) is False
 
 
 def test_internal_holdout_requires_colocated_artifact(tmp_path, monkeypatch):
