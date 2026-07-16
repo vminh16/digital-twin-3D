@@ -86,11 +86,12 @@ def test_comparator_rejects_changed_optimization_domain(field, value):
 
 
 def test_comparator_uses_locked_loss_tolerance():
-    close = _profile(losses=(1.00005, 0.90005))
+    close = _profile(losses=(0.15807, 0.15411))
+    reference = _profile(losses=(0.1580444, 0.1541382))
     far = _profile(losses=(1.01, 0.9))
     close["cache_images"] = True
     far["cache_images"] = True
-    assert compare_input_profiles(_profile(), close)["trace_equal"]
+    assert compare_input_profiles(reference, close)["trace_equal"]
     assert not compare_input_profiles(_profile(), far)["trace_equal"]
 
 

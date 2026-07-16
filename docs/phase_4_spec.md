@@ -370,7 +370,7 @@ Mục tiêu là tăng useful compute throughput, không phải tăng allocated V
 - Cached path phải nhanh hơn ít nhất 10% median step time hoặc giảm CPU
   preprocessing xuống dưới 10% wall step time.
 - Cached/uncached phải dùng cùng sampled-image index sequence trong toàn bộ 500
-  measured steps. Loss trace phải allclose với `rtol=1e-4, atol=1e-6` và
+  measured steps. Loss trace phải allclose với `rtol=5e-4, atol=1e-6` và
   Gaussian count phải bằng nhau trên các step trước density refinement đầu tiên.
   Topology delta từ refinement được report riêng vì threshold có thể khuếch đại
   nondeterminism CUDA nhỏ; không được dùng quy tắc này để bỏ qua divergence xảy

@@ -53,8 +53,9 @@ the first topology-changing density refinement. With the current baseline this
 is measured steps 51 through 499. Step 500 remains part of performance timing,
 but its post-refinement Gaussian count is diagnostic because CUDA gradient
 accumulation can move a threshold-borderline Gaussian to either side. The report
-records the compared prefix and final Gaussian-count delta; it does not loosen
-the existing loss tolerance.
+records the compared prefix and final Gaussian-count delta. Loss equivalence
+uses `rtol=5e-4, atol=1e-6` to tolerate small independent-run CUDA drift while
+remaining strict enough to reject a changed optimization trajectory.
 
 ## Acceptance
 

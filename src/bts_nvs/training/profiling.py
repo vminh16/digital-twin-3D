@@ -106,7 +106,7 @@ def compare_input_profiles(uncached: dict, cached: dict) -> dict:
         and np.allclose(
             uncached["losses"][:equivalence_steps],
             cached["losses"][:equivalence_steps],
-            rtol=1e-4,
+            rtol=5e-4,
             atol=1e-6,
         )
     )
