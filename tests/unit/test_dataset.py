@@ -5,13 +5,14 @@ import numpy as np
 import pytest
 from PIL import Image
 
+import bts_nvs.data.dataset as dataset_module
 from bts_nvs.cameras.distortion import CameraDistortion
 from bts_nvs.cameras.intrinsics import CameraIntrinsics
 from bts_nvs.data.dataset import CameraSample, SceneDataset
 from bts_nvs.data.manifest import SceneManifest
 
 
-def _dataset(tmp_path: Path, *, undistort=False, resize=None):
+def _dataset(tmp_path: Path, *, undistort=False, resize=None, cache_images=False):
     root = tmp_path / "scene"
     image_dir = root / "train" / "images"
     image_dir.mkdir(parents=True)
@@ -40,7 +41,16 @@ def _dataset(tmp_path: Path, *, undistort=False, resize=None):
         identity,
         identity,
     )
-    return SceneDataset(manifest, root, undistort=undistort, resize=resize), manifest
+    return (
+        SceneDataset(
+            manifest,
+            root,
+            undistort=undistort,
+            resize=resize,
+            cache_images=cache_images,
+        ),
+        manifest,
+    )
 
 
 def test_raw_dataset_sample_preserves_camera_contract(tmp_path):
@@ -86,6 +96,65 @@ def test_dataset_does_not_mutate_manifest_arrays(tmp_path):
     sample.world_to_camera[0, 3] = 99.0
 
     np.testing.assert_array_equal(manifest.train_world_to_camera, before)
+
+
+def test_cached_and_uncached_samples_are_bit_identical(tmp_path, monkeypatch):
+    monkeypatch.setattr(dataset_module, "available_host_ram_bytes", lambda: 8 * 1024**3)
+    uncached, _ = _dataset(tmp_path / "uncached", undistort=True, resize=(4, 3))
+    cached, _ = _dataset(
+        tmp_path / "cached", undistort=True, resize=(4, 3), cache_images=True
+    )
+
+    expected = uncached[0]
+    actual = cached[0]
+
+    np.testing.assert_array_equal(actual.image, expected.image)
+    np.testing.assert_array_equal(actual.valid_mask, expected.valid_mask)
+    np.testing.assert_array_equal(actual.world_to_camera, expected.world_to_camera)
+    assert actual.intrinsics == expected.intrinsics
+    assert actual.distortion == expected.distortion
+    assert actual.image.flags.c_contiguous
+    assert actual.image.dtype == np.uint8
+    assert actual.valid_mask.flags.c_contiguous
+    assert actual.valid_mask.dtype == np.bool_
+
+
+def test_cache_decodes_once_and_returned_samples_are_isolated(tmp_path, monkeypatch):
+    monkeypatch.setattr(dataset_module, "available_host_ram_bytes", lambda: 8 * 1024**3)
+    original_open = dataset_module.Image.open
+    opened = 0
+
+    def counted_open(*args, **kwargs):
+        nonlocal opened
+        opened += 1
+        return original_open(*args, **kwargs)
+
+    monkeypatch.setattr(dataset_module.Image, "open", counted_open)
+    dataset, _ = _dataset(tmp_path, cache_images=True)
+    first = dataset[0]
+    first.image[:] = 255
+    first.valid_mask[:] = False
+    second = dataset[0]
+
+    assert opened == 1
+    assert not np.all(second.image == 255)
+    assert second.valid_mask.all()
+
+
+def test_cache_rejects_insufficient_host_ram_before_decode(tmp_path, monkeypatch):
+    monkeypatch.setattr(dataset_module, "available_host_ram_bytes", lambda: 0)
+    opened = False
+
+    def reject_open(*args, **kwargs):
+        nonlocal opened
+        opened = True
+        raise AssertionError("image must not be decoded before RAM preflight")
+
+    monkeypatch.setattr(dataset_module.Image, "open", reject_open)
+
+    with pytest.raises(MemoryError, match="4 GiB"):
+        _dataset(tmp_path, cache_images=True)
+    assert opened is False
 
 
 def test_dataset_rejects_image_resolution_that_disagrees_with_intrinsics(tmp_path):

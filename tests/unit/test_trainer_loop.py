@@ -351,6 +351,27 @@ def test_trainer_uses_completed_step_numbers_in_metrics(
     assert [record["step"] for record in records] == [1, 2]
 
 
+def test_trainer_records_sample_and_input_timings(
+    tmp_path: Path,
+    manifest_artifact: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(trainer_module, "render_gaussians", _differentiable_render)
+    config = _config(max_steps=1)
+    config["pinned_transfer"] = True
+    dataset = _MockDataset()
+    trainer = _trainer(tmp_path / "run", manifest_artifact, dataset, config=config)
+
+    trainer.train(stop_step=1, checkpoint_every=1)
+
+    timing = json.loads((tmp_path / "run" / "timing.json").read_text())["1"]
+    metric = json.loads((tmp_path / "run" / "metrics.jsonl").read_text())
+    assert timing["data"] >= 0.0
+    assert timing["transfer"] >= 0.0
+    assert metric["sample_index"] == dataset.sampled_indices[0]
+    assert trainer.input_pipeline.slot_count == 0
+
+
 def test_summary_records_total_wall_time_and_peak_vram(
     tmp_path: Path,
     manifest_artifact: Path,

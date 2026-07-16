@@ -9,7 +9,7 @@ import torch
 # Ensure src/ is in pythonpath
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-from bts_nvs.data.dataset import SceneDataset
+from bts_nvs.data.dataset import SceneDataset, estimate_image_cache_bytes
 from bts_nvs.data.manifest import (
     build_scene_manifest,
     load_scene_manifest,
@@ -20,6 +20,11 @@ from bts_nvs.models.gaussian_parameters import GaussianParameters
 from bts_nvs.models.initialization import initialize_from_manifest
 from bts_nvs.rendering.gsplat_renderer import render_gaussians
 from bts_nvs.training.trainer import Trainer
+from bts_nvs.training.resources import (
+    linux_memory_status,
+    require_cache_capacity,
+    require_no_swap,
+)
 
 
 def parse_args():
@@ -74,6 +79,21 @@ def parse_args():
         default=None,
         help="Path to an existing checkpoint (.pt) to resume training from.",
     )
+    parser.add_argument(
+        "--cache_images",
+        action="store_true",
+        help="Decode, undistort, and resize each selected train image once.",
+    )
+    parser.add_argument(
+        "--pinned_transfer",
+        action="store_true",
+        help="Use a two-sample pinned host-memory ring for CUDA transfers.",
+    )
+    parser.add_argument(
+        "--profile_input",
+        action="store_true",
+        help="Run the fixed 50 warm-up + 500 measured-step input profile.",
+    )
     return parser.parse_args()
 
 
@@ -90,6 +110,28 @@ def validate_output_directory(output_dir: Path, resume: str | Path | None) -> No
         raise FileExistsError(
             f"output directory is not empty; use --resume or a new path: {output}"
         )
+
+
+def validate_profile_args(args) -> None:
+    if not args.profile_input:
+        return
+    if args.max_steps != 550:
+        raise ValueError("--profile_input requires exactly 550 max steps")
+    if args.resume is not None:
+        raise ValueError("--profile_input requires a fresh run without --resume")
+
+
+def validate_host_resources(
+    *,
+    cache_bytes: int,
+    memory_status: tuple[int, int] | None,
+) -> None:
+    if memory_status is None:
+        return
+    available_bytes, swap_used_bytes = memory_status
+    require_no_swap(swap_used_bytes)
+    if cache_bytes:
+        require_cache_capacity(cache_bytes, available_bytes=available_bytes)
 
 
 def validate_preflight_gradients(parameters) -> None:
@@ -141,6 +183,9 @@ def build_training_config(args, manifest, resize: tuple[int, int]) -> dict:
         "resize_width": width,
         "resize_height": height,
         "undistort": True,
+        "cache_images": bool(args.cache_images),
+        "pinned_transfer": bool(args.pinned_transfer),
+        "profile_input": bool(args.profile_input),
         "seed": args.seed,
         "max_steps": args.max_steps,
         "prune_opa": 0.005,
@@ -212,6 +257,7 @@ def read_json_record(path: Path) -> dict:
 def main():
     args = parse_args()
     validate_resize_factor(args.resize_factor)
+    validate_profile_args(args)
     validate_output_directory(Path(args.output_dir), args.resume)
     run_cuda_preflight()
 
@@ -236,9 +282,23 @@ def main():
     h = ref_camera.height // args.resize_factor
     resize = (w, h)
     print(f"Downscaling images by factor {args.resize_factor} to resolution: {resize}")
+    validate_host_resources(
+        cache_bytes=(
+            estimate_image_cache_bytes(manifest, resize=resize)
+            if args.cache_images
+            else 0
+        ),
+        memory_status=linux_memory_status(),
+    )
 
     # 3. Setup Dataset
-    dataset = SceneDataset(manifest, scene_root, undistort=True, resize=resize)
+    dataset = SceneDataset(
+        manifest,
+        scene_root,
+        undistort=True,
+        resize=resize,
+        cache_images=args.cache_images,
+    )
 
     # 4. Initialize adaptively from sparse point cloud
     print("Adaptive scale initialization from SfM sparse point cloud...")
@@ -276,7 +336,11 @@ def main():
 
     # 8. Start optimization run
     print(f"Starting optimization for {args.max_steps} iterations...")
-    trainer.train(stop_step=args.max_steps, checkpoint_every=args.checkpoint_every)
+    trainer.train(
+        stop_step=args.max_steps,
+        checkpoint_every=args.checkpoint_every,
+        save_checkpoints=not args.profile_input,
+    )
     final_metrics = trainer.evaluate_train_view(
         0,
         render_path=previews / f"step_{args.max_steps:09d}.png",

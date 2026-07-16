@@ -19,6 +19,9 @@ def _args(**changes):
         "checkpoint_every": 100,
         "seed": 7,
         "resume": None,
+        "cache_images": False,
+        "pinned_transfer": False,
+        "profile_input": False,
     }
     values.update(changes)
     return Namespace(**values)
@@ -61,6 +64,33 @@ def test_training_config_binds_preprocessing_identity():
     assert config["resize_height"] == 494
     assert config["undistort"] is True
     assert config["seed"] == 19
+    assert config["cache_images"] is False
+    assert config["pinned_transfer"] is False
+
+
+def test_profile_mode_requires_fresh_exact_550_step_run():
+    run_training.validate_profile_args(_args(profile_input=True, max_steps=550))
+
+    with pytest.raises(ValueError, match="550"):
+        run_training.validate_profile_args(_args(profile_input=True, max_steps=549))
+    with pytest.raises(ValueError, match="fresh"):
+        run_training.validate_profile_args(
+            _args(profile_input=True, max_steps=550, resume="checkpoint.pt")
+        )
+
+
+def test_host_resource_preflight_rejects_swap_and_low_cache_ram():
+    run_training.validate_host_resources(cache_bytes=0, memory_status=None)
+    with pytest.raises(RuntimeError, match="swap"):
+        run_training.validate_host_resources(
+            cache_bytes=0,
+            memory_status=(8 * 1024**3, 1),
+        )
+    with pytest.raises(MemoryError, match="host RAM"):
+        run_training.validate_host_resources(
+            cache_bytes=5 * 1024**3,
+            memory_status=(8 * 1024**3, 0),
+        )
 
 
 def test_non_resume_run_rejects_non_empty_output(tmp_path: Path):

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ctypes
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -11,6 +12,54 @@ from bts_nvs.cameras.distortion import CameraDistortion
 from bts_nvs.cameras.intrinsics import CameraIntrinsics
 
 from .manifest import SceneManifest
+
+
+_CACHE_RAM_HEADROOM_BYTES = 4 * 1024**3
+
+
+def available_host_ram_bytes() -> int:
+    meminfo = Path("/proc/meminfo")
+    if meminfo.is_file():
+        for line in meminfo.read_text(encoding="ascii").splitlines():
+            if line.startswith("MemAvailable:"):
+                return int(line.split()[1]) * 1024
+
+    class MemoryStatus(ctypes.Structure):
+        _fields_ = [
+            ("length", ctypes.c_ulong),
+            ("memory_load", ctypes.c_ulong),
+            ("total_physical", ctypes.c_ulonglong),
+            ("available_physical", ctypes.c_ulonglong),
+            ("total_page_file", ctypes.c_ulonglong),
+            ("available_page_file", ctypes.c_ulonglong),
+            ("total_virtual", ctypes.c_ulonglong),
+            ("available_virtual", ctypes.c_ulonglong),
+            ("available_extended_virtual", ctypes.c_ulonglong),
+        ]
+
+    status = MemoryStatus()
+    status.length = ctypes.sizeof(status)
+    if not ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):
+        raise OSError("cannot query available host RAM")
+    return int(status.available_physical)
+
+
+def estimate_image_cache_bytes(
+    manifest: SceneManifest,
+    *,
+    resize: tuple[int, int] | None = None,
+    indices: tuple[int, ...] | None = None,
+) -> int:
+    selected = range(len(manifest.train_intrinsics)) if indices is None else indices
+    if resize is not None:
+        width, height = resize
+        return len(selected) * width * height * 4
+    return sum(
+        manifest.train_intrinsics[index].width
+        * manifest.train_intrinsics[index].height
+        * 4
+        for index in selected
+    )
 
 
 @dataclass(frozen=True)
@@ -46,6 +95,7 @@ class SceneDataset:
         image_names: tuple[str, ...] | None = None,
         undistort: bool = False,
         resize: tuple[int, int] | None = None,
+        cache_images: bool = False,
     ) -> None:
         if resize is not None and (
             len(resize) != 2
@@ -69,12 +119,42 @@ class SceneDataset:
             if unknown:
                 raise ValueError(f"image_names contains unknown train images: {unknown}")
             self._indices = tuple(index_by_name[name] for name in names)
+        self.cache_images = bool(cache_images)
+        self._cache: tuple[CameraSample, ...] | None = None
+        if self.cache_images:
+            cache_bytes = estimate_image_cache_bytes(
+                self.manifest,
+                resize=self.resize,
+                indices=self._indices,
+            )
+            if available_host_ram_bytes() < cache_bytes + _CACHE_RAM_HEADROOM_BYTES:
+                raise MemoryError(
+                    "image cache requires its estimated bytes plus 4 GiB free host RAM"
+                )
+            cached = tuple(self._build_sample(index) for index in self._indices)
+            for sample in cached:
+                sample.image.setflags(write=False)
+                sample.world_to_camera.setflags(write=False)
+                sample.valid_mask.setflags(write=False)
+            self._cache = cached
 
     def __len__(self) -> int:
         return len(self._indices)
 
     def __getitem__(self, index: int) -> CameraSample:
-        index = self._indices[index]
+        if self._cache is not None:
+            sample = self._cache[index]
+            return CameraSample(
+                image=sample.image,
+                world_to_camera=sample.world_to_camera,
+                intrinsics=sample.intrinsics,
+                distortion=sample.distortion,
+                valid_mask=sample.valid_mask,
+                image_name=sample.image_name,
+            )
+        return self._build_sample(self._indices[index])
+
+    def _build_sample(self, index: int) -> CameraSample:
         path = self.scene_root / self.manifest.train_image_paths[index]
         with Image.open(path) as source:
             image = np.asarray(source.convert("RGB"), dtype=np.uint8).copy()

@@ -3,6 +3,7 @@ import json
 import os
 import platform
 import random
+import statistics
 import sys
 import time
 from importlib.metadata import version
@@ -23,6 +24,20 @@ from bts_nvs.models.optimizer import setup_mean_scheduler, setup_optimizers
 from bts_nvs.rendering.density_strategy import GsplatStrategy
 from bts_nvs.rendering.gsplat_renderer import render_gaussians
 from bts_nvs.training.checkpoint import load_checkpoint, save_checkpoint, set_rng_states
+from bts_nvs.training.input_pipeline import TrainingInputPipeline
+from bts_nvs.training.profiling import (
+    PROFILE_MEASURED_STEPS,
+    PROFILE_SCHEMA_VERSION,
+    PROFILE_WARMUP_STEPS,
+    write_input_profile,
+)
+from bts_nvs.training.resources import (
+    linux_memory_status,
+    require_cache_capacity,
+    require_checkpoint_path_capacity,
+    require_no_swap,
+    require_peak_vram,
+)
 
 
 def _atomic_write_text(path: Path, text: str) -> None:
@@ -206,6 +221,10 @@ class Trainer:
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.gaussians.to(self.device)
+        self.input_pipeline = TrainingInputPipeline(
+            self.device,
+            pinned_transfer=bool(self.config.get("pinned_transfer", False)),
+        )
         if self.device.type == "cuda":
             torch.cuda.reset_peak_memory_stats(self.device)
 
@@ -445,12 +464,14 @@ class Trainer:
         *,
         stop_step: int | None = None,
         checkpoint_every: int = 3000,
+        save_checkpoints: bool = True,
     ) -> None:
         """Runs the main optimization training loop.
 
         Args:
             stop_step (int, optional): Completed step at which this invocation stops.
             checkpoint_every (int): Frequency in steps to save checkpoints.
+            save_checkpoints (bool): Disable large artifacts for controlled profiles.
         """
         target_step = self.max_steps if stop_step is None else stop_step
         if (
@@ -469,6 +490,13 @@ class Trainer:
             or checkpoint_every <= 0
         ):
             raise ValueError("checkpoint_every must be a positive integer")
+        profile_input = bool(self.config.get("profile_input", False))
+        if profile_input and (
+            self.device.type != "cuda"
+            or self.start_step != 0
+            or target_step != PROFILE_WARMUP_STEPS + PROFILE_MEASURED_STEPS
+        ):
+            raise ValueError("input profiling requires a fresh 550-step CUDA run")
         metrics_file = self.output_dir / "metrics.jsonl"
         timing_file = self.output_dir / "timing.json"
         if self.device.type == "cuda":
@@ -481,8 +509,17 @@ class Trainer:
                 raise ValueError("timing.json must contain an object")
         else:
             timing_records = {}
+        profile_events: list[tuple[torch.cuda.Event, torch.cuda.Event]] = []
+        profile_losses: list[float] = []
+        profile_counts: list[int] = []
+        profile_indices: list[int] = []
+        profile_data_seconds = 0.0
+        profile_wall_start: float | None = None
 
         for step_index in range(self.start_step, target_step):
+            if profile_input and step_index == PROFILE_WARMUP_STEPS:
+                torch.cuda.synchronize(self.device)
+                profile_wall_start = time.perf_counter()
             completed_step = step_index + 1
             step_start_time = time.perf_counter()
 
@@ -492,20 +529,32 @@ class Trainer:
 
             # Select uniform random camera sample
             sample_idx = random.randint(0, len(self.dataset) - 1)
+            t_data_start = time.perf_counter()
             sample = self.dataset[sample_idx]
             if sample.distortion.model != "PINHOLE":
                 raise ValueError(
                     "training requires an undistorted PINHOLE dataset sample"
                 )
 
-            # Move data tensors to device
-            rgb_gt = torch.from_numpy(sample.image).to(self.device)
-            mask = torch.from_numpy(sample.valid_mask).to(self.device)
             normalized_w2c = _normalize_world_to_camera(
                 sample.world_to_camera,
                 self.dataset.manifest.normalization_transform,
             )
-            viewmat = torch.from_numpy(normalized_w2c).to(self.device)
+            t_data = time.perf_counter() - t_data_start
+            cuda_start = cuda_end = None
+            if profile_input and step_index >= PROFILE_WARMUP_STEPS:
+                cuda_start = torch.cuda.Event(enable_timing=True)
+                cuda_end = torch.cuda.Event(enable_timing=True)
+                cuda_start.record(torch.cuda.current_stream(self.device))
+            t_transfer_start = time.perf_counter()
+            device_sample = self.input_pipeline.transfer(
+                sample,
+                world_to_camera=normalized_w2c,
+            )
+            rgb_gt = device_sample.rgb
+            mask = device_sample.mask
+            viewmat = device_sample.world_to_camera
+            t_transfer = time.perf_counter() - t_transfer_start
 
             # 1. Forward Pass
             t_fwd_start = time.perf_counter()
@@ -589,6 +638,13 @@ class Trainer:
                         f"step {completed_step}"
                     )
             t_opt = time.perf_counter() - t_opt_start
+            if cuda_end is not None:
+                cuda_end.record(torch.cuda.current_stream(self.device))
+                profile_events.append((cuda_start, cuda_end))
+                profile_losses.append(float(loss.item()))
+                profile_counts.append(self.gaussians.num_gaussians)
+                profile_indices.append(sample_idx)
+                profile_data_seconds += t_data
 
             step_duration = time.perf_counter() - step_start_time
 
@@ -598,6 +654,8 @@ class Trainer:
                 "backward": t_bwd,
                 "strategy": t_strategy,
                 "optimizer": t_opt,
+                "data": t_data,
+                "transfer": t_transfer,
                 "total": step_duration,
             }
 
@@ -607,14 +665,22 @@ class Trainer:
                 "loss": loss.item(),
                 "num_gaussians": self.gaussians.num_gaussians,
                 "lr_means": self.scheduler.get_last_lr()[0],
+                "sample_index": sample_idx,
             }
             with open(metrics_file, "a", encoding="utf-8") as f:
                 f.write(json.dumps(metrics, allow_nan=False) + "\n")
 
             # Checkpoint
-            if completed_step % checkpoint_every == 0 or completed_step == target_step:
+            if save_checkpoints and (
+                completed_step % checkpoint_every == 0
+                or completed_step == target_step
+            ):
                 checkpoint_name = f"step_{completed_step:09d}.pt"
                 checkpoint_path = self.output_dir / "checkpoints" / checkpoint_name
+                require_checkpoint_path_capacity(
+                    checkpoint_path,
+                    self.gaussians.num_gaussians,
+                )
                 save_checkpoint(
                     path=checkpoint_path,
                     step=completed_step,
@@ -631,7 +697,62 @@ class Trainer:
 
         if self.device.type == "cuda":
             torch.cuda.synchronize(self.device)
+        profile_wall_seconds = (
+            time.perf_counter() - profile_wall_start
+            if profile_wall_start is not None
+            else None
+        )
         total_time_seconds = time.perf_counter() - training_start_time
+        peak_vram_bytes = (
+            int(torch.cuda.max_memory_allocated(self.device))
+            if self.device.type == "cuda"
+            else 0
+        )
+        require_peak_vram(peak_vram_bytes)
+        final_memory = linux_memory_status() if self.device.type == "cuda" else None
+        if final_memory is not None:
+            available_bytes, swap_used_bytes = final_memory
+            require_no_swap(swap_used_bytes)
+            require_cache_capacity(0, available_bytes=available_bytes)
+        if profile_input:
+            assert profile_wall_seconds is not None
+            cuda_step_ms = [start.elapsed_time(end) for start, end in profile_events]
+            if len(cuda_step_ms) != PROFILE_MEASURED_STEPS:
+                raise RuntimeError("input profile did not record exactly 500 steps")
+            write_input_profile(
+                self.output_dir / "input_profile.json",
+                {
+                    "cache_images": bool(self.config.get("cache_images", False)),
+                    "schema_version": PROFILE_SCHEMA_VERSION,
+                    "training_identity_sha256": compute_config_sha256(
+                        {
+                            key: value
+                            for key, value in self.config.items()
+                            if key not in {"cache_images", "profile_input"}
+                        }
+                    ),
+                    "warmup_steps": PROFILE_WARMUP_STEPS,
+                    "measured_steps": PROFILE_MEASURED_STEPS,
+                    "mean_wall_step_ms": 1000.0
+                    * profile_wall_seconds
+                    / PROFILE_MEASURED_STEPS,
+                    "median_wall_step_ms": 1000.0
+                    * statistics.median(
+                        timing_records[str(step)]["total"]
+                        for step in range(
+                            PROFILE_WARMUP_STEPS + 1,
+                            PROFILE_WARMUP_STEPS + PROFILE_MEASURED_STEPS + 1,
+                        )
+                    ),
+                    "median_cuda_step_ms": statistics.median(cuda_step_ms),
+                    "cpu_preprocessing_fraction": profile_data_seconds
+                    / profile_wall_seconds,
+                    "peak_vram_bytes": peak_vram_bytes,
+                    "sample_indices": profile_indices,
+                    "losses": profile_losses,
+                    "gaussian_counts": profile_counts,
+                },
+            )
 
         # Write final outputs
         # 1. timing.json
@@ -645,7 +766,7 @@ class Trainer:
             "final_loss": loss.item(),
             "final_num_gaussians": self.gaussians.num_gaussians,
             "max_vram_mb": (
-                torch.cuda.max_memory_allocated(self.device) / (1024 * 1024)
+                peak_vram_bytes / (1024 * 1024)
                 if self.device.type == "cuda"
                 else 0.0
             ),
