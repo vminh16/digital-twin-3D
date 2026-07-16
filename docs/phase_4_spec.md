@@ -369,9 +369,12 @@ Mục tiêu là tăng useful compute throughput, không phải tăng allocated V
 - So sánh uncached và cached path trên cùng process setup.
 - Cached path phải nhanh hơn ít nhất 10% median step time hoặc giảm CPU
   preprocessing xuống dưới 10% wall step time.
-- Cached/uncached phải dùng cùng sampled-image index sequence; loss trace phải
-  allclose với `rtol=1e-4, atol=1e-6` và Gaussian count phải bằng nhau. Tolerance
-  này chỉ hấp thụ nondeterminism CUDA nhỏ, không cho phép đổi training behavior.
+- Cached/uncached phải dùng cùng sampled-image index sequence trong toàn bộ 500
+  measured steps. Loss trace phải allclose với `rtol=1e-4, atol=1e-6` và
+  Gaussian count phải bằng nhau trên các step trước density refinement đầu tiên.
+  Topology delta từ refinement được report riêng vì threshold có thể khuếch đại
+  nondeterminism CUDA nhỏ; không được dùng quy tắc này để bỏ qua divergence xảy
+  ra trước refinement.
 - Không đặt acceptance theo phần trăm VRAM sử dụng hay một mẫu `nvidia-smi`.
 
 ### 9.3. Resource limits
@@ -445,6 +448,8 @@ timing đúng.
 
 **Deliverables:**
 
+- batch script tạo/validate `manifest.json`, `arrays.npz` và `holdout.json` cho
+  mọi scene hiện có, với strict 13-scene mode khi cohort đầy đủ;
 - optional `cache_images` dataset path;
 - two-sample pinned transfer ring;
 - 50-step warm-up + 500-step controlled profiler report;
@@ -453,6 +458,7 @@ timing đúng.
 **Acceptance:**
 
 - cached/uncached samples bằng nhau;
+- profile sampler chỉ dùng internal-train; guard và validation không được train;
 - optimization trace bằng nhau trong tolerance đã khóa;
 - performance gate Mục 9.2 pass trên HCM0181 factor 1;
 - VM không swap và terminal vẫn responsive;

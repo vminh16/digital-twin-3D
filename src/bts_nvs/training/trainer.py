@@ -29,6 +29,7 @@ from bts_nvs.training.profiling import (
     PROFILE_MEASURED_STEPS,
     PROFILE_SCHEMA_VERSION,
     PROFILE_WARMUP_STEPS,
+    equivalence_steps_before_refinement,
     write_input_profile,
 )
 from bts_nvs.training.resources import (
@@ -723,6 +724,9 @@ class Trainer:
                 self.output_dir / "input_profile.json",
                 {
                     "cache_images": bool(self.config.get("cache_images", False)),
+                    "equivalence_steps": equivalence_steps_before_refinement(
+                        int(self.config.get("refine_start_step", 500))
+                    ),
                     "schema_version": PROFILE_SCHEMA_VERSION,
                     "training_identity_sha256": compute_config_sha256(
                         {

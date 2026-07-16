@@ -2,6 +2,7 @@ import argparse
 import json
 import math
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import torch
@@ -10,11 +11,13 @@ import torch
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from bts_nvs.data.dataset import SceneDataset, estimate_image_cache_bytes
+from bts_nvs.data.holdout import HoldoutSplit, load_holdout_split
 from bts_nvs.data.manifest import (
     build_scene_manifest,
     load_scene_manifest,
     save_scene_manifest,
 )
+from bts_nvs.data.sparse_subset import build_split_sparse_initialization
 from bts_nvs.cameras.intrinsics import CameraIntrinsics
 from bts_nvs.models.gaussian_parameters import GaussianParameters
 from bts_nvs.models.initialization import initialize_from_manifest
@@ -94,6 +97,11 @@ def parse_args():
         action="store_true",
         help="Run the fixed 50 warm-up + 500 measured-step input profile.",
     )
+    parser.add_argument(
+        "--internal_holdout",
+        action="store_true",
+        help="Train only on the prepared leakage-controlled internal split.",
+    )
     return parser.parse_args()
 
 
@@ -119,6 +127,37 @@ def validate_profile_args(args) -> None:
         raise ValueError("--profile_input requires exactly 550 max steps")
     if args.resume is not None:
         raise ValueError("--profile_input requires a fresh run without --resume")
+
+
+def internal_holdout_enabled(args) -> bool:
+    return bool(args.internal_holdout or args.profile_input)
+
+
+def load_internal_holdout(
+    manifest_dir: Path,
+    manifest,
+    *,
+    enabled: bool,
+) -> HoldoutSplit | None:
+    if not enabled:
+        return None
+    path = Path(manifest_dir) / "holdout.json"
+    if not path.is_file():
+        raise FileNotFoundError(
+            f"required internal holdout artifact does not exist: {path}"
+        )
+    return load_holdout_split(path, manifest)
+
+
+def build_initialization_manifest(manifest, scene_root: Path, split):
+    if split is None:
+        return manifest
+    sparse = build_split_sparse_initialization(manifest, scene_root, split)
+    return replace(
+        manifest,
+        sparse_points=sparse.points,
+        sparse_colors=sparse.colors,
+    )
 
 
 def validate_host_resources(
@@ -175,9 +214,15 @@ def run_cuda_preflight() -> None:
         raise RuntimeError("gsplat CUDA forward/backward preflight failed") from error
 
 
-def build_training_config(args, manifest, resize: tuple[int, int]) -> dict:
+def build_training_config(
+    args,
+    manifest,
+    resize: tuple[int, int],
+    *,
+    split: HoldoutSplit | None = None,
+) -> dict:
     width, height = resize
-    return {
+    config = {
         "scene_id": manifest.scene_id,
         "resize_factor": args.resize_factor,
         "resize_width": width,
@@ -186,6 +231,7 @@ def build_training_config(args, manifest, resize: tuple[int, int]) -> dict:
         "cache_images": bool(args.cache_images),
         "pinned_transfer": bool(args.pinned_transfer),
         "profile_input": bool(args.profile_input),
+        "internal_holdout": split is not None,
         "seed": args.seed,
         "max_steps": args.max_steps,
         "prune_opa": 0.005,
@@ -198,6 +244,17 @@ def build_training_config(args, manifest, resize: tuple[int, int]) -> dict:
         "lambda_dssim": 0.2,
         "data_range": 1.0,
     }
+    if split is not None:
+        config.update(
+            {
+                "holdout_algorithm": split.algorithm,
+                "holdout_manifest_sha256": split.manifest_sha256,
+                "internal_train_count": len(split.train_image_names),
+                "guard_count": len(split.guard_image_names),
+                "validation_count": len(split.validation_image_names),
+            }
+        )
+    return config
 
 
 def write_convergence_report(
@@ -275,6 +332,11 @@ def main():
     else:
         print(f"Loading scene manifest from: {manifest_json}")
         manifest = load_scene_manifest(manifest_json, scene_root)
+    split = load_internal_holdout(
+        manifest_dir,
+        manifest,
+        enabled=internal_holdout_enabled(args),
+    )
 
     # 2. Setup resolution resizing
     ref_camera = manifest.train_intrinsics[0]
@@ -284,7 +346,18 @@ def main():
     print(f"Downscaling images by factor {args.resize_factor} to resolution: {resize}")
     validate_host_resources(
         cache_bytes=(
-            estimate_image_cache_bytes(manifest, resize=resize)
+            estimate_image_cache_bytes(
+                manifest,
+                resize=resize,
+                indices=(
+                    tuple(
+                        manifest.train_image_names.index(name)
+                        for name in split.train_image_names
+                    )
+                    if split is not None
+                    else None
+                ),
+            )
             if args.cache_images
             else 0
         ),
@@ -295,6 +368,7 @@ def main():
     dataset = SceneDataset(
         manifest,
         scene_root,
+        image_names=(split.train_image_names if split is not None else None),
         undistort=True,
         resize=resize,
         cache_images=args.cache_images,
@@ -302,11 +376,16 @@ def main():
 
     # 4. Initialize adaptively from sparse point cloud
     print("Adaptive scale initialization from SfM sparse point cloud...")
-    gaussians = initialize_from_manifest(manifest)
+    initialization_manifest = build_initialization_manifest(
+        manifest,
+        scene_root,
+        split,
+    )
+    gaussians = initialize_from_manifest(initialization_manifest)
     print(f"Initialized {gaussians.num_gaussians} 3D Gaussian primitives.")
 
     # 5. Build Config baseline B0, including preprocessing identity.
-    config = build_training_config(args, manifest, resize)
+    config = build_training_config(args, manifest, resize, split=split)
 
     # 6. Instantiate Trainer
     trainer = Trainer(

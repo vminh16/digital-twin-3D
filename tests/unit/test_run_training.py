@@ -1,8 +1,10 @@
 from argparse import Namespace
+from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
 
 import json
+import numpy as np
 import pytest
 import torch
 
@@ -22,6 +24,7 @@ def _args(**changes):
         "cache_images": False,
         "pinned_transfer": False,
         "profile_input": False,
+        "internal_holdout": False,
     }
     values.update(changes)
     return Namespace(**values)
@@ -77,6 +80,80 @@ def test_profile_mode_requires_fresh_exact_550_step_run():
         run_training.validate_profile_args(
             _args(profile_input=True, max_steps=550, resume="checkpoint.pt")
         )
+
+
+def test_profile_implies_internal_holdout():
+    assert run_training.internal_holdout_enabled(
+        _args(profile_input=True, max_steps=550)
+    )
+    assert run_training.internal_holdout_enabled(_args(internal_holdout=True))
+    assert not run_training.internal_holdout_enabled(_args())
+
+
+def test_internal_holdout_requires_colocated_artifact(tmp_path, monkeypatch):
+    manifest = SimpleNamespace(scene_id="HCM0181")
+    with pytest.raises(FileNotFoundError, match="holdout.json"):
+        run_training.load_internal_holdout(tmp_path, manifest, enabled=True)
+    assert run_training.load_internal_holdout(tmp_path, manifest, enabled=False) is None
+
+    path = tmp_path / "holdout.json"
+    path.write_text("{}")
+    expected = SimpleNamespace(train_image_names=("a.JPG",))
+    monkeypatch.setattr(
+        run_training,
+        "load_holdout_split",
+        lambda source, value: expected,
+    )
+    assert run_training.load_internal_holdout(tmp_path, manifest, enabled=True) is expected
+
+
+def test_training_config_records_holdout_identity():
+    manifest = SimpleNamespace(scene_id="HCM0181")
+    split = SimpleNamespace(
+        algorithm="pose_fps_guard2_v1",
+        manifest_sha256="abc",
+        train_image_names=("a", "b"),
+        guard_image_names=("c",),
+        validation_image_names=("d",),
+    )
+
+    config = run_training.build_training_config(
+        _args(), manifest, resize=(8, 6), split=split
+    )
+
+    assert config["holdout_algorithm"] == "pose_fps_guard2_v1"
+    assert config["holdout_manifest_sha256"] == "abc"
+    assert config["internal_train_count"] == 2
+    assert config["guard_count"] == 1
+    assert config["validation_count"] == 1
+
+
+def test_internal_holdout_replaces_only_sparse_initialization(monkeypatch):
+    @dataclass(frozen=True)
+    class Manifest:
+        sparse_points: np.ndarray
+        sparse_colors: np.ndarray
+
+    manifest = Manifest(
+        np.zeros((1, 3), dtype=np.float64),
+        np.zeros((1, 3), dtype=np.uint8),
+    )
+    split = SimpleNamespace()
+    sparse = SimpleNamespace(
+        points=np.ones((2, 3), dtype=np.float64),
+        colors=np.full((2, 3), 7, dtype=np.uint8),
+    )
+    monkeypatch.setattr(
+        run_training,
+        "build_split_sparse_initialization",
+        lambda value, root, holdout: sparse,
+    )
+
+    result = run_training.build_initialization_manifest(manifest, Path("scene"), split)
+
+    np.testing.assert_array_equal(result.sparse_points, sparse.points)
+    np.testing.assert_array_equal(result.sparse_colors, sparse.colors)
+    np.testing.assert_array_equal(manifest.sparse_points, np.zeros((1, 3)))
 
 
 def test_host_resource_preflight_rejects_swap_and_low_cache_ram():
