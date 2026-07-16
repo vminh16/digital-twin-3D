@@ -39,7 +39,8 @@ env/
 
 # Project specific ignores
 /data/
-/runs/
+/runs/**/*.pt
+/runs/**/*.pth
 /outputs/
 __MACOSX/
 *.zip

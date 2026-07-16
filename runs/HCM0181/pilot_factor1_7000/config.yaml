@@ -1,0 +1,16 @@
+data_range: 1.0
+grow_grad2d: 0.0002
+grow_scale3d: 0.01
+lambda_dssim: 0.2
+max_steps: 7000
+prune_opa: 0.005
+refine_every: 100
+refine_start_step: 500
+refine_stop_step: 15000
+reset_every: 3000
+resize_factor: 1
+resize_height: 989
+resize_width: 1320
+scene_id: HCM0181
+seed: 0
+undistort: true
