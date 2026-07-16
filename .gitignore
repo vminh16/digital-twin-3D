@@ -44,6 +44,7 @@ env/
 /data/
 /runs/**/*.pt
 /runs/**/*.pth
+runs/manifests/
 /outputs/
 __MACOSX/
 *.zip
