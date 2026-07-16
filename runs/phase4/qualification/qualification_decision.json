@@ -1,0 +1,31 @@
+{
+  "calibration_scenes": [
+    "hcm0031",
+    "HCM0181",
+    "HCM0421",
+    "HCM1439",
+    "HNI0131",
+    "HNI0265"
+  ],
+  "candidate_aggregates": {
+    "B0-compact": {
+      "lpips_mean": 0.2112465628895622,
+      "max_vram_mb": 4207.39599609375,
+      "peak_gaussians_mean": 1927379.8333333333,
+      "psnr_db_mean": 21.83574589951478,
+      "ssim_mean": 0.7273844033130868,
+      "total_time_seconds": 3631.8081763289993
+    },
+    "B0-reference": {
+      "lpips_mean": 0.1899260659315265,
+      "max_vram_mb": 7197.24169921875,
+      "peak_gaussians_mean": 3485473.1666666665,
+      "psnr_db_mean": 21.945409936206364,
+      "ssim_mean": 0.734798071476079,
+      "total_time_seconds": 5555.621431776999
+    }
+  },
+  "compact_passed": false,
+  "schema_version": 1,
+  "selected_candidate": "B0-reference"
+}

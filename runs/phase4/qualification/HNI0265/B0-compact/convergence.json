@@ -1,0 +1,23 @@
+{
+  "final": {
+    "alpha_coverage": 1.0,
+    "psnr_db": 26.567977655609837,
+    "psnr_is_infinite": false,
+    "rgb_std": 0.17458979785442352,
+    "ssim": 0.7996051907539368,
+    "valid_fraction": 1.0
+  },
+  "final_render_non_blank": true,
+  "initial": {
+    "alpha_coverage": 1.0,
+    "psnr_db": 13.771366340302396,
+    "psnr_is_infinite": false,
+    "rgb_std": 0.09046792984008789,
+    "ssim": 0.30677270889282227,
+    "valid_fraction": 1.0
+  },
+  "psnr_delta_db": 12.796611315307441,
+  "quality_improved": true,
+  "ssim_delta": 0.4928324818611145,
+  "train_camera_index": 0
+}
