@@ -467,6 +467,21 @@ scenes đã khóa trước khi đọc metric, với split, seed và 7k horizon c
 - Gaussian/VRAM/time comparison;
 - machine-readable candidate decision với rule Mục 8.2.
 
+**Runbook tối thiểu:**
+
+```bash
+./scripts/prepare_phase4_artifacts.sh
+./scripts/run_phase4_qualification.sh
+```
+
+Script đầu yêu cầu đúng 18 scene dưới `data/bts_scenes` và sinh manifest cùng
+holdout vào `runs/manifests`. Script thứ hai gọi lại bước chuẩn bị một cách
+idempotent, smoke-test LPIPS rồi chạy ma trận 6 scene × 2 candidate vào
+`runs/phase4/qualification`. Run đã có `qualification_report.json` được bỏ qua;
+thư mục run dở dang làm script dừng và không bị tự động xóa. Có thể đổi root
+trên VM bằng `PYTHON_BIN`, `BTS_SCENES_ROOT`, `BTS_MANIFESTS_ROOT` và
+`BTS_QUALIFICATION_ROOT`.
+
 **Acceptance:**
 
 - mọi run có 7,000 finite steps và phục hồi sau reset step 6,000;
