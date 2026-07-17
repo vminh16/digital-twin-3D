@@ -6,6 +6,7 @@ PREPARE_SCRIPT = REPO_ROOT / "scripts" / "prepare_phase4_artifacts.sh"
 QUALIFICATION_SCRIPT = REPO_ROOT / "scripts" / "run_phase4_qualification.sh"
 DRY_RUN_SCRIPT = REPO_ROOT / "scripts" / "run_phase4_30k_dry_run.sh"
 BACKEND_SCRIPT = REPO_ROOT / "scripts" / "run_phase4_backend_qualification.sh"
+FULL_TRAINING_SCRIPT = REPO_ROOT / "scripts" / "run_phase4_full_training.sh"
 
 
 def _read_script(path: Path) -> str:
@@ -100,3 +101,31 @@ def test_backend_qualification_script_runs_three_fresh_1000_step_jobs():
     assert "compare_backend_qualification" in script
     assert "backend_qualification.json" in script
     assert "rm " not in script
+
+
+def test_full_training_script_is_a_path_only_wrapper():
+    script = _read_script(FULL_TRAINING_SCRIPT)
+
+    assert script.startswith("#!/usr/bin/env bash\nset -euo pipefail\n")
+    assert "prepare_phase4_artifacts.sh" in script
+    assert 'BACKEND_ROOT="${BTS_BACKEND_ROOT:-' in script
+    assert 'FULL_ROOT="${BTS_FULL_ROOT:-' in script
+    assert 'PYTHONPATH="${REPO_ROOT}/src' in script
+    assert "-m bts_nvs.training.run_full_training" in script
+    for flag in (
+        "--repo_root",
+        "--scenes_root",
+        "--manifests_root",
+        "--backend_root",
+        "--output_root",
+        "--python_bin",
+    ):
+        assert flag in script
+    for forbidden in (
+        "rm ",
+        "--max_steps",
+        "--optimizer_backend",
+        "--precision",
+        "for scene",
+    ):
+        assert forbidden not in script

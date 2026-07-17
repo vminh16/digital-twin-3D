@@ -129,3 +129,43 @@ speedup và sai số có một nguyên nhân duy nhất. Tham chiếu:
 [NVIDIA L4 specifications](https://www.nvidia.com/en-gb/data-center/l4/).
 
 Changing resize, seed, manifest, or optimization horizon must be rejected by checkpoint validation.
+
+## 7. Phase 4.7 — full training 18 scenes without Docker
+
+Activate the installed virtual environment, then start the sequential cohort:
+
+```bash
+source .venv/bin/activate
+bash scripts/run_phase4_full_training.sh
+```
+
+Optional path overrides are limited to runtime locations:
+
+```bash
+BTS_SCENES_ROOT="$PWD/data/bts_scenes" \
+BTS_MANIFESTS_ROOT="$PWD/runs/manifests" \
+BTS_BACKEND_ROOT="$PWD/runs/phase4/backend_qualification" \
+BTS_FULL_ROOT="$PWD/runs/phase4/full_training" \
+PYTHON_BIN="$PWD/.venv/bin/python" \
+bash scripts/run_phase4_full_training.sh
+```
+
+The wrapper regenerates/audits manifest artifacts, validates the exact canonical
+18-scene pool, reads the accepted backend decision, and runs one GPU process at a
+time. Monitor durable cohort state with:
+
+```bash
+cat runs/phase4/full_training/ledger.json
+df -h "$PWD/runs/phase4/full_training"
+nvidia-smi
+```
+
+If the process is interrupted, execute the same wrapper again. A scene with a
+valid `checkpoints/recovery.pt` resumes automatically; a fully validated scene is
+skipped. A non-zero scene exit stops the queue and records `failed`. `Ctrl+C`
+leaves the current scene as `running`, so its recovery artifact can be inspected
+and resumed. Do not delete or rename partial run directories.
+
+Only one rolling recovery checkpoint is retained per scene. A ledger status of
+`trained` means the 30k training artifacts passed integrity checks; compact model
+export and official test rendering are separate later steps.

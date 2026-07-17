@@ -30,6 +30,7 @@ def _args(**changes):
         "backend_qualification": False,
         "optimizer_backend": "adam",
         "precision": "fp32",
+        "rolling_checkpoint": False,
     }
     values.update(changes)
     return Namespace(**values)
@@ -76,6 +77,7 @@ def test_training_config_binds_preprocessing_identity():
     assert config["pinned_transfer"] is False
     assert config["optimizer_backend"] == "adam"
     assert config["precision"] == "fp32"
+    assert config["rolling_checkpoint"] is False
 
 
 @pytest.mark.parametrize(
@@ -97,6 +99,23 @@ def test_training_backend_contract_rejects_amp_with_unfused_adam():
         run_training.validate_training_backend(
             _args(optimizer_backend="adam", precision="amp-fp16")
         )
+
+
+def test_rolling_checkpoint_is_allowed_only_for_ordinary_or_full_length_runs():
+    run_training.validate_rolling_checkpoint_args(_args(rolling_checkpoint=True))
+    run_training.validate_rolling_checkpoint_args(
+        _args(rolling_checkpoint=True, full_length_qualification=True)
+    )
+
+    for change in (
+        {"profile_input": True},
+        {"backend_qualification": True},
+        {"qualification_candidate": "B0-reference"},
+    ):
+        with pytest.raises(ValueError, match="rolling checkpoint"):
+            run_training.validate_rolling_checkpoint_args(
+                _args(rolling_checkpoint=True, **change)
+            )
 
 
 def test_profile_mode_requires_fresh_exact_550_step_run():

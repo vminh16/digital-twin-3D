@@ -143,6 +143,11 @@ def parse_args():
         action="store_true",
         help="Run the fixed Phase 4.6 1000-step HCM0181 backend qualification.",
     )
+    parser.add_argument(
+        "--rolling_checkpoint",
+        action="store_true",
+        help="Atomically reuse checkpoints/recovery.pt instead of numbered files.",
+    )
     return parser.parse_args()
 
 
@@ -179,6 +184,19 @@ def validate_backend_qualification_args(args) -> None:
 def validate_backend_qualification_scene(scene_id: str, args) -> None:
     if args.backend_qualification and scene_id != "HCM0181":
         raise ValueError("backend qualification requires HCM0181")
+
+
+def validate_rolling_checkpoint_args(args) -> None:
+    if not args.rolling_checkpoint:
+        return
+    if (
+        args.profile_input
+        or args.backend_qualification
+        or args.qualification_candidate is not None
+    ):
+        raise ValueError(
+            "rolling checkpoint is only supported for ordinary or full-length runs"
+        )
 
 
 def validate_output_directory(output_dir: Path, resume: str | Path | None) -> None:
@@ -445,6 +463,7 @@ def build_training_config(
         "optimizer_backend": args.optimizer_backend,
         "precision": args.precision,
         "backend_qualification": bool(args.backend_qualification),
+        "rolling_checkpoint": bool(args.rolling_checkpoint),
         "internal_holdout": split is not None,
         "seed": args.seed,
         "max_steps": args.max_steps,
@@ -534,6 +553,7 @@ def main():
     validate_resize_factor(args.resize_factor)
     validate_training_backend(args)
     validate_backend_qualification_args(args)
+    validate_rolling_checkpoint_args(args)
     validate_profile_args(args)
     validate_qualification_args(args)
     validate_full_length_args(args)
@@ -684,7 +704,9 @@ def main():
             stop_step=args.max_steps,
             checkpoint_every=args.checkpoint_every,
             save_checkpoints=should_save_checkpoints(args),
-            rolling_checkpoint=args.full_length_qualification,
+            rolling_checkpoint=(
+                args.rolling_checkpoint or args.full_length_qualification
+            ),
         )
     else:
         print(f"Checkpoint is already at step {args.max_steps}; finalizing artifacts...")

@@ -583,22 +583,27 @@ nguyên baseline đã khóa.
 **Deliverables:**
 
 - sorted scene queue;
-- ledger trạng thái `pending/running/complete/failed`;
+- ledger trạng thái `pending/running/trained/failed`;
 - rolling atomic recovery checkpoint cho scene đang chạy;
-- final compact model và per-scene training report;
-- bounded checkpoint retention, không lưu checkpoint dày đặc.
+- per-scene training report; compact export được tách sang bước sau;
+- đúng một `checkpoints/recovery.pt`, không lưu checkpoint dày đặc.
 
 **Acceptance:**
 
 - scene chạy đúng thứ tự scene ID, một process GPU tại một thời điểm;
-- rerun bỏ qua scene complete chỉ khi hashes và artifact validation pass;
-- failed scene không đánh dấu các scene khác complete;
-- disk preflight chạy trước mỗi scene và fail trước `torch.save` nếu thiếu;
-- mỗi scene complete có 30k records, compact model, config/environment/hash và
-  non-blank fixed train preview;
+- rerun bỏ qua scene `trained` chỉ khi hashes và artifact validation pass;
+- failed scene không đánh dấu các scene khác `trained`;
+- exact 18-scene pool và manifest artifacts được kiểm tra trước khi khởi chạy;
+- mỗi scene `trained` có 30k records, config/manifest hashes, recovery checkpoint
+  tại bước 30k và non-blank fixed train preview;
 - peak VRAM/RAM/Gaussians nằm trong limits đã khóa.
 
-**Điểm dừng:** red review từng scene; không render official test từ model fail.
+Backend/precision chỉ được lấy từ `backend_qualification.json` đã accepted;
+production không cho phép CLI override. Runner khóa full resolution, 30k steps,
+checkpoint mỗi 3k, seed 0, image cache và pinned transfer.
+
+**Điểm dừng:** cohort mới ở trạng thái trained; compact export và test rendering
+là bước riêng. Không render official test từ model fail.
 
 ### Phiên 4.8 — Test rendering, benchmark và final audit
 
