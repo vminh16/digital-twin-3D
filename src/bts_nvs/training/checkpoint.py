@@ -46,6 +46,7 @@ def save_checkpoint(
     active_sh_degree: int,
     manifest_hash: str,
     config_hash: str,
+    precision_state: dict | None = None,
 ) -> None:
     """Saves training checkpoint atomically.
 
@@ -74,6 +75,7 @@ def save_checkpoint(
         "rng_states": get_rng_states(),
         "manifest_hash": manifest_hash,
         "config_hash": config_hash,
+        "precision_state": precision_state or {},
     }
 
     torch.save(state, tmp_path)

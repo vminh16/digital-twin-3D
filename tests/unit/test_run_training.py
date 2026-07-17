@@ -27,6 +27,9 @@ def _args(**changes):
         "internal_holdout": False,
         "qualification_candidate": None,
         "full_length_qualification": False,
+        "backend_qualification": False,
+        "optimizer_backend": "adam",
+        "precision": "fp32",
     }
     values.update(changes)
     return Namespace(**values)
@@ -36,7 +39,7 @@ def test_cuda_preflight_rejects_cpu_only_torch(monkeypatch):
     monkeypatch.setattr(run_training.torch.cuda, "is_available", lambda: False)
 
     with pytest.raises(RuntimeError, match="CUDA-enabled PyTorch"):
-        run_training.run_cuda_preflight()
+        run_training.run_cuda_preflight("adam-fused", "amp-fp16")
 
 
 def test_preflight_requires_a_finite_gradient():
@@ -71,6 +74,29 @@ def test_training_config_binds_preprocessing_identity():
     assert config["seed"] == 19
     assert config["cache_images"] is False
     assert config["pinned_transfer"] is False
+    assert config["optimizer_backend"] == "adam"
+    assert config["precision"] == "fp32"
+
+
+@pytest.mark.parametrize(
+    "backend,precision",
+    [
+        ("adam", "fp32"),
+        ("adam-fused", "fp32"),
+        ("adam-fused", "amp-fp16"),
+    ],
+)
+def test_training_backend_contract_accepts_supported_pairs(backend, precision):
+    run_training.validate_training_backend(
+        _args(optimizer_backend=backend, precision=precision)
+    )
+
+
+def test_training_backend_contract_rejects_amp_with_unfused_adam():
+    with pytest.raises(ValueError, match="amp-fp16 requires adam-fused"):
+        run_training.validate_training_backend(
+            _args(optimizer_backend="adam", precision="amp-fp16")
+        )
 
 
 def test_profile_mode_requires_fresh_exact_550_step_run():
@@ -90,6 +116,37 @@ def test_profile_implies_internal_holdout():
     )
     assert run_training.internal_holdout_enabled(_args(internal_holdout=True))
     assert not run_training.internal_holdout_enabled(_args())
+
+
+def test_backend_qualification_locks_1000_step_l4_contract():
+    valid = _args(
+        backend_qualification=True,
+        resize_factor=1,
+        max_steps=1000,
+        checkpoint_every=1000,
+        seed=0,
+        cache_images=True,
+        pinned_transfer=True,
+        optimizer_backend="adam-fused",
+        precision="amp-fp16",
+    )
+    run_training.validate_backend_qualification_args(valid)
+    assert run_training.internal_holdout_enabled(valid)
+    assert run_training.should_save_checkpoints(valid) is False
+
+    for change in (
+        {"max_steps": 999},
+        {"resize_factor": 2},
+        {"seed": 1},
+        {"cache_images": False},
+        {"pinned_transfer": False},
+        {"resume": "checkpoint.pt"},
+        {"full_length_qualification": True},
+    ):
+        with pytest.raises(ValueError, match="backend qualification"):
+            run_training.validate_backend_qualification_args(
+                _args(**(vars(valid) | change))
+            )
 
 
 def test_qualification_candidate_locks_run_contract():

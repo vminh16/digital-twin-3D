@@ -23,6 +23,12 @@ from bts_nvs.models.loss import JointLoss
 from bts_nvs.models.optimizer import setup_mean_scheduler, setup_optimizers
 from bts_nvs.rendering.density_strategy import GsplatStrategy
 from bts_nvs.rendering.gsplat_renderer import render_gaussians
+from bts_nvs.training.backend_qualification import (
+    AUDIT_STEPS,
+    DENSITY_EVENT_STEPS,
+    QUALIFICATION_STEPS,
+    write_backend_profile,
+)
 from bts_nvs.training.checkpoint import load_checkpoint, save_checkpoint, set_rng_states
 from bts_nvs.training.input_pipeline import TrainingInputPipeline
 from bts_nvs.training.profiling import (
@@ -32,6 +38,7 @@ from bts_nvs.training.profiling import (
     equivalence_steps_before_refinement,
     write_input_profile,
 )
+from bts_nvs.training.precision import TrainingPrecision
 from bts_nvs.training.resources import (
     linux_memory_status,
     require_cache_capacity,
@@ -228,6 +235,14 @@ class Trainer:
         else:
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+        optimizer_backend = self.config.get("optimizer_backend", "adam")
+        precision_mode = self.config.get("precision", "fp32")
+        if precision_mode == "amp-fp16" and optimizer_backend != "adam-fused":
+            raise ValueError("amp-fp16 requires adam-fused")
+        if optimizer_backend == "adam-fused" and self.device.type != "cuda":
+            raise ValueError("adam-fused requires CUDA")
+        self.precision = TrainingPrecision(precision_mode, self.device)
+
         self.gaussians.to(self.device)
         self.input_pipeline = TrainingInputPipeline(
             self.device,
@@ -311,7 +326,10 @@ class Trainer:
             )
 
         # Setup Optimizers
-        self.optimizers = setup_optimizers(self.gaussians)
+        self.optimizers = setup_optimizers(
+            self.gaussians,
+            backend=optimizer_backend,
+        )
 
         # Setup LR Scheduler
         self.scheduler = setup_mean_scheduler(self.optimizers, max_steps=self.max_steps)
@@ -441,7 +459,10 @@ class Trainer:
         self.gaussians.load_state_dict(checkpoint_state["gaussians"])
 
         # 2. Re-create optimizers for resized parameters
-        self.optimizers = setup_optimizers(self.gaussians)
+        self.optimizers = setup_optimizers(
+            self.gaussians,
+            backend=self.config.get("optimizer_backend", "adam"),
+        )
         for name, opt in self.optimizers.items():
             opt.load_state_dict(checkpoint_state["optimizers"][name])
 
@@ -461,10 +482,13 @@ class Trainer:
                 loaded_state[k] = v.to(self.device)
         self.strategy_state = loaded_state
 
-        # 6. Restore RNG state
+        # 6. Restore AMP loss scale; legacy FP32 checkpoints use an empty state.
+        self.precision.load_state_dict(checkpoint_state.get("precision_state", {}))
+
+        # 7. Restore RNG state
         set_rng_states(checkpoint_state["rng_states"])
 
-        # 7. Remove records written after the resumed checkpoint.
+        # 8. Remove records written after the resumed checkpoint.
         _truncate_run_records(self.output_dir, self.start_step)
 
     def train(
@@ -501,12 +525,21 @@ class Trainer:
         ):
             raise ValueError("checkpoint_every must be a positive integer")
         profile_input = bool(self.config.get("profile_input", False))
+        backend_qualification = bool(self.config.get("backend_qualification", False))
         if profile_input and (
             self.device.type != "cuda"
             or self.start_step != 0
             or target_step != PROFILE_WARMUP_STEPS + PROFILE_MEASURED_STEPS
         ):
             raise ValueError("input profiling requires a fresh 550-step CUDA run")
+        if backend_qualification and (
+            self.device.type != "cuda"
+            or self.start_step != 0
+            or target_step != QUALIFICATION_STEPS
+        ):
+            raise ValueError(
+                "backend qualification requires a fresh 1000-step CUDA run"
+            )
         metrics_file = self.output_dir / "metrics.jsonl"
         timing_file = self.output_dir / "timing.json"
         if self.device.type == "cuda":
@@ -525,6 +558,12 @@ class Trainer:
         profile_indices: list[int] = []
         profile_data_seconds = 0.0
         profile_wall_start: float | None = None
+        backend_events: list[tuple[torch.cuda.Event, torch.cuda.Event]] = []
+        backend_losses: list[float] = []
+        backend_counts: list[int] = []
+        backend_indices: list[int] = []
+        backend_density_events: list[int] = []
+        gradient_audits: list[dict[str, Any]] = []
 
         for step_index in range(self.start_step, target_step):
             if profile_input and step_index == PROFILE_WARMUP_STEPS:
@@ -556,6 +595,11 @@ class Trainer:
                 cuda_start = torch.cuda.Event(enable_timing=True)
                 cuda_end = torch.cuda.Event(enable_timing=True)
                 cuda_start.record(torch.cuda.current_stream(self.device))
+            backend_cuda_start = backend_cuda_end = None
+            if backend_qualification and step_index >= PROFILE_WARMUP_STEPS:
+                backend_cuda_start = torch.cuda.Event(enable_timing=True)
+                backend_cuda_end = torch.cuda.Event(enable_timing=True)
+                backend_cuda_start.record(torch.cuda.current_stream(self.device))
             t_transfer_start = time.perf_counter()
             device_sample = self.input_pipeline.transfer(
                 sample,
@@ -568,13 +612,14 @@ class Trainer:
 
             # 1. Forward Pass
             t_fwd_start = time.perf_counter()
-            result = render_gaussians(
-                gaussians=self.gaussians,
-                viewmat=viewmat,
-                intrinsics=sample.intrinsics,
-                active_sh_degree=active_sh_degree,
-                render_mode="RGB",
-            )
+            with self.precision.autocast():
+                result = render_gaussians(
+                    gaussians=self.gaussians,
+                    viewmat=viewmat,
+                    intrinsics=sample.intrinsics,
+                    active_sh_degree=active_sh_degree,
+                    render_mode="RGB",
+                )
             t_fwd = time.perf_counter() - t_fwd_start
 
             # 2. Strategy pre-backward step (step + 1 because strategy step is 1-based)
@@ -585,7 +630,8 @@ class Trainer:
             )
 
             # 3. Compute loss
-            loss = self.loss_fn(result.rgb, rgb_gt, mask)
+            with self.precision.autocast():
+                loss = self.loss_fn(result.rgb, rgb_gt, mask)
             if not torch.isfinite(loss):
                 raise FloatingPointError(
                     f"non-finite loss at completed step {completed_step}"
@@ -597,7 +643,16 @@ class Trainer:
 
             # 5. Backward Pass
             t_bwd_start = time.perf_counter()
-            loss.backward()
+            means2d = result.info.get("means2d")
+            if not isinstance(means2d, torch.Tensor):
+                raise RuntimeError("renderer did not return projected means")
+            loss_scale = self.precision.backward_and_unscale(
+                loss,
+                self.optimizers,
+                means2d,
+            )
+            audit_step = backend_qualification and completed_step in AUDIT_STEPS
+            leaf_grad_max: dict[str, float] = {}
             for name, parameter in self.gaussians.named_parameters():
                 if (
                     parameter.grad is not None
@@ -607,16 +662,39 @@ class Trainer:
                         f"non-finite gradient for {name} at completed step "
                         f"{completed_step}"
                     )
-            means2d = result.info.get("means2d")
+                if audit_step and parameter.grad is not None:
+                    leaf_grad_max[name] = float(
+                        parameter.grad.detach().abs().max().item()
+                    )
             if (
-                isinstance(means2d, torch.Tensor)
-                and (means2d.is_leaf or means2d.retains_grad)
+                (means2d.is_leaf or means2d.retains_grad)
                 and means2d.grad is not None
                 and not torch.isfinite(means2d.grad).all()
             ):
                 raise FloatingPointError(
                     "non-finite projected means gradient at completed step "
                     f"{completed_step}"
+                )
+            if audit_step:
+                if means2d.grad is None:
+                    raise RuntimeError("gradient audit requires projected means gradient")
+                gradient_audits.append(
+                    {
+                        "step": completed_step,
+                        "finite": True,
+                        "strategy_gradient_unscaled": True,
+                        "loss_scale": loss_scale,
+                        "projected_grad_max": float(
+                            means2d.grad.detach().abs().max().item()
+                        ),
+                        "leaf_grad_max": leaf_grad_max,
+                        "parameter_dtypes": {
+                            name: str(parameter.dtype)
+                            for name, parameter in self.gaussians.named_parameters()
+                        },
+                        "render_dtype": str(result.rgb.dtype),
+                        "loss_dtype": str(loss.dtype),
+                    }
                 )
             t_bwd = time.perf_counter() - t_bwd_start
 
@@ -638,8 +716,7 @@ class Trainer:
 
             # 7. Optimizer step and scheduler decay
             t_opt_start = time.perf_counter()
-            for opt in self.optimizers.values():
-                opt.step()
+            self.precision.step(self.optimizers)
             self.scheduler.step()
             for name, parameter in self.gaussians.named_parameters():
                 if not torch.isfinite(parameter).all():
@@ -648,6 +725,15 @@ class Trainer:
                         f"step {completed_step}"
                     )
             t_opt = time.perf_counter() - t_opt_start
+            if backend_cuda_end is not None:
+                backend_cuda_end.record(torch.cuda.current_stream(self.device))
+                backend_events.append((backend_cuda_start, backend_cuda_end))
+            if backend_qualification:
+                backend_losses.append(float(loss.item()))
+                backend_counts.append(self.gaussians.num_gaussians)
+                backend_indices.append(sample_idx)
+                if completed_step in DENSITY_EVENT_STEPS:
+                    backend_density_events.append(completed_step)
             if cuda_end is not None:
                 cuda_end.record(torch.cuda.current_stream(self.device))
                 profile_events.append((cuda_start, cuda_end))
@@ -710,6 +796,7 @@ class Trainer:
                     active_sh_degree=self.active_sh_degree,
                     manifest_hash=self.manifest_hash,
                     config_hash=self.config_hash,
+                    precision_state=self.precision.state_dict(),
                 )
 
         if self.device.type == "cuda":
@@ -731,6 +818,30 @@ class Trainer:
             available_bytes, swap_used_bytes = final_memory
             require_no_swap(swap_used_bytes)
             require_cache_capacity(0, available_bytes=available_bytes)
+        if backend_qualification:
+            cuda_step_ms = [start.elapsed_time(end) for start, end in backend_events]
+            if len(cuda_step_ms) != QUALIFICATION_STEPS - PROFILE_WARMUP_STEPS:
+                raise RuntimeError("backend qualification has an incomplete CUDA trace")
+            write_backend_profile(
+                self.output_dir / "backend_profile.json",
+                {
+                    "schema_version": 1,
+                    "optimizer_backend": self.config.get("optimizer_backend", "adam"),
+                    "precision": self.config.get("precision", "fp32"),
+                    "steps": QUALIFICATION_STEPS,
+                    "device_name": torch.cuda.get_device_name(self.device),
+                    "device_capability": list(
+                        torch.cuda.get_device_capability(self.device)
+                    ),
+                    "median_cuda_step_ms": statistics.median(cuda_step_ms),
+                    "peak_vram_bytes": peak_vram_bytes,
+                    "sample_indices": backend_indices,
+                    "losses": backend_losses,
+                    "gaussian_counts": backend_counts,
+                    "density_event_steps": backend_density_events,
+                    "gradient_audits": gradient_audits,
+                },
+            )
         if profile_input:
             assert profile_wall_seconds is not None
             cuda_step_ms = [start.elapsed_time(end) for start, end in profile_events]

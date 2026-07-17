@@ -145,6 +145,17 @@ def _config(max_steps: int = 4) -> dict[str, int | float]:
     }
 
 
+def test_trainer_rejects_fused_adam_on_cpu(
+    tmp_path: Path,
+    manifest_artifact: Path,
+) -> None:
+    config = _config()
+    config["optimizer_backend"] = "adam-fused"
+
+    with pytest.raises(ValueError, match="adam-fused requires CUDA"):
+        _trainer(tmp_path / "run", manifest_artifact, _MockDataset(), config=config)
+
+
 def _differentiable_render(
     gaussians,
     viewmat,
@@ -535,13 +546,14 @@ def test_checkpoint_manifest_hash_validation(tmp_path: Path) -> None:
         active_sh_degree=0,
         manifest_hash="expected",
         config_hash="config",
+        precision_state={"scale": 1024.0},
     )
 
     with pytest.raises(ValueError, match="Manifest hash mismatch"):
         load_checkpoint(checkpoint_path, expected_manifest_hash="wrong")
-    assert (
-        load_checkpoint(checkpoint_path, expected_manifest_hash="expected")["step"] == 5
-    )
+    loaded = load_checkpoint(checkpoint_path, expected_manifest_hash="expected")
+    assert loaded["step"] == 5
+    assert loaded["precision_state"] == {"scale": 1024.0}
 
 
 def test_compute_file_sha256_changes_with_content(tmp_path: Path) -> None:

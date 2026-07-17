@@ -17,13 +17,19 @@ _LEARNING_RATES = {
 
 def setup_optimizers(
     gaussians: GaussianParameters,
+    *,
+    backend: str = "adam",
 ) -> dict[str, torch.optim.Adam]:
     """Create one Adam optimizer per Gaussian parameter for gsplat strategy updates."""
+    if backend not in {"adam", "adam-fused"}:
+        raise ValueError(f"unsupported optimizer backend: {backend}")
     parameters = dict(gaussians.named_parameters())
+    adam_options = {"fused": True} if backend == "adam-fused" else {}
     return {
         name: torch.optim.Adam(
             [{"params": [parameters[name]], "lr": lr, "name": name}],
             eps=1e-15,
+            **adam_options,
         )
         for name, lr in _LEARNING_RATES.items()
     }

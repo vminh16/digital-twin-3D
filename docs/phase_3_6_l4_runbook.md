@@ -93,4 +93,39 @@ docker run --rm --gpus all \
     --resume runs/HCM0181/run_b_factor2_7000/checkpoints/step_000003000.pt
 ```
 
+## 6. Phase 4.6 — accelerated backend qualification
+
+PyTorch CUDA phải nhận đúng NVIDIA L4 (`compute capability 8.9`). Trước run
+1,000 bước, chạy gradient smoke thật cho cả ba backend:
+
+```bash
+BTS_RUN_CUDA_BACKEND_SMOKE=1 python -m pytest \
+  tests/integration/test_cuda_backend_smoke.py -q
+```
+
+Sau đó chạy ba job full-resolution tuần tự:
+
+```bash
+bash scripts/run_phase4_backend_qualification.sh
+cat runs/phase4/backend_qualification/backend_qualification.json
+```
+
+Điều kiện pass:
+
+- `accepted` là `true`;
+- mọi gradient audit finite và density strategy nhận projected gradient đã
+  unscale;
+- sample traces và density-event schedule giống nhau;
+- fused FP32 chỉ được chọn khi speedup tối thiểu 10%;
+- AMP FP16 chỉ được chọn khi nhanh thêm tối thiểu 5% so với fused FP32;
+- peak VRAM nhỏ hơn 20 GiB;
+- candidate không đạt gate phải quay về reference trong report, không silently
+  fallback trong training.
+
+L4 hỗ trợ FP16/BF16/TF32 Tensor Cores, nhưng gate này chỉ thay đổi FP16 AMP để
+speedup và sai số có một nguyên nhân duy nhất. Tham chiếu:
+[PyTorch fused Adam](https://docs.pytorch.org/docs/stable/generated/torch.optim.Adam.html),
+[PyTorch AMP với nhiều optimizer](https://docs.pytorch.org/docs/stable/notes/amp_examples.html),
+[NVIDIA L4 specifications](https://www.nvidia.com/en-gb/data-center/l4/).
+
 Changing resize, seed, manifest, or optimization horizon must be rejected by checkpoint validation.

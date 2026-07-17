@@ -5,6 +5,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 PREPARE_SCRIPT = REPO_ROOT / "scripts" / "prepare_phase4_artifacts.sh"
 QUALIFICATION_SCRIPT = REPO_ROOT / "scripts" / "run_phase4_qualification.sh"
 DRY_RUN_SCRIPT = REPO_ROOT / "scripts" / "run_phase4_30k_dry_run.sh"
+BACKEND_SCRIPT = REPO_ROOT / "scripts" / "run_phase4_backend_qualification.sh"
 
 
 def _read_script(path: Path) -> str:
@@ -80,4 +81,22 @@ def test_30k_dry_run_script_locks_science_and_bounded_artifacts():
     assert "checkpoints/recovery.pt" in script
     assert "BTS_RESUME" in script
     assert "full_length_report.json" in script
+    assert "rm " not in script
+
+
+def test_backend_qualification_script_runs_three_fresh_1000_step_jobs():
+    script = _read_script(BACKEND_SCRIPT)
+
+    assert script.startswith("#!/usr/bin/env bash\nset -euo pipefail\n")
+    assert script.count("--backend_qualification") == 1
+    assert script.count("--max_steps 1000") == 1
+    assert "--resize_factor 1" in script
+    assert "--seed 0" in script
+    assert "--cache_images" in script
+    assert "--pinned_transfer" in script
+    assert '"adam:fp32"' in script
+    assert '"adam-fused:fp32"' in script
+    assert '"adam-fused:amp-fp16"' in script
+    assert "compare_backend_qualification" in script
+    assert "backend_qualification.json" in script
     assert "rm " not in script

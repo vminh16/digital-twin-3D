@@ -22,6 +22,8 @@ from bts_nvs.data.sparse_subset import build_split_sparse_initialization
 from bts_nvs.cameras.intrinsics import CameraIntrinsics
 from bts_nvs.models.gaussian_parameters import GaussianParameters
 from bts_nvs.models.initialization import initialize_from_manifest
+from bts_nvs.models.optimizer import setup_optimizers
+from bts_nvs.rendering.density_strategy import GsplatStrategy
 from bts_nvs.rendering.gsplat_renderer import render_gaussians
 from bts_nvs.training.checkpoint import load_checkpoint
 from bts_nvs.training.trainer import Trainer
@@ -38,6 +40,7 @@ from bts_nvs.training.resources import (
     require_cache_capacity,
     require_no_swap,
 )
+from bts_nvs.training.precision import TrainingPrecision
 
 
 def parse_args():
@@ -123,12 +126,59 @@ def parse_args():
         action="store_true",
         help="Run the locked HCM0181 Phase 4.5 30k internal-holdout dry run.",
     )
+    parser.add_argument(
+        "--optimizer_backend",
+        choices=("adam", "adam-fused"),
+        default="adam",
+        help="Adam implementation; fused is CUDA-only and never falls back.",
+    )
+    parser.add_argument(
+        "--precision",
+        choices=("fp32", "amp-fp16"),
+        default="fp32",
+        help="Training precision; AMP keeps Gaussian parameters in FP32.",
+    )
+    parser.add_argument(
+        "--backend_qualification",
+        action="store_true",
+        help="Run the fixed Phase 4.6 1000-step HCM0181 backend qualification.",
+    )
     return parser.parse_args()
 
 
 def validate_resize_factor(value: int) -> None:
     if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
         raise ValueError("resize_factor must be a positive integer")
+
+
+def validate_training_backend(args) -> None:
+    if args.precision == "amp-fp16" and args.optimizer_backend != "adam-fused":
+        raise ValueError("amp-fp16 requires adam-fused")
+
+
+def validate_backend_qualification_args(args) -> None:
+    if not args.backend_qualification:
+        return
+    if (
+        args.max_steps != 1000
+        or args.resize_factor != 1
+        or args.seed != 0
+        or not args.cache_images
+        or not args.pinned_transfer
+        or args.resume is not None
+        or args.profile_input
+        or args.qualification_candidate is not None
+        or args.full_length_qualification
+    ):
+        raise ValueError(
+            "backend qualification requires a fresh factor-1, seed-0, "
+            "1000-step run with cached images and pinned transfer"
+        )
+
+
+def validate_backend_qualification_scene(scene_id: str, args) -> None:
+    if args.backend_qualification and scene_id != "HCM0181":
+        raise ValueError("backend qualification requires HCM0181")
 
 
 def validate_output_directory(output_dir: Path, resume: str | Path | None) -> None:
@@ -255,11 +305,16 @@ def internal_holdout_enabled(args) -> bool:
         or args.profile_input
         or args.qualification_candidate is not None
         or args.full_length_qualification
+        or args.backend_qualification
     )
 
 
 def should_save_checkpoints(args) -> bool:
-    return not args.profile_input and args.qualification_candidate is None
+    return (
+        not args.profile_input
+        and args.qualification_candidate is None
+        and not args.backend_qualification
+    )
 
 
 def load_internal_holdout(
@@ -314,7 +369,10 @@ def validate_preflight_gradients(parameters) -> None:
         )
 
 
-def run_cuda_preflight() -> None:
+def run_cuda_preflight(
+    optimizer_backend: str = "adam",
+    precision_mode: str = "fp32",
+) -> None:
     """Fail before scene loading unless real gsplat CUDA forward/backward works."""
     if not torch.cuda.is_available():
         raise RuntimeError(
@@ -330,14 +388,37 @@ def run_cuda_preflight() -> None:
         shN=torch.zeros((1, 15, 3), device=device),
     )
     try:
-        result = render_gaussians(
-            gaussians=gaussians,
-            viewmat=torch.eye(4, device=device),
-            intrinsics=CameraIntrinsics(32, 32, 24.0, 24.0, 16.0, 16.0),
-            active_sh_degree=0,
-        )
-        result.rgb.sum().backward()
+        optimizers = setup_optimizers(gaussians, backend=optimizer_backend)
+        precision = TrainingPrecision(precision_mode, device)
+        strategy = GsplatStrategy(gaussians, optimizers)
+        strategy_state = strategy.initialize_state(scene_scale=1.0)
+        with precision.autocast():
+            result = render_gaussians(
+                gaussians=gaussians,
+                viewmat=torch.eye(4, device=device),
+                intrinsics=CameraIntrinsics(32, 32, 24.0, 24.0, 16.0, 16.0),
+                active_sh_degree=0,
+            )
+            loss = result.rgb.square().mean()
+        strategy.step_pre_backward(strategy_state, step=1, info=result.info)
+        for optimizer in optimizers.values():
+            optimizer.zero_grad(set_to_none=True)
+        means2d = result.info.get("means2d")
+        if not isinstance(means2d, torch.Tensor):
+            raise RuntimeError("gsplat preflight did not return projected means")
+        precision.backward_and_unscale(loss, optimizers, means2d)
         validate_preflight_gradients(gaussians.parameters())
+        if means2d.grad is None or not torch.isfinite(means2d.grad).all():
+            raise RuntimeError(
+                "gsplat preflight did not produce a finite projected gradient"
+            )
+        strategy.step_post_backward(
+            strategy_state,
+            step=1,
+            info=result.info,
+            packed=True,
+        )
+        precision.step(optimizers)
         torch.cuda.synchronize(device)
     except Exception as error:
         raise RuntimeError("gsplat CUDA forward/backward preflight failed") from error
@@ -361,6 +442,9 @@ def build_training_config(
         "pinned_transfer": bool(args.pinned_transfer),
         "profile_input": bool(args.profile_input),
         "full_length_qualification": bool(args.full_length_qualification),
+        "optimizer_backend": args.optimizer_backend,
+        "precision": args.precision,
+        "backend_qualification": bool(args.backend_qualification),
         "internal_holdout": split is not None,
         "seed": args.seed,
         "max_steps": args.max_steps,
@@ -448,6 +532,8 @@ def read_json_record(path: Path) -> dict:
 def main():
     args = parse_args()
     validate_resize_factor(args.resize_factor)
+    validate_training_backend(args)
+    validate_backend_qualification_args(args)
     validate_profile_args(args)
     validate_qualification_args(args)
     validate_full_length_args(args)
@@ -457,7 +543,7 @@ def main():
         if args.full_length_qualification
         else None
     )
-    run_cuda_preflight()
+    run_cuda_preflight(args.optimizer_backend, args.precision)
 
     scene_root = Path(args.scene_dir)
     manifest_dir = (
@@ -479,6 +565,7 @@ def main():
     ):
         raise ValueError("qualification scene is not in the locked calibration set")
     validate_full_length_scene(manifest.scene_id, args)
+    validate_backend_qualification_scene(manifest.scene_id, args)
     split = load_internal_holdout(
         manifest_dir,
         manifest,

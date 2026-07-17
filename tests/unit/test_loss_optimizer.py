@@ -167,6 +167,22 @@ def test_setup_optimizers_matches_default_strategy_contract() -> None:
         assert optimizer.defaults["eps"] == 1e-15
 
 
+def test_setup_optimizers_exposes_fused_adam_without_changing_hyperparameters() -> None:
+    reference = setup_optimizers(_gaussians(), backend="adam")
+    fused = setup_optimizers(_gaussians(), backend="adam-fused")
+
+    for name in reference:
+        assert reference[name].defaults["fused"] is None
+        assert fused[name].defaults["fused"] is True
+        assert fused[name].defaults["eps"] == reference[name].defaults["eps"]
+        assert fused[name].param_groups[0]["lr"] == reference[name].param_groups[0]["lr"]
+
+
+def test_setup_optimizers_rejects_unknown_backend() -> None:
+    with pytest.raises(ValueError, match="optimizer backend"):
+        setup_optimizers(_gaussians(), backend="selective-adam")
+
+
 def test_mean_scheduler_has_exact_decay_and_restorable_state() -> None:
     optimizers = setup_optimizers(_gaussians())
     scheduler = setup_mean_scheduler(optimizers, max_steps=30_000)

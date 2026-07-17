@@ -543,6 +543,9 @@ ghi render; public test RGB không được đọc trong phase này.
 
 **Deliverables:**
 
+- qualification ba backend `adam/fp32`, `adam-fused/fp32` và
+  `adam-fused/amp-fp16` bằng 1,000 full-resolution steps trên HCM0181;
+- gradient audit xác nhận `means2d.grad` đã được unscale trước density strategy;
 - canonical `phase4_baseline.yaml`;
 - SHA-256 của config, dependency lock, code commit và holdout algorithm;
 - qualification summary và explicit grading-harness caveats;
@@ -551,6 +554,12 @@ ghi render; public test RGB không được đọc trong phase này.
 
 **Acceptance:**
 
+- fused Adam chỉ được chọn nếu nhanh hơn reference ít nhất 10%; AMP chỉ được
+  chọn nếu đúng objective và nhanh thêm ít nhất 5% so với fused FP32;
+- Gaussian parameters và Adam states luôn là `float32`; AMP scaler state phải
+  round-trip qua recovery checkpoint;
+- ba backend dùng cùng sample trace; loss trước topology all-close, final
+  Gaussian count lệch không quá 1% và rolling-100 loss lệch không quá 2%;
 - thay một config scalar làm hash đổi;
 - trainer/resume/render reject hash mismatch;
 - compact artifact render khớp full checkpoint trong `atol=1/255`;
