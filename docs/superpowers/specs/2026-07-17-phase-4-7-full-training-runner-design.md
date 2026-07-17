@@ -59,6 +59,11 @@ Production training uses all physical train images.  The runner must not pass
 `--internal_holdout`, `--qualification_candidate`, `--profile_input`,
 `--backend_qualification`, or `--full_length_qualification`.
 
+Because every physical train image participates in optimization, production has
+no independent validation set.  The runner therefore must not select or label a
+checkpoint as `best_validation`.  Train-view loss, convergence, or preview
+metrics are diagnostics only and cannot substitute for held-out validation.
+
 ## Training contract
 
 Every scene uses the same locked CLI values:
@@ -90,6 +95,10 @@ holdout or Phase 4.5 evaluation.  Checkpoints are written atomically to:
 The checkpoint is replaced every 3,000 steps and at step 30,000.  No numbered
 checkpoints are retained.  Its config hash includes the selected backend and
 precision, and AMP scaler state remains part of the checkpoint when applicable.
+`recovery.pt` is explicitly the latest durable optimizer state, not a
+best-quality checkpoint.  Internal-holdout best-step selection remains confined
+to qualification experiments and does not run again for the 18-scene production
+cohort.
 
 On rerun:
 
@@ -146,6 +155,8 @@ A scene becomes `trained` only when all checks pass:
 
 This validation establishes completed training, not novel-view quality or
 leaderboard readiness.  No official test image or official test render is read.
+It also does not claim that step 30,000 is each scene's unknown validation
+optimum; it is the baseline horizon already selected before production.
 
 ## Components
 
@@ -228,4 +239,3 @@ runs/phase4/full_training/
 The training-only runner exits zero when all 18 scene records are `trained` and
 their artifacts pass validation.  This authorizes compact inference export; it
 does not by itself mark Phase 4.7 complete or authorize final test rendering.
-
