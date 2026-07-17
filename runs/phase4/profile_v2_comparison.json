@@ -1,8 +1,0 @@
-{
-  "accepted": true,
-  "equivalence_steps": 449,
-  "final_gaussian_count_delta": 1,
-  "performance_gate_passed": true,
-  "speedup_fraction": 0.4330765924264537,
-  "trace_equal": true
-}
