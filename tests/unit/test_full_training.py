@@ -21,6 +21,7 @@ from bts_nvs.training.full_training import (
     load_or_create_ledger,
     set_scene_status,
     run_full_training,
+    validate_scene_selection,
     validate_trained_run,
     validate_scene_pool,
 )
@@ -127,6 +128,23 @@ def test_backend_decision_rejects_tampered_or_unaccepted_aggregate(tmp_path: Pat
 def test_scene_pool_accepts_exact_case_sensitive_18_scene_contract(tmp_path: Path):
     scenes, manifests = _scene_pool(tmp_path)
     assert validate_scene_pool(scenes, manifests) == CANONICAL_SCENES
+
+
+def test_scene_selection_defaults_to_all_and_preserves_subset_order():
+    assert validate_scene_selection(None) == CANONICAL_SCENES
+    assert validate_scene_selection(("HCM0644", "HCM0421")) == (
+        "HCM0644",
+        "HCM0421",
+    )
+
+
+@pytest.mark.parametrize(
+    "scene_ids",
+    [(), ("HCM0644", "HCM0644"), ("HCM0644", "hcm0644")],
+)
+def test_scene_selection_rejects_empty_duplicate_or_unknown_ids(scene_ids):
+    with pytest.raises(ValueError, match="scene selection"):
+        validate_scene_selection(scene_ids)
 
 
 @pytest.mark.parametrize("problem", ["missing", "extra", "wrong_case", "npz", "identity"])
@@ -453,6 +471,53 @@ def test_full_training_failure_stops_later_scenes_and_is_resumable(
     assert {record["status"] for record in ledger["scenes"][1:]} == {"pending"}
 
 
+def test_full_training_runs_only_selected_scenes_and_keeps_canonical_ledger(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import bts_nvs.training.full_training as module
+
+    scenes, manifests = _scene_pool(tmp_path)
+    backend = _backend_root(tmp_path)
+    output = tmp_path / "full"
+    selected = ("HCM0644", "HCM0421")
+    monkeypatch.setattr(module, "inspect_scene_run", lambda *args: "fresh")
+    monkeypatch.setattr(
+        module,
+        "validate_trained_run",
+        lambda *args: TrainedRun(30_000, "c" * 64, "m" * 64),
+    )
+    commands = []
+
+    def succeed(command, **kwargs):
+        commands.append(command)
+        return SimpleNamespace(returncode=0)
+
+    run_full_training(
+        repo_root=tmp_path,
+        scenes_root=scenes,
+        manifests_root=manifests,
+        backend_root=backend,
+        output_root=output,
+        python_bin="python3",
+        scene_ids=selected,
+        run_process=succeed,
+    )
+
+    assert [command[command.index("--scene_dir") + 1] for command in commands] == [
+        str(scenes / scene_id) for scene_id in selected
+    ]
+    ledger = json.loads((output / "ledger.json").read_text())
+    assert len(ledger["scenes"]) == len(CANONICAL_SCENES)
+    statuses = {record["scene_id"]: record["status"] for record in ledger["scenes"]}
+    assert all(statuses[scene_id] == "trained" for scene_id in selected)
+    assert all(
+        statuses[scene_id] == "pending"
+        for scene_id in CANONICAL_SCENES
+        if scene_id not in selected
+    )
+
+
 def test_full_training_records_invalid_existing_artifacts_as_failed(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -501,6 +566,9 @@ def test_full_training_cli_parses_only_runtime_paths(tmp_path: Path):
             str(tmp_path / "output"),
             "--python_bin",
             "python3",
+            "--scene_ids",
+            "HCM0644",
+            "HCM0421",
         ]
     )
 
@@ -510,3 +578,4 @@ def test_full_training_cli_parses_only_runtime_paths(tmp_path: Path):
     assert args.backend_root == tmp_path / "backend"
     assert args.output_root == tmp_path / "output"
     assert args.python_bin == "python3"
+    assert args.scene_ids == ["HCM0644", "HCM0421"]

@@ -7,7 +7,7 @@ import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Sequence
 
 import yaml
 from PIL import Image
@@ -41,6 +41,23 @@ CANONICAL_SCENES = (
     "HNI0366",
     "HNI0437",
 )
+
+
+def validate_scene_selection(
+    scene_ids: Sequence[str] | None,
+) -> tuple[str, ...]:
+    if scene_ids is None:
+        return CANONICAL_SCENES
+    selected = tuple(scene_ids)
+    if (
+        not selected
+        or len(set(selected)) != len(selected)
+        or any(scene_id not in CANONICAL_SCENES for scene_id in selected)
+    ):
+        raise ValueError(
+            "scene selection must be non-empty, unique, case-sensitive, and canonical"
+        )
+    return selected
 
 
 @dataclass(frozen=True)
@@ -423,14 +440,16 @@ def run_full_training(
     backend_root: Path,
     output_root: Path,
     python_bin: str,
+    scene_ids: Sequence[str] | None = None,
     run_process: Callable[..., object] = subprocess.run,
 ) -> None:
     decision = load_or_create_backend_decision(backend_root)
-    scene_ids = validate_scene_pool(scenes_root, manifests_root)
-    ledger = load_or_create_ledger(output_root, decision, scene_ids)
+    canonical_scene_ids = validate_scene_pool(scenes_root, manifests_root)
+    selected_scene_ids = validate_scene_selection(scene_ids)
+    ledger = load_or_create_ledger(output_root, decision, canonical_scene_ids)
     ledger_path = Path(output_root) / "ledger.json"
 
-    for scene_id in scene_ids:
+    for scene_id in selected_scene_ids:
         run_dir = Path(output_root) / "scenes" / scene_id
         manifest_path = Path(manifests_root) / scene_id / "manifest.json"
         try:

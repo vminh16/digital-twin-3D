@@ -18,6 +18,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--backend_root", type=Path, required=True)
     parser.add_argument("--output_root", type=Path, required=True)
     parser.add_argument("--python_bin", default=sys.executable)
+    parser.add_argument(
+        "--scene_ids",
+        nargs="+",
+        help="Ordered case-sensitive subset of canonical scene IDs.",
+    )
     return parser.parse_args(argv)
 
 
@@ -30,6 +35,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         backend_root=args.backend_root,
         output_root=args.output_root,
         python_bin=args.python_bin,
+        scene_ids=args.scene_ids,
     )
 
 

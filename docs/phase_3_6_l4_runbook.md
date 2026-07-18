@@ -169,3 +169,15 @@ and resumed. Do not delete or rename partial run directories.
 Only one rolling recovery checkpoint is retained per scene. A ledger status of
 `trained` means the 30k training artifacts passed integrity checks; compact model
 export and official test rendering are separate later steps.
+
+To train only the five currently required scenes while retaining the canonical
+18-scene ledger, pass an ordered subset:
+
+```bash
+bash scripts/run_phase4_full_training.sh \
+  --scene_ids HCM0644 HCM0674 HCM0540 HCM0539 HCM0421
+```
+
+The IDs are case-sensitive and must not repeat. Unselected scenes keep their
+existing ledger status, and rerunning the same command resumes or skips each
+selected scene according to its validated artifacts.

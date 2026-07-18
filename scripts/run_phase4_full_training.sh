@@ -27,4 +27,5 @@ export PYTHONPATH="${REPO_ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
     --manifests_root "${MANIFESTS_ROOT}" \
     --backend_root "${BACKEND_ROOT}" \
     --output_root "${FULL_ROOT}" \
-    --python_bin "${PYTHON_BIN}"
+    --python_bin "${PYTHON_BIN}" \
+    "$@"

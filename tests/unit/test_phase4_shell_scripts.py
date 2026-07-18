@@ -112,6 +112,7 @@ def test_full_training_script_is_a_path_only_wrapper():
     assert 'FULL_ROOT="${BTS_FULL_ROOT:-' in script
     assert 'PYTHONPATH="${REPO_ROOT}/src' in script
     assert "-m bts_nvs.training.run_full_training" in script
+    assert '"$@"' in script
     for flag in (
         "--repo_root",
         "--scenes_root",
@@ -129,3 +130,5 @@ def test_full_training_script_is_a_path_only_wrapper():
         "for scene",
     ):
         assert forbidden not in script
+    for scene_id in ("HCM0644", "HCM0674", "HCM0540", "HCM0539", "HCM0421"):
+        assert scene_id not in script
