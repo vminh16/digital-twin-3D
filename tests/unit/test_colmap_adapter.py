@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 import bts_nvs.data.colmap as colmap_module
-from bts_nvs.data.colmap import ColmapImageRecord, read_colmap_model
+from bts_nvs.data.colmap import ColmapImageRecord, _camera_record, read_colmap_model
 
 
 class _Rigid:
@@ -106,3 +106,20 @@ def test_pycolmap_adapter_requires_all_binary_files(tmp_path):
 
     with pytest.raises(FileNotFoundError, match="cameras.bin"):
         read_colmap_model(sparse)
+
+
+def test_simple_pinhole_camera_maps_to_zero_distortion_pinhole():
+    camera = SimpleNamespace(
+        model=SimpleNamespace(name="SIMPLE_PINHOLE"),
+        params=np.array([1113.0, 360.0, 640.0]),
+        width=720,
+        height=1280,
+    )
+
+    record = _camera_record(7, camera)
+
+    assert record.intrinsics.fx == record.intrinsics.fy == 1113.0
+    assert record.intrinsics.cx == 360.0
+    assert record.intrinsics.cy == 640.0
+    assert record.distortion.model == "PINHOLE"
+    assert record.distortion.coefficients == ()

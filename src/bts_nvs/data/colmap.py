@@ -140,6 +140,12 @@ def _camera_record(camera_id: int, camera: object) -> ColmapCameraRecord:
             raise ValueError("COLMAP PINHOLE camera must have four parameters")
         fx, fy, cx, cy = params
         distortion = CameraDistortion("PINHOLE", ())
+    elif model == "SIMPLE_PINHOLE":
+        if params.shape != (3,):
+            raise ValueError("COLMAP SIMPLE_PINHOLE camera must have three parameters")
+        fx, cx, cy = params
+        fy = fx
+        distortion = CameraDistortion("PINHOLE", ())
     elif model == "SIMPLE_RADIAL":
         if params.shape != (4,):
             raise ValueError("COLMAP SIMPLE_RADIAL camera must have four parameters")

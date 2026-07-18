@@ -39,7 +39,9 @@ def _valid_output(tmp_path: Path) -> Path:
     root = tmp_path / "outputs"
     scene = root / "scene_001"
     scene.mkdir(parents=True)
-    Image.fromarray(np.zeros((6, 8, 3), dtype=np.uint8)).save(scene / "target.png")
+    Image.fromarray(np.zeros((6, 8, 3), dtype=np.uint8)).save(
+        scene / "target.JPG", format="JPEG"
+    )
     return root
 
 
@@ -57,7 +59,7 @@ def test_missing_extra_and_wrong_case_are_reported(tmp_path):
     output = tmp_path / "outputs"
     scene = output / "scene_001"
     scene.mkdir(parents=True)
-    Image.fromarray(np.zeros((6, 8, 3), dtype=np.uint8)).save(scene / "TARGET.png")
+    Image.fromarray(np.zeros((6, 8, 3), dtype=np.uint8)).save(scene / "TARGET.JPG")
     (scene / "extra.txt").write_text("extra", encoding="utf-8")
 
     issues = validate_submission(output, {"scene_001": _manifest()})
@@ -80,23 +82,23 @@ def test_missing_extra_and_wrong_case_are_reported(tmp_path):
         ),
     ],
 )
-def test_invalid_png_contract_is_reported(tmp_path, writer, expected_code):
+def test_invalid_jpeg_contract_is_reported(tmp_path, writer, expected_code):
     output = tmp_path / "outputs"
     scene = output / "scene_001"
     scene.mkdir(parents=True)
-    writer(scene / "target.png")
+    writer(scene / "target.JPG")
 
     issues = validate_submission(output, {"scene_001": _manifest()})
 
     assert expected_code in _codes(issues)
 
 
-def test_png_extension_with_jpeg_payload_is_rejected(tmp_path):
+def test_jpeg_extension_with_png_payload_is_rejected(tmp_path):
     output = tmp_path / "outputs"
     scene = output / "scene_001"
     scene.mkdir(parents=True)
     Image.fromarray(np.zeros((6, 8, 3), dtype=np.uint8)).save(
-        scene / "target.png", format="JPEG"
+        scene / "target.JPG", format="PNG"
     )
 
     assert "wrong_format" in _codes(
@@ -104,12 +106,12 @@ def test_png_extension_with_jpeg_payload_is_rejected(tmp_path):
     )
 
 
-@pytest.mark.parametrize("mode", ["P", "RGBA"])
-def test_non_rgb_png_modes_are_rejected(tmp_path, mode):
+@pytest.mark.parametrize("mode", ["L", "CMYK"])
+def test_non_rgb_jpeg_modes_are_rejected(tmp_path, mode):
     output = tmp_path / "outputs"
     scene = output / "scene_001"
     scene.mkdir(parents=True)
-    Image.new(mode, (8, 6)).save(scene / "target.png")
+    Image.new(mode, (8, 6)).save(scene / "target.JPG", format="JPEG")
 
     assert "wrong_mode" in _codes(
         validate_submission(output, {"scene_001": _manifest()})
@@ -120,10 +122,9 @@ def test_cmyk_payload_is_rejected(tmp_path):
     output = tmp_path / "outputs"
     scene = output / "scene_001"
     scene.mkdir(parents=True)
-    Image.new("CMYK", (8, 6)).save(scene / "target.png", format="JPEG")
+    Image.new("CMYK", (8, 6)).save(scene / "target.JPG", format="JPEG")
 
     codes = _codes(validate_submission(output, {"scene_001": _manifest()}))
-    assert "wrong_format" in codes
     assert "wrong_mode" in codes
 
 
@@ -137,13 +138,13 @@ def test_missing_and_extra_scenes_are_reported(tmp_path):
 
 
 def test_output_symlink_is_rejected(tmp_path):
-    outside = tmp_path / "outside.png"
-    Image.fromarray(np.zeros((6, 8, 3), dtype=np.uint8)).save(outside)
+    outside = tmp_path / "outside.JPG"
+    Image.fromarray(np.zeros((6, 8, 3), dtype=np.uint8)).save(outside, format="JPEG")
     output = tmp_path / "outputs"
     scene = output / "scene_001"
     scene.mkdir(parents=True)
     try:
-        (scene / "target.png").symlink_to(outside)
+        (scene / "target.JPG").symlink_to(outside)
     except OSError:
         pytest.skip("symlink creation is unavailable")
 

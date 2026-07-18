@@ -621,21 +621,23 @@ phải quay lại distorted native domain:
 2. Với mỗi distorted destination pixel, chuyển về normalized distorted point.
 3. Invert radial distortion để tìm normalized undistorted source point.
 4. Bilinear sample pinhole render; `PINHOLE` dùng identity mapping.
-5. Encode RGB PNG bằng exact `test_output_names`.
+5. Encode RGB bằng exact `test_image_names`: JPEG cho `.jpg/.jpeg`, PNG cho
+   `.png`; giữ nguyên extension và case từ CSV. Manifest `test_output_names` là
+   field legacy schema v1 để bảo toàn checkpoint hash.
 
 **Deliverables:**
 
-- per-scene canonical PNG outputs;
+- per-scene outputs đúng codec và exact filename trong test CSV;
 - output root trực tiếp là `outputs/<scene_id>/`, không chèn tầng phase name;
 - internal qualification benchmark report;
 - submission validation report;
 - final cohort resource/quality notebook;
-- checksums cho compact models và PNG outputs.
+- checksums cho compact models và submission image outputs.
 
 **Acceptance:**
 
 - đúng một output cho mọi test pose của mọi scene;
-- exact filename, case, PNG RGB và original resolution;
+- exact filename, case, RGB payload đúng extension và original resolution;
 - không symlink, missing/extra scene hoặc file;
 - renderer không đọc internal validation RGB hoặc official test RGB;
 - deterministic render: same model/camera tạo same PNG bytes trong cùng pinned
@@ -666,7 +668,7 @@ runs/phase4/
 │   ├── metrics.jsonl
 │   ├── timing.json
 │   └── summary.json
-├── outputs/<scene_id>/*.png
+├── outputs/<scene_id>/<exact test image_name>
 ├── ledger.json
 └── final_report.json
 ```
@@ -676,17 +678,25 @@ checkpoint. Atomic recovery write cần temporary sibling và rename.
 
 ## 12. Phase 4 exit criteria
 
-Phase 4 chỉ complete khi:
+Phase 4 baseline submission chỉ complete khi:
 
-- đủ expected 18 BTS scenes và mọi manifest pass;
+- inventory/manifest của canonical 18-scene BTS research pool đã được audit;
 - holdout algorithm, split artifacts và leakage tests pass;
 - một 30k qualification pass quality/resource gates;
 - baseline bundle đã freeze và hash;
-- mọi production scene complete ở 30k hoặc có explicit approved exclusion;
+- submission cohort `HCM0644 HCM0674 HCM0540 HCM0539 HCM0421 chair bonsai`
+  complete ở 30k hoặc có explicit approved exclusion;
 - mọi test pose có canonical output;
 - submission validator pass toàn bộ output tree;
 - code commit, dependencies, configs, model/output hashes và reports đầy đủ;
 - không dùng official test data cho tuning hoặc optimization.
+
+Canonical 18-scene BTS pool vẫn là research/extended-training pool, nhưng không
+phải điều kiện đóng submission baseline hiện tại. `chair` và `bonsai` là
+auxiliary submission scenes và không được nhập vào canonical BTS pool. JPEG
+baseline khóa quality 98, 4:4:4, optimized, non-progressive; toàn bộ ZIP phải
+nhỏ hơn 350 MB. Trạng thái hiện tại là 5/7 scene đã train/render, còn
+`chair` và `bonsai`.
 
 Nếu grading harness cung cấp `PSNR_max`, LPIPS backbone hoặc SSIM config khác,
 chỉ evaluator/report config được cập nhật. Baseline training không được âm thầm

@@ -44,7 +44,7 @@ def _patch_manifests(monkeypatch, selected):
     manifests = {
         scene_id: SimpleNamespace(
             scene_id=scene_id,
-            test_output_names=(f"{scene_id}.png",),
+            test_image_names=(f"{scene_id}.jpg",),
             test_intrinsics=(intrinsics,),
         )
         for scene_id in selected
@@ -66,8 +66,8 @@ def test_local_benchmark_reads_existing_output_and_explicit_references(
     outputs = tmp_path / "outputs"
     references = tmp_path / "references"
     for scene_id in selected:
-        _write_rgb(outputs / scene_id / f"{scene_id}.png")
-        _write_rgb(references / scene_id / f"{scene_id}.png")
+        _write_rgb(outputs / scene_id / f"{scene_id}.jpg")
+        _write_rgb(references / scene_id / f"{scene_id}.jpg")
     report_path = tmp_path / "benchmark.json"
 
     report = run_local_benchmark(
@@ -94,8 +94,8 @@ def test_local_benchmark_rejects_top_level_or_image_schema_mismatch(
     _patch_manifests(monkeypatch, selected)
     outputs = tmp_path / "outputs"
     references = tmp_path / "references"
-    _write_rgb(outputs / "HCM0644" / "HCM0644.png")
-    _write_rgb(references / "HCM0644" / "HCM0644.png")
+    _write_rgb(outputs / "HCM0644" / "HCM0644.jpg")
+    _write_rgb(references / "HCM0644" / "HCM0644.jpg")
     (outputs / "EXTRA").mkdir()
 
     with pytest.raises(ValueError, match="scene directories"):

@@ -25,6 +25,15 @@ def _issue(scene_id: str, filename: str, code: str, message: str) -> ValidationI
     return ValidationIssue(scene_id, filename, code, message)
 
 
+def image_format_from_name(name: str) -> str:
+    suffix = Path(name).suffix.lower()
+    if suffix in {".jpg", ".jpeg"}:
+        return "JPEG"
+    if suffix == ".png":
+        return "PNG"
+    raise ValueError(f"unsupported submission image suffix: {Path(name).suffix}")
+
+
 def validate_submission(
     output_root: Path,
     manifests: Mapping[str, SceneManifest],
@@ -61,8 +70,13 @@ def validate_submission(
             continue
 
         expected = {
-            name: (intrinsics.width, intrinsics.height)
-            for name, intrinsics in zip(manifest.test_output_names, manifest.test_intrinsics)
+            name: (
+                (intrinsics.width, intrinsics.height),
+                image_format_from_name(name),
+            )
+            for name, intrinsics in zip(
+                manifest.test_image_names, manifest.test_intrinsics, strict=True
+            )
         }
         entries = {path.name: path for path in scene_dir.iterdir()}
         actual = set(entries)
@@ -93,18 +107,25 @@ def validate_submission(
             except (OSError, UnidentifiedImageError):
                 issues.append(_issue(scene_id, filename, "decode_error", "output cannot be decoded"))
                 continue
-            if image_format != "PNG":
-                issues.append(_issue(scene_id, filename, "wrong_format", "output payload is not PNG"))
+            expected_size, expected_format = expected[filename]
+            if image_format != expected_format:
+                issues.append(
+                    _issue(
+                        scene_id,
+                        filename,
+                        "wrong_format",
+                        f"output payload is not {expected_format}",
+                    )
+                )
             if mode != "RGB":
                 issues.append(_issue(scene_id, filename, "wrong_mode", f"output mode must be RGB, found {mode}"))
-            if size != expected[filename]:
+            if size != expected_size:
                 issues.append(
                     _issue(
                         scene_id,
                         filename,
                         "wrong_resolution",
-                        f"output resolution {size} does not match {expected[filename]}",
+                        f"output resolution {size} does not match {expected_size}",
                     )
                 )
     return tuple(sorted(issues))
-

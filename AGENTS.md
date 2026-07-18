@@ -34,13 +34,37 @@ image_name, qw, qx, qy, qz, tx, ty, tz, fx, fy, cx, cy, width, height
 ```
 outputs/
 ├── scene_001/
-│   ├── 0001.png   # filename MUST match image_name in test_poses.csv
+│   ├── <exact image_name from test_poses.csv>
 │   └── ...
 └── scene_002/...
 ```
+- `image_name` trong `test_poses.csv` là nguồn sự thật tuyệt đối cho filename,
+  extension và case. Không tự đổi suffix.
+- Payload phải khớp extension: `.jpg`/`.jpeg` là JPEG, `.png` là PNG.
+- Baseline JPEG mặc định quality 98, 4:4:4, optimized, non-progressive để giữ
+  chất lượng trong giới hạn submission 350 MB. Q100 không phải mặc định.
 - Image dimensions must exactly match `width`/`height` per row in `test_poses.csv`.
 - Every pose in every scene must have a corresponding render — a missing scene or pose invalidates the entire evaluation run, not just that scene.
 - Renders must be produced entirely by the pipeline; no manual post-processing (see Engineering constraints).
+
+`SceneManifest.test_output_names` là field legacy của schema v1 và không phải
+submission authority. Inference/validator mới phải dùng `test_image_names` để
+không làm đổi manifest hash của checkpoint đã train.
+
+## Current baseline closure
+
+Submission cohort đã xác nhận gồm đúng:
+
+```text
+HCM0644 HCM0674 HCM0540 HCM0539 HCM0421 chair bonsai
+```
+
+- Năm HCM scene đã train/render.
+- `chair` và `bonsai` phải train/render trước khi đóng baseline.
+- Canonical research pool 18 BTS scene vẫn giữ riêng; hai auxiliary scene không
+  được nhập vào pool đó hoặc dùng để suy luận cross-scene generalization.
+- Baseline chỉ closed khi đủ 7 scene, exact-name/codec/resolution validator pass,
+  ZIP dưới 350 MB và inference reports được lưu.
 
 ## Evaluation metrics
 Final metric is a weighted composite, matching standard NVS benchmarking (Mip-NeRF / 3DGS-style evaluation):

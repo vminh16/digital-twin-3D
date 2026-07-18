@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 import torch
+from PIL import Image
 
 from bts_nvs.cameras.distortion import (
     CameraDistortion,
@@ -178,6 +179,7 @@ def _fake_manifest(scene_id: str):
     intrinsics = CameraIntrinsics(3, 2, 2.0, 2.0, 1.0, 0.5)
     return SimpleNamespace(
         scene_id=scene_id,
+        test_image_names=(f"{scene_id}_a.JPG", f"{scene_id}_b.png"),
         test_output_names=(f"{scene_id}_a.png", f"{scene_id}_b.png"),
         test_world_to_camera=np.stack((np.eye(4), np.eye(4))),
         test_intrinsics=(intrinsics, intrinsics),
@@ -265,10 +267,15 @@ def test_batch_inference_renders_selected_scenes_and_validates_exact_output(
     assert sorted(path.name for path in output.iterdir()) == list(sorted(selected))
     for scene_id in selected:
         assert sorted(path.name for path in (output / scene_id).iterdir()) == [
-            f"{scene_id}_a.png",
+            f"{scene_id}_a.JPG",
             f"{scene_id}_b.png",
         ]
+        with Image.open(output / scene_id / f"{scene_id}_a.JPG") as image:
+            assert image.format == "JPEG"
+        with Image.open(output / scene_id / f"{scene_id}_b.png") as image:
+            assert image.format == "PNG"
     assert report["scene_ids"] == list(selected)
+    assert report["jpeg_quality"] == 98
     assert [item["scene_id"] for item in report["scenes"]] == list(selected)
     encoded = report_path.read_text(encoding="utf-8").lower()
     assert json.loads(encoded)["total_images"] == 4
@@ -330,7 +337,47 @@ def test_inference_cli_parses_paths_and_selected_scenes(tmp_path: Path):
             "--scene_ids",
             "HCM0644",
             "HCM0421",
+            "--jpeg_quality",
+            "97",
+            "--allow_noncanonical_scenes",
         ]
     )
     assert args.output_root == tmp_path / "outputs"
     assert args.scene_ids == ["HCM0644", "HCM0421"]
+    assert args.jpeg_quality == 97
+    assert args.allow_noncanonical_scenes is True
+
+
+def test_noncanonical_inference_requires_explicit_safe_scene_ids(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    selected = ("chair",)
+    scenes, manifests, full = _batch_layout(tmp_path, selected)
+    _patch_batch_dependencies(monkeypatch, selected)
+
+    report = run_inference(
+        scenes_root=scenes,
+        manifests_root=manifests,
+        backend_root=tmp_path / "backend",
+        full_root=full,
+        output_root=tmp_path / "outputs",
+        report_path=tmp_path / "report.json",
+        scene_ids=selected,
+        allow_noncanonical_scenes=True,
+        device=torch.device("cpu"),
+    )
+
+    assert report["scene_ids"] == ["chair"]
+
+    with pytest.raises(ValueError, match="explicit"):
+        run_inference(
+            scenes_root=scenes,
+            manifests_root=manifests,
+            backend_root=tmp_path / "backend",
+            full_root=full,
+            output_root=tmp_path / "other",
+            report_path=tmp_path / "other.json",
+            allow_noncanonical_scenes=True,
+            device=torch.device("cpu"),
+        )

@@ -54,7 +54,7 @@ def run_local_benchmark(
         expected = {
             name: (intrinsics.width, intrinsics.height)
             for name, intrinsics in zip(
-                manifest.test_output_names, manifest.test_intrinsics, strict=True
+                manifest.test_image_names, manifest.test_intrinsics, strict=True
             )
         }
         scenes[scene_id] = load_image_pairs(
