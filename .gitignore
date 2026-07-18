@@ -46,6 +46,8 @@ env/
 /runs/**/*.pth
 runs/manifests/
 /outputs/
+/submission_outputs/
+/runs/submission/
 __MACOSX/
 *.zip
 *.rar

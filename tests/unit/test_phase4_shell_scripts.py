@@ -6,6 +6,7 @@ PREPARE_SCRIPT = REPO_ROOT / "scripts" / "prepare_phase4_artifacts.sh"
 QUALIFICATION_SCRIPT = REPO_ROOT / "scripts" / "run_phase4_qualification.sh"
 DRY_RUN_SCRIPT = REPO_ROOT / "scripts" / "run_phase4_30k_dry_run.sh"
 BACKEND_SCRIPT = REPO_ROOT / "scripts" / "run_phase4_backend_qualification.sh"
+JPEG_SUBMISSION_SCRIPT = REPO_ROOT / "scripts" / "prepare_jpeg_submission.sh"
 FULL_TRAINING_SCRIPT = REPO_ROOT / "scripts" / "run_phase4_full_training.sh"
 INFERENCE_SCRIPT = REPO_ROOT / "scripts" / "run_phase4_inference.sh"
 
@@ -101,6 +102,22 @@ def test_backend_qualification_script_runs_three_fresh_1000_step_jobs():
     assert '"adam-fused:amp-fp16"' in script
     assert "compare_backend_qualification" in script
     assert "backend_qualification.json" in script
+    assert "rm " not in script
+
+
+def test_jpeg_submission_script_uses_safe_defaults_and_forwards_scene_ids():
+    script = JPEG_SUBMISSION_SCRIPT.read_text(encoding="utf-8")
+
+    assert "bts_nvs.submission.prepare_jpeg" in script
+    assert "--source_root" in script
+    assert "--output_root" in script
+    assert "--manifests_root" in script
+    assert "--report_path" in script
+    assert "--quality" in script
+    assert "BTS_JPEG_QUALITY" in script
+    assert "--max_bytes" in script
+    assert "BTS_SUBMISSION_MAX_BYTES" in script
+    assert '"$@"' in script
     assert "rm " not in script
 
 
