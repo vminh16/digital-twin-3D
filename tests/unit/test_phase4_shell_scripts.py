@@ -7,6 +7,7 @@ QUALIFICATION_SCRIPT = REPO_ROOT / "scripts" / "run_phase4_qualification.sh"
 DRY_RUN_SCRIPT = REPO_ROOT / "scripts" / "run_phase4_30k_dry_run.sh"
 BACKEND_SCRIPT = REPO_ROOT / "scripts" / "run_phase4_backend_qualification.sh"
 JPEG_SUBMISSION_SCRIPT = REPO_ROOT / "scripts" / "prepare_jpeg_submission.sh"
+JPEG_SUBMISSION_CMD = REPO_ROOT / "scripts" / "prepare_jpeg_submission.cmd"
 FULL_TRAINING_SCRIPT = REPO_ROOT / "scripts" / "run_phase4_full_training.sh"
 INFERENCE_SCRIPT = REPO_ROOT / "scripts" / "run_phase4_inference.sh"
 
@@ -119,6 +120,19 @@ def test_jpeg_submission_script_uses_safe_defaults_and_forwards_scene_ids():
     assert "BTS_SUBMISSION_MAX_BYTES" in script
     assert '"$@"' in script
     assert "rm " not in script
+
+
+def test_jpeg_submission_cmd_runs_from_windows_with_local_venv():
+    script = JPEG_SUBMISSION_CMD.read_text(encoding="utf-8")
+
+    assert script.startswith("@echo off\n")
+    assert ".venv\\Scripts\\python.exe" in script
+    assert "bts_nvs.submission.prepare_jpeg" in script
+    assert "--source_root" in script
+    assert "--output_root" in script
+    assert "--quality" in script
+    assert "--max_bytes" in script
+    assert "%*" in script
 
 
 def test_full_training_script_is_a_path_only_wrapper():
