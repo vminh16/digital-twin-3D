@@ -181,3 +181,47 @@ bash scripts/run_phase4_full_training.sh \
 The IDs are case-sensitive and must not repeat. Unselected scenes keep their
 existing ledger status, and rerunning the same command resumes or skips each
 selected scene according to its validated artifacts.
+
+## 8. Phase 4.8 — test-pose inference and optional local benchmark
+
+After all requested scene records are `trained`, render directly into
+`outputs/<scene_id>`:
+
+```bash
+bash scripts/run_phase4_inference.sh \
+  --scene_ids HCM0644 HCM0674 HCM0540 HCM0539 HCM0421
+```
+
+The command requires CUDA and a fresh `outputs` path. It validates each 30k
+checkpoint and manifest hash, renders all manifest test poses, restores the
+original distortion domain, validates exact PNG names and resolutions, and only
+then atomically creates `outputs`. It never reads reference RGB or computes a
+quality score. To use another destination without deleting an existing result:
+
+```bash
+BTS_OUTPUT_ROOT="$PWD/outputs_candidate_2" \
+BTS_INFERENCE_REPORT="$PWD/runs/phase4/inference_report_candidate_2.json" \
+bash scripts/run_phase4_inference.sh \
+  --scene_ids HCM0644 HCM0674 HCM0540 HCM0539 HCM0421
+```
+
+When a legitimate local reference set exists with the same
+`<root>/<scene>/<test_output_name>.png` schema, benchmark the already-rendered
+files separately:
+
+```bash
+PYTHONPATH="$PWD/src" python -m bts_nvs.evaluation.run_benchmark \
+  --outputs_root "$PWD/outputs" \
+  --reference_root "$PWD/data/local_references" \
+  --manifests_root "$PWD/runs/manifests" \
+  --scenes_root "$PWD/data/bts_scenes" \
+  --scene_ids HCM0644 HCM0674 HCM0540 HCM0539 HCM0421 \
+  --psnr_max 40 \
+  --lpips_backbone alex \
+  --device cuda \
+  --report_path "$PWD/runs/phase4/local_benchmark.json"
+```
+
+`test_poses.csv` alone has no RGB ground truth and therefore cannot produce
+PSNR, SSIM, LPIPS, or a composite score. Do not point `--reference_root` at
+undocumented or inferred official-test data.

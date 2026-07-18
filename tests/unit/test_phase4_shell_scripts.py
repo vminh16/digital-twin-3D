@@ -7,6 +7,7 @@ QUALIFICATION_SCRIPT = REPO_ROOT / "scripts" / "run_phase4_qualification.sh"
 DRY_RUN_SCRIPT = REPO_ROOT / "scripts" / "run_phase4_30k_dry_run.sh"
 BACKEND_SCRIPT = REPO_ROOT / "scripts" / "run_phase4_backend_qualification.sh"
 FULL_TRAINING_SCRIPT = REPO_ROOT / "scripts" / "run_phase4_full_training.sh"
+INFERENCE_SCRIPT = REPO_ROOT / "scripts" / "run_phase4_inference.sh"
 
 
 def _read_script(path: Path) -> str:
@@ -132,3 +133,33 @@ def test_full_training_script_is_a_path_only_wrapper():
         assert forbidden not in script
     for scene_id in ("HCM0644", "HCM0674", "HCM0540", "HCM0539", "HCM0421"):
         assert scene_id not in script
+
+
+def test_inference_script_writes_direct_scene_outputs_without_evaluation():
+    script = _read_script(INFERENCE_SCRIPT)
+
+    assert script.startswith("#!/usr/bin/env bash\nset -euo pipefail\n")
+    assert "prepare_phase4_artifacts.sh" in script
+    assert 'OUTPUT_ROOT="${BTS_OUTPUT_ROOT:-${REPO_ROOT}/outputs}"' in script
+    assert 'FULL_ROOT="${BTS_FULL_ROOT:-' in script
+    assert 'PYTHONPATH="${REPO_ROOT}/src' in script
+    assert "-m bts_nvs.rendering.run_inference" in script
+    assert '"$@"' in script
+    for flag in (
+        "--scenes_root",
+        "--manifests_root",
+        "--backend_root",
+        "--full_root",
+        "--output_root",
+        "--report_path",
+    ):
+        assert flag in script
+    for forbidden in (
+        "--reference_root",
+        "--psnr_max",
+        "--lpips_backbone",
+        "run_benchmark",
+        "for scene",
+        "rm ",
+    ):
+        assert forbidden not in script

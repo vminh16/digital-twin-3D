@@ -19,6 +19,7 @@ from bts_nvs.training.full_training import (
     inspect_scene_run,
     load_or_create_backend_decision,
     load_or_create_ledger,
+    load_trained_checkpoint,
     set_scene_status,
     run_full_training,
     validate_scene_selection,
@@ -285,6 +286,12 @@ def test_trained_run_validation_and_scene_inspection(tmp_path: Path):
     assert inspect_scene_run(
         tmp_path / "absent", "HCM0181", manifest, _decision()
     ) == "fresh"
+
+    loaded, checkpoint = load_trained_checkpoint(
+        run, "HCM0181", manifest, _decision()
+    )
+    assert loaded == trained
+    assert checkpoint["step"] == 30_000
 
 
 @pytest.mark.parametrize(

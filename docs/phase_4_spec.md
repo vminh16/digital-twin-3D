@@ -609,8 +609,10 @@ là bước riêng. Không render official test từ model fail.
 
 **Mục đích:** tạo output đúng contract và kiểm tra completeness trước submission.
 
-**Mục tiêu triển khai riêng:** batch render từ compact model qua canonical test
-camera path và dùng Phase 2 submission validator.
+**Mục tiêu triển khai riêng:** batch render qua canonical test camera path và
+dùng Phase 2 submission validator. Baseline hiện tại load trực tiếp validated
+`checkpoints/recovery.pt`; compact export có thể thay nguồn model sau này nhưng
+không được thay camera hoặc output contract.
 
 Training diễn ra trong undistorted pinhole domain. Với `SIMPLE_RADIAL`, output
 phải quay lại distorted native domain:
@@ -624,6 +626,7 @@ phải quay lại distorted native domain:
 **Deliverables:**
 
 - per-scene canonical PNG outputs;
+- output root trực tiếp là `outputs/<scene_id>/`, không chèn tầng phase name;
 - internal qualification benchmark report;
 - submission validation report;
 - final cohort resource/quality notebook;
