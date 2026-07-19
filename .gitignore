@@ -52,3 +52,4 @@ __MACOSX/
 *.zip
 *.rar
 .DS_Store
+/.worktrees/
