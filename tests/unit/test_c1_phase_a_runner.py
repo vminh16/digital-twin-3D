@@ -5,6 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import yaml
 
 import bts_nvs.training.c1_phase_a_runner as runner
 from bts_nvs.training.c1_candidates import C1_CANDIDATES
@@ -112,8 +113,28 @@ def test_runner_executes_exact_four_pairs_and_reuses_completed_reports(
         run_dir = Path(command[command.index("--output_dir") + 1])
         run_dir.mkdir(parents=True)
         (run_dir / "validation_renders").mkdir()
+        settings = runner.candidate_settings(candidate)
+        config = {
+            "scene_id": scene,
+            "qualification_candidate": candidate,
+            "resize_factor": 1,
+            "max_steps": 7000,
+            "seed": 0,
+            "cache_images": True,
+            "pinned_transfer": True,
+            "internal_holdout": True,
+            "optimizer_backend": decision.optimizer_backend,
+            "precision": decision.precision,
+            "rolling_checkpoint": False,
+            "grow_grad2d": settings.grow_grad2d,
+            "absgrad": settings.absgrad,
+            "revised_opacity": settings.revised_opacity,
+        }
+        (run_dir / "config.yaml").write_text(yaml.safe_dump(config))
+        report = _report(scene, candidate, 21.0)
+        report["config_sha256"] = runner.compute_config_sha256(config)
         (run_dir / "qualification_report.json").write_text(
-            json.dumps(_report(scene, candidate, 21.0))
+            json.dumps(report)
         )
         observed.append((scene, candidate))
         return SimpleNamespace(returncode=0)
@@ -189,4 +210,29 @@ def test_runner_stops_on_failed_training_process(tmp_path, monkeypatch) -> None:
             output_root=roots["output"],
             python_bin="python",
             run_process=lambda *args, **kwargs: SimpleNamespace(returncode=7),
+        )
+
+
+def test_completed_run_rejects_mismatched_candidate_config(tmp_path) -> None:
+    run_dir = tmp_path / "run"
+    (run_dir / "validation_renders").mkdir(parents=True)
+    report = _report("HCM0421", C1_CANDIDATES[0], 21.0)
+    report["config_sha256"] = "not-the-config-hash"
+    (run_dir / "qualification_report.json").write_text(json.dumps(report))
+    (run_dir / "config.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "scene_id": "HCM0421",
+                "qualification_candidate": C1_CANDIDATES[1],
+                "max_steps": 7000,
+            }
+        )
+    )
+
+    with pytest.raises(ValueError, match="config"):
+        runner.load_completed_run(
+            run_dir,
+            "HCM0421",
+            C1_CANDIDATES[0],
+            SimpleNamespace(optimizer_backend="adam", precision="fp32"),
         )

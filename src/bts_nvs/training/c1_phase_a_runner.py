@@ -6,11 +6,13 @@ import subprocess
 from pathlib import Path
 from typing import Callable
 
+import yaml
+
 from bts_nvs.data.dataset import SceneDataset
 from bts_nvs.data.holdout import load_holdout_split
 from bts_nvs.data.manifest import load_scene_manifest
 from bts_nvs.evaluation.high_frequency import evaluate_render_directory
-from bts_nvs.training.c1_candidates import C1_CANDIDATES
+from bts_nvs.training.c1_candidates import C1_CANDIDATES, candidate_settings
 from bts_nvs.training.c1_phase_a import (
     BASELINE_CANDIDATE,
     PHASE_A_SCENES,
@@ -22,6 +24,7 @@ from bts_nvs.training.full_training import (
     BackendDecision,
     load_or_create_backend_decision,
 )
+from bts_nvs.training.trainer import compute_config_sha256
 
 
 def _atomic_json(path: Path, payload: dict) -> None:
@@ -51,6 +54,52 @@ def _load_report(path: Path, scene_id: str, candidate_id: str) -> dict:
     ):
         raise ValueError(f"qualification report identity mismatch: {source}")
     score50(report)
+    return report
+
+
+def load_completed_run(
+    run_dir: Path,
+    scene_id: str,
+    candidate_id: str,
+    decision: BackendDecision,
+) -> dict:
+    run = Path(run_dir)
+    report = _load_report(
+        run / "qualification_report.json",
+        scene_id,
+        candidate_id,
+    )
+    config_path = run / "config.yaml"
+    if not config_path.is_file():
+        raise FileNotFoundError(f"completed run config does not exist: {config_path}")
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    settings = candidate_settings(candidate_id)
+    expected = {
+        "scene_id": scene_id,
+        "qualification_candidate": candidate_id,
+        "resize_factor": 1,
+        "max_steps": 7000,
+        "seed": 0,
+        "cache_images": True,
+        "pinned_transfer": True,
+        "internal_holdout": True,
+        "optimizer_backend": decision.optimizer_backend,
+        "precision": decision.precision,
+        "rolling_checkpoint": False,
+        "grow_grad2d": settings.grow_grad2d,
+        "absgrad": settings.absgrad,
+        "revised_opacity": settings.revised_opacity,
+    }
+    if not isinstance(config, dict) or any(
+        config.get(key) != value for key, value in expected.items()
+    ):
+        raise ValueError(f"completed run config violates Phase A: {config_path}")
+    if report.get("config_sha256") != compute_config_sha256(config):
+        raise ValueError("completed run config hash does not match its report")
+    if not (run / "validation_renders").is_dir():
+        raise FileNotFoundError("completed run validation renders do not exist")
+    if any(run.rglob("*.pt")) or any(run.rglob("*.pth")):
+        raise ValueError("Phase A run must not contain model checkpoints")
     return report
 
 
@@ -169,7 +218,12 @@ def run_phase_a(
             run_dir = Path(output_root) / scene_id / candidate_id
             report_path = run_dir / "qualification_report.json"
             if report_path.is_file():
-                report = _load_report(report_path, scene_id, candidate_id)
+                report = load_completed_run(
+                    run_dir,
+                    scene_id,
+                    candidate_id,
+                    backend,
+                )
             else:
                 if run_dir.exists() and any(run_dir.iterdir()):
                     raise ValueError(
@@ -192,7 +246,12 @@ def run_phase_a(
                         f"Phase A training exited with code {returncode} for "
                         f"{scene_id}/{candidate_id}"
                     )
-                report = _load_report(report_path, scene_id, candidate_id)
+                report = load_completed_run(
+                    run_dir,
+                    scene_id,
+                    candidate_id,
+                    backend,
+                )
             candidate_reports.append(report)
 
     baseline_reports: list[dict] = []

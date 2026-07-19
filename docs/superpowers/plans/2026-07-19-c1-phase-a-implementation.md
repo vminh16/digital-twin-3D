@@ -43,7 +43,7 @@
 - Produces: `GsplatStrategy(..., absgrad: bool = False, revised_opacity: bool = False)`.
 - Preserves: B0 and ordinary defaults `grow_grad2d=0.0002`, `absgrad=False`, `revised_opacity=False`.
 
-- [ ] **Step 1: Write failing candidate/configuration tests**
+- [x] **Step 1: Write failing candidate/configuration tests**
 
 ```python
 def test_c1_candidate_settings_are_exact():
@@ -63,13 +63,13 @@ def test_training_config_records_c1_density_settings():
     assert config["revised_opacity"] is True
 ```
 
-- [ ] **Step 2: Run the focused tests and confirm RED**
+- [x] **Step 2: Run the focused tests and confirm RED**
 
 Run: `python -m pytest tests/unit/test_c1_candidates.py tests/unit/test_run_training.py -q`
 
 Expected: FAIL because `c1_candidates` and C1 choices/settings do not exist.
 
-- [ ] **Step 3: Implement the immutable candidate mapping and config lookup**
+- [x] **Step 3: Implement the immutable candidate mapping and config lookup**
 
 ```python
 @dataclass(frozen=True)
@@ -84,7 +84,7 @@ QUALIFICATION_CANDIDATES = ("B0-reference", "B0-compact", *C1_CANDIDATES)
 
 Use this mapping in argparse choices and `build_training_config`; keep the existing qualification validation so C1 inherits the locked 7k/no-resume contract.
 
-- [ ] **Step 4: Write failing renderer, strategy, trainer, preflight, and AMP tests**
+- [x] **Step 4: Write failing renderer, strategy, trainer, preflight, and AMP tests**
 
 ```python
 def test_renderer_forwards_absgrad(monkeypatch):
@@ -105,17 +105,17 @@ def test_amp_unscales_projected_absgrad():
     assert projected.absgrad.item() == pytest.approx(1.0)
 ```
 
-- [ ] **Step 5: Run the propagation tests and confirm RED**
+- [x] **Step 5: Run the propagation tests and confirm RED**
 
 Run: `python -m pytest tests/unit/test_renderer.py tests/unit/test_strategy.py tests/unit/test_training_precision.py tests/unit/test_trainer_loop.py tests/unit/test_run_training.py -q`
 
 Expected: FAIL because the new flags are not accepted or propagated and AMP does not unscale `.absgrad`.
 
-- [ ] **Step 6: Implement minimal propagation and AbsGrad unscale**
+- [x] **Step 6: Implement minimal propagation and AbsGrad unscale**
 
 Pass `config["absgrad"]` to training rasterization and both flags to `GsplatStrategy`. Pass the same settings through CUDA preflight. In AMP mode only, divide `projected_means.absgrad` by the active loss scale when that tensor attribute exists; leave FP32 unchanged.
 
-- [ ] **Step 7: Run Task 1 tests and commit**
+- [x] **Step 7: Run Task 1 tests and commit**
 
 Run: `python -m pytest tests/unit/test_c1_candidates.py tests/unit/test_renderer.py tests/unit/test_strategy.py tests/unit/test_training_precision.py tests/unit/test_trainer_loop.py tests/unit/test_run_training.py -q`
 
@@ -136,7 +136,7 @@ Commit: `feat: add C1 AbsGrad candidate configuration`
 - Produces: `evaluate_render_directory(dataset, render_dir: Path) -> dict`.
 - Consumes: undistorted `SceneDataset` validation samples and the existing PNG validation renders.
 
-- [ ] **Step 1: Write failing mathematical metric tests**
+- [x] **Step 1: Write failing mathematical metric tests**
 
 ```python
 def test_identical_images_have_zero_high_frequency_error():
@@ -156,17 +156,17 @@ def test_noise_in_flat_region_increases_spurious_edge():
     assert high_frequency_metrics(noisy, target)["spurious_edge"] > 0.0
 ```
 
-- [ ] **Step 2: Run metric tests and confirm RED**
+- [x] **Step 2: Run metric tests and confirm RED**
 
 Run: `python -m pytest tests/unit/test_high_frequency.py -q`
 
 Expected: FAIL because the module does not exist.
 
-- [ ] **Step 3: Implement the fixed diagnostic equations**
+- [x] **Step 3: Implement the fixed diagnostic equations**
 
 Convert RGB to `Y=0.299R+0.587G+0.114B`. Compute Sobel magnitudes, use the target 90th percentile as edge mask and 50th percentile as flat mask, and normalize missing/spurious excess by `max(mean(target_gradient[edge_mask]), 1e-12)`. Define `HF-L1` as the mean absolute difference between target and prediction Laplacians. Validate equal shape, RGB layout, finite values, and `[0,1]` range.
 
-- [ ] **Step 4: Write failing stored-render tests**
+- [x] **Step 4: Write failing stored-render tests**
 
 ```python
 def test_render_directory_matches_dataset_names_and_masks_invalid_pixels(tmp_path):
@@ -180,7 +180,7 @@ def test_render_directory_rejects_missing_or_colliding_png_names(tmp_path):
         evaluate_render_directory(dataset, tmp_path)
 ```
 
-- [ ] **Step 5: Implement stored-render evaluation and verify Task 2**
+- [x] **Step 5: Implement stored-render evaluation and verify Task 2**
 
 Load each PNG as RGB float `[0,1]`, require exact target resolution, replace invalid-mask pixels with target pixels, compute per-image metrics, and return finite means plus image records.
 
@@ -203,7 +203,7 @@ Commit: `feat: add high-frequency render diagnostics`
 - Produces: `build_phase_a_decision(baseline_reports, candidate_reports, diagnostics) -> dict`.
 - Produces: `save_phase_a_decision(decision: dict, path: Path) -> None`.
 
-- [ ] **Step 1: Write failing decision tests**
+- [x] **Step 1: Write failing decision tests**
 
 ```python
 def test_score50_matches_locked_formula():
@@ -220,17 +220,17 @@ def test_incomplete_duplicate_or_nonfinite_matrix_is_rejected():
         build_phase_a_decision(...)
 ```
 
-- [ ] **Step 2: Run decision tests and confirm RED**
+- [x] **Step 2: Run decision tests and confirm RED**
 
 Run: `python -m pytest tests/unit/test_c1_phase_a.py -q`
 
 Expected: FAIL because Phase A decision logic does not exist.
 
-- [ ] **Step 3: Implement exact paired gates and deterministic JSON**
+- [x] **Step 3: Implement exact paired gates and deterministic JSON**
 
 Require B0-reference plus both C1 candidates for both locked scenes. Compute per-scene `delta_score50`; candidate eligibility requires positive deltas on both scenes and forbids both missing-edge and spurious-edge means worsening on either scene. Select largest mean delta, then lower mean HF-L1, lower mean peak Gaussian count, then the AbsGrad-only candidate. Save with sorted keys, finite JSON, atomic replacement.
 
-- [ ] **Step 4: Verify Task 3 and commit**
+- [x] **Step 4: Verify Task 3 and commit**
 
 Run: `python -m pytest tests/unit/test_c1_phase_a.py -q`
 
@@ -252,7 +252,7 @@ Commit: `feat: add deterministic C1 Phase A decision`
 - Produces: `run_phase_a(...) -> dict` that returns and writes the Phase A decision.
 - CLI requires repo, scenes, manifests, backend qualification, existing B0 qualification, and new output roots.
 
-- [ ] **Step 1: Write failing command and orchestration tests**
+- [x] **Step 1: Write failing command and orchestration tests**
 
 ```python
 def test_phase_a_command_is_locked_and_checkpoint_free():
@@ -274,23 +274,23 @@ def test_runner_rejects_nonempty_incomplete_run_directory():
         run_phase_a(...)
 ```
 
-- [ ] **Step 2: Run runner tests and confirm RED**
+- [x] **Step 2: Run runner tests and confirm RED**
 
 Run: `python -m pytest tests/unit/test_c1_phase_a_runner.py -q`
 
 Expected: FAIL because the runner modules do not exist.
 
-- [ ] **Step 3: Implement the minimal Python runner**
+- [x] **Step 3: Implement the minimal Python runner**
 
 Reuse `load_or_create_backend_decision`, `load_scene_manifest`, `load_holdout_split`, `SceneDataset`, existing qualification reports/renders, and `run_training.py`. Run sequentially, skip only a valid complete report, reject partial directories, compute stored-render diagnostics for B0 and C1 with the same path, then write `phase_a_decision.json`. Do not prepare manifests, run inference, modify B0 artifacts, or launch Phase B.
 
-- [ ] **Step 4: Verify Task 4 and all Phase A tests**
+- [x] **Step 4: Verify Task 4 and all Phase A tests**
 
 Run: `python -m pytest tests/unit/test_c1_phase_a_runner.py tests/unit/test_c1_phase_a.py tests/unit/test_high_frequency.py tests/unit/test_c1_candidates.py tests/unit/test_renderer.py tests/unit/test_strategy.py tests/unit/test_training_precision.py tests/unit/test_trainer_loop.py tests/unit/test_run_training.py -q`
 
 Expected: PASS.
 
-- [ ] **Step 5: Run full regression and compile checks**
+- [x] **Step 5: Run full regression and compile checks**
 
 Run: `python -m compileall -q src tests`
 
