@@ -640,8 +640,8 @@ phải quay lại distorted native domain:
 - exact filename, case, RGB payload đúng extension và original resolution;
 - không symlink, missing/extra scene hoặc file;
 - renderer không đọc internal validation RGB hoặc official test RGB;
-- deterministic render: same model/camera tạo same PNG bytes trong cùng pinned
-  environment;
+- deterministic render: same model/camera và pinned codec tạo cùng encoded
+  output bytes trong cùng pinned environment;
 - report JSON standard-compliant, không NaN/Infinity;
 - Phase 2 submission validator pass toàn bộ cohort.
 
@@ -693,10 +693,32 @@ Phase 4 baseline submission chỉ complete khi:
 
 Canonical 18-scene BTS pool vẫn là research/extended-training pool, nhưng không
 phải điều kiện đóng submission baseline hiện tại. `chair` và `bonsai` là
-auxiliary submission scenes và không được nhập vào canonical BTS pool. JPEG
-baseline khóa quality 98, 4:4:4, optimized, non-progressive; toàn bộ ZIP phải
-nhỏ hơn 350 MB. Trạng thái hiện tại là 5/7 scene đã train/render, còn
-`chair` và `bonsai`.
+auxiliary submission scenes và không được nhập vào canonical BTS pool.
+
+## 13. Baseline closure record
+
+| Field | Value |
+|---|---|
+| Baseline ID | `B0-submission-q99-v1` |
+| Status | **CLOSED** |
+| Submission cohort | `HCM0644 HCM0674 HCM0540 HCM0539 HCM0421 chair bonsai` |
+| Encoding | JPEG quality 99, 4:4:4, optimized, non-progressive |
+| Archive size | 335 MB (limit 350 MB) |
+| Official score | 70.98330 |
+| Official PSNR | 24.611499 |
+| Official SSIM | 80.4805 |
+| Official LPIPS | 19.8195 |
+| Scene coverage | 7/7 |
+| Local benchmark | Chưa chạy |
+
+Các metric trên đến từ evaluator chính thức. Không được coi chúng là local
+validation hoặc suy diễn cấu hình nội bộ của grading harness khi chưa có bằng
+chứng. Official test data không được dùng làm ground truth hay tín hiệu gradient.
+
+Hướng nghiên cứu sau B0 chưa được chọn. Density control, antialiasing, objective
+alignment, distortion-domain rendering và appearance modeling chỉ là danh sách
+câu hỏi cần nghiên cứu; chúng chưa phải roadmap hoặc thay đổi đã được duyệt.
+Mọi thử nghiệm sau B0 phải có candidate ID riêng để giữ B0 bất biến.
 
 Nếu grading harness cung cấp `PSNR_max`, LPIPS backbone hoặc SSIM config khác,
 chỉ evaluator/report config được cập nhật. Baseline training không được âm thầm

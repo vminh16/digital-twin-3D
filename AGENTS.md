@@ -41,8 +41,9 @@ outputs/
 - `image_name` trong `test_poses.csv` là nguồn sự thật tuyệt đối cho filename,
   extension và case. Không tự đổi suffix.
 - Payload phải khớp extension: `.jpg`/`.jpeg` là JPEG, `.png` là PNG.
-- Baseline JPEG mặc định quality 98, 4:4:4, optimized, non-progressive để giữ
-  chất lượng trong giới hạn submission 350 MB. Q100 không phải mặc định.
+- Inference CLI mặc định JPEG quality 98. Baseline đã đóng
+  `B0-submission-q99-v1` dùng quality 99, 4:4:4, optimized, non-progressive;
+  không được âm thầm thay đổi cấu hình của baseline đã đóng.
 - Image dimensions must exactly match `width`/`height` per row in `test_poses.csv`.
 - Every pose in every scene must have a corresponding render — a missing scene or pose invalidates the entire evaluation run, not just that scene.
 - Renders must be produced entirely by the pipeline; no manual post-processing (see Engineering constraints).
@@ -59,12 +60,17 @@ Submission cohort đã xác nhận gồm đúng:
 HCM0644 HCM0674 HCM0540 HCM0539 HCM0421 chair bonsai
 ```
 
-- Năm HCM scene đã train/render.
-- `chair` và `bonsai` phải train/render trước khi đóng baseline.
+- Baseline ID: `B0-submission-q99-v1`; trạng thái: **CLOSED**.
+- Evaluator chính thức: Score `70.98330`, PSNR `24.611499`, SSIM `80.4805`,
+  LPIPS `19.8195`, `matched_scenes=7/7`.
+- Submission dùng JPEG quality 99, 4:4:4, optimized, non-progressive; ZIP cuối
+  335 MB dưới giới hạn 350 MB.
+- Chưa chạy benchmark local có ground truth. Không được mô tả số liệu evaluator
+  chính thức là kết quả local hoặc dùng official test data làm tín hiệu tuning.
 - Canonical research pool 18 BTS scene vẫn giữ riêng; hai auxiliary scene không
   được nhập vào pool đó hoặc dùng để suy luận cross-scene generalization.
-- Baseline chỉ closed khi đủ 7 scene, exact-name/codec/resolution validator pass,
-  ZIP dưới 350 MB và inference reports được lưu.
+- Mọi thay đổi model, loss, optimizer, densification, renderer hoặc codec phải
+  tạo candidate/baseline ID mới. Hướng nghiên cứu tiếp theo chưa được phê duyệt.
 
 ## Evaluation metrics
 Final metric is a weighted composite, matching standard NVS benchmarking (Mip-NeRF / 3DGS-style evaluation):

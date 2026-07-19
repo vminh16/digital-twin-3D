@@ -6,15 +6,25 @@ hình riêng; đây không phải mô hình tổng quát hóa chéo scene.
 
 ## Trạng thái baseline
 
-Submission cohort hiện tại có đúng 7 scene:
+Baseline `B0-submission-q99-v1` đã **CLOSED** trên đúng 7 scene:
 
-| Scene | Trạng thái |
-|---|---|
-| `HCM0644`, `HCM0674`, `HCM0540`, `HCM0539`, `HCM0421` | Đã train và render |
-| `chair`, `bonsai` | Cần train và render để đóng baseline |
+```text
+HCM0644 HCM0674 HCM0540 HCM0539 HCM0421 chair bonsai
+```
 
-Baseline chỉ được coi là **closed** khi đủ 7 folder, mọi ảnh khớp chính xác
-`image_name`, kích thước trong CSV, validator pass và ZIP nhỏ hơn 350 MB.
+| Kết quả evaluator chính thức | Giá trị |
+|---|---:|
+| Score | 70.98330 |
+| PSNR | 24.611499 |
+| SSIM | 80.4805 |
+| LPIPS | 19.8195 |
+| Matched scenes | 7/7 |
+
+Submission dùng JPEG quality 99, 4:4:4, optimized, non-progressive; ZIP cuối
+335 MB, dưới giới hạn 350 MB. Đây là kết quả từ evaluator chính thức, **không
+phải benchmark local**; cấu hình nội bộ của LPIPS/SSIM và `PSNR_max` chưa được
+xác nhận. Mọi thay đổi training, rendering hoặc codec sau mốc này phải dùng
+baseline/candidate ID mới. Hướng cải tiến tiếp theo chưa được chốt.
 
 ## Cài đặt không dùng Docker
 
