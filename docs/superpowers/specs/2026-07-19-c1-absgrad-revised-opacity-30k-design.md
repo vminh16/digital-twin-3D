@@ -1,7 +1,7 @@
-# C1 AbsGrad × Revised Opacity 30k Experiment Design
+# C1 AbsGrad × Revised Opacity Staged Experiment Design
 
-**Date:** 2026-07-19  
-**Status:** Approved direction; implementation is gated on review of this written specification.  
+**Date:** 2026-07-19
+**Status:** Revised after compute/storage review; implementation is gated on approval of this specification.
 **Baseline authority:** `B0-submission-q99-v1` remains CLOSED and immutable.
 
 ## 1. Objective
@@ -10,24 +10,24 @@ Implement the smallest reproducible research extension needed to test whether
 AbsGrad densification reduces blurred or missing BTS details, and whether revised
 opacity reduces haze, halos, and floaters after clone/split operations.
 
-The experiment runs directly to 30,000 optimization steps on an NVIDIA L4 with
-23 GB usable VRAM. A 7,000-step run is not the final experiment. Short execution
-is limited to unit/integration smoke checks; research decisions use full 30k runs.
+The experiment uses the repository's established 7,000-step qualification
+contract to screen candidates cheaply and fairly. Only the selected winner is
+retrained from scratch for a 30,000-step confirmation. If it passes, the same
+locked method is trained from scratch on all seven submission scenes.
 
-## 2. Why direct 30k is justified
+## 2. Why 7k screening precedes 30k
 
-The earlier 7k proposal was a low-cost hypothesis screen. It is no longer the
-selected design because:
+The baseline screening authority is the six-scene, seed-0, factor-1, fresh 7k
+qualification. Comparing a new 7k candidate with those existing B0 references
+holds steps, seed, holdout, resolution, optimizer, and data constant. Directly
+running every arm to 30k would spend substantially more compute before showing
+that the mechanism has any repeatable benefit.
 
-- the training target is a VM with a dedicated NVIDIA L4 rather than local compute;
-- the existing HCM0181 artifact provides a clean B0 30k internal-holdout reference;
-- the repository already has rolling 3k recovery checkpoints and validated L4
-  backend selection;
-- the HCM0181 baseline improved materially between 7k and 30k, so selecting only
-  at 7k could reject a candidate whose post-densification optimization is useful.
-
-The design remains adaptive across scenes: it completes both candidates on
-HCM0181 before spending compute on HCM0421.
+Thirty thousand steps are still required at the confirmation and production
+stages. On HCM0181, the clean B0 internal-holdout result improved from 7k to 30k
+by about `+3.646 Score50`, while the 30k run cost 2.90 L4 GPU-hours. This is strong
+evidence that 7k is not a substitute for final training, but it is evidence from
+only one scene. Therefore 30k is used after multi-scene screening, not before it.
 
 ## 3. Hypotheses
 
@@ -57,8 +57,8 @@ Expected observable effects relative to AbsGrad alone:
 - no regression in the evaluator-aligned composite score.
 
 This experiment does not include a revised-opacity-only arm. It estimates the
-incremental value of revised opacity conditional on AbsGrad, saving one 30k run
-per scene.
+incremental value of revised opacity conditional on AbsGrad, saving one candidate
+run per screening scene.
 
 ## 4. Candidate identities and locked configuration
 
@@ -73,12 +73,13 @@ Two new candidate IDs are allowed:
 that AbsGrad requires a higher threshold than signed-average gradient and gives
 `0.0008` as the example value. C1 does not add a threshold sweep.
 
-Every other optimization value remains locked to B0 research settings:
+Every other optimization value remains locked to the matching B0 stage:
 
-- `max_steps=30000`;
+- `max_steps=7000` during screening and `max_steps=30000` during confirmation
+  and production;
 - `resize_factor=1`;
 - `seed=0`;
-- internal holdout enabled;
+- internal holdout enabled for screening/confirmation and disabled for production;
 - `prune_opa=0.005`;
 - `grow_scale3d=0.01`;
 - `refine_start_step=500`;
@@ -95,40 +96,51 @@ configuration error, not a supported mode.
 
 ## 5. Experiment sequence and compute budget
 
-### Phase A — HCM0181 hypothesis test
+### Phase A — two-scene 7k mechanism screen
 
-Reference:
+Use existing B0-reference 7k artifacts for `HCM0421` and `HCM1439`. Run both C1
+candidates fresh at 7k on both scenes. These scenes provide one exact submission
+scene and one additional BTS scene while retaining existing paired controls.
 
-- existing committed B0 30k internal-holdout artifact from commit `411c8de`;
-- PSNR `22.6915559431`, SSIM `0.8053435291`, LPIPS `0.1112587926`;
-- 6,861,805 final Gaussians, 11.79 GB peak VRAM, 2.90 hours on NVIDIA L4.
+New runs: four. The committed six-scene B0-reference aggregate took 5,555.62
+seconds, or 15.43 minutes per 7k scene on average. On that measured anchor, the
+planning estimate is about 1.03 sequential L4 GPU-hours.
 
-New runs:
+### Phase B — six-scene 7k robustness screen
 
-1. `HCM0181/C1-absgrad-t08-v1`, fresh 30k;
-2. `HCM0181/C1-absgrad-t08-revopacity-v1`, fresh 30k.
+If one candidate wins on both Phase-A scenes, lock it and run it fresh at 7k on
+the remaining four qualification scenes: `hcm0031`, `HCM0181`, `HNI0131`, and
+`HNI0265`. Compare against their existing paired B0-reference artifacts. No
+second candidate is run in Phase B.
 
-Estimated sequential compute: about 5.8 GPU-hours using the B0 HCM0181 run as
-the planning anchor. Actual time is recorded and not assumed equal.
+New runs: four; planning estimate about 1.03 L4 GPU-hours. Together, Phases A and
+B evaluate the winner across all six established screening scenes for about 2.06
+GPU-hours, without retraining any B0 control. AbsGrad may grow more Gaussians, so
+these are planning anchors rather than runtime guarantees.
 
-### Phase B — HCM0421 locked confirmation
+### Phase C — fresh 30k confirmation
 
-Run only if Phase A selects a winner.
+If the winner passes the six-scene screen, train it from scratch for 30k on
+`HCM0181` with the exact holdout used by the existing committed B0 30k artifact
+from commit `411c8de`. That reference has PSNR `22.6915559431`, SSIM
+`0.8053435291`, LPIPS `0.1112587926`, 11.79 GB peak VRAM, and 2.90 L4 GPU-hours.
 
-New runs:
+The 7k checkpoint is not resumed: the learning-rate schedule horizon and config
+hash differ, so a fresh run is required for a controlled 30k comparison.
 
-1. `HCM0421/B0-research-30k-v1`, fresh 30k with internal holdout;
-2. `HCM0421/<Phase-A-winner>`, fresh 30k with the identical holdout.
+New runs: one; planning estimate about 2.9 L4 GPU-hours. Total pre-production
+budget is therefore about 4.96 GPU-hours, subject to measured candidate growth.
 
-The production HCM0421 checkpoint cannot serve as the reference because it was
-trained with `internal_holdout=false`; evaluating it on training images would
-leak the comparison. A new B0 research control is required.
+### Phase D — seven-scene production retraining
 
-Estimated additional sequential compute: about 5.8 GPU-hours. The maximum C1
-budget is therefore about 11.6 GPU-hours before any submission-cohort retraining.
+If Phase C passes, train the locked winner from scratch for 30k on exactly
+`HCM0644 HCM0674 HCM0540 HCM0539 HCM0421 chair bonsai`, using the production
+contract (`internal_holdout=false`) and a new candidate/baseline ID. Then render,
+validate, and package all seven scenes. Phase C is only a compute-risk gate;
+Phase D is the actual deployment experiment.
 
-HCM1439 is not used in this first 30k experiment because no clean B0 30k
-internal-holdout reference exists. Using it would require an additional B0 run.
+Using 2.90 hours as a conservative per-scene anchor, Phase D is roughly 20.3
+sequential L4 GPU-hours. Actual scene times and peak VRAM must be recorded.
 
 ## 6. Decision metrics
 
@@ -167,43 +179,53 @@ algorithmically; no manual BTS crop or per-pose annotation is allowed.
 
 ## 7. Selection rules
 
-### Phase A eligibility
+### Run eligibility
 
 A candidate is eligible only when all conditions hold:
 
 - final validation artifacts cover every internal validation image;
 - PSNR, SSIM, LPIPS, Score50, HF-L1, missing-edge, and spurious-edge are finite;
-- final checkpoint is exactly step 30,000 and config/manifest hashes match;
+- final metrics are exactly at the stage horizon (7k or 30k) and config/manifest
+  hashes match;
 - no CUDA OOM, non-finite loss, or invalid Gaussian state occurred;
 - peak VRAM is below 23 GB;
 - wall time and Gaussian trajectory are recorded.
 
-### Phase A winner
+### Phase A candidate lock
 
-Compare each candidate against the existing B0 HCM0181 reference.
+For each candidate, compute paired `ΔScore50` against B0 on HCM0421 and HCM1439.
 
-1. Reject a candidate when `ΔScore50 <= 0`.
-2. Reject a candidate when both missing-edge and spurious-edge means worsen.
-3. Among remaining candidates, choose the highest `Score50`.
-4. If the Score50 difference between candidates is numerically tied at the
-   stored precision, choose lower HF-L1; then lower peak Gaussian count; then
-   `C1-absgrad-t08-v1` as the simpler model.
+1. A candidate must have `ΔScore50 > 0` on both scenes.
+2. It is rejected if missing-edge and spurious-edge both worsen on either scene.
+3. If both remain eligible, select the larger two-scene mean `ΔScore50`.
+4. A numerical tie is broken by lower mean HF-L1, then lower peak Gaussian
+   count, then `C1-absgrad-t08-v1` as the simpler method.
 
-No significance claim is made from one seed. The same seed and holdout provide
-a controlled paired engineering comparison, not a population-level estimate.
+### Phase B six-scene gate
 
-### Phase B confirmation
+The locked candidate passes screening only when:
 
-The Phase-A winner passes C1 only if, against the fresh HCM0421 B0 research
-control:
+- mean paired `ΔScore50 > 0` across all six scenes;
+- at least four of six scene deltas are positive;
+- aggregate LPIPS does not worsen;
+- missing-edge and spurious-edge do not both worsen in aggregate;
+- every run passes integrity and resource gates.
+
+Report all six paired deltas and an exact two-sided sign-test p-value as
+descriptive evidence. With six scenes the strongest possible result is
+`p=0.03125`; no broader generalization claim is made from one fixed seed.
+
+### Phase C 30k gate
+
+Against the existing HCM0181 B0 30k internal-holdout reference, require:
 
 - `ΔScore50 > 0`;
 - LPIPS does not increase;
 - missing-edge and spurious-edge do not both worsen;
-- the run satisfies the same integrity and resource gates.
+- integrity/resource gates pass.
 
-If Phase A passes but Phase B fails, classify the effect as scene-specific and
-do not retrain the seven-scene submission cohort.
+Only then may Phase D retrain all seven production scenes. A Phase-C failure
+means the 7k gain did not survive the final training horizon.
 
 ## 8. L4 CUDA execution contract
 
@@ -229,7 +251,9 @@ Required runtime settings:
 - accepted fused optimizer/precision pair from backend qualification;
 - Gaussian parameters remain FP32 under AMP;
 - one scene per GPU process;
-- rolling atomic recovery checkpoint every 3,000 steps;
+- no model checkpoint during 7k screening; metrics and timing remain durable;
+- one rolling atomic `recovery.pt` every 3,000 steps during 30k confirmation and
+  production; it overwrites the same path rather than accumulating milestones;
 - no `torch.compile`, TF32 override, multi-GPU synchronization, custom CUDA
   kernels, or dependency upgrade in C1.
 
@@ -240,21 +264,17 @@ changes from becoming extra experimental factors.
 
 ### 9.1 Configuration boundary
 
-Add a separate `--research_candidate` argument with exact allowed IDs. Do not
-weaken or overload `--qualification_candidate`, `--full_length_qualification`,
-or production training contracts.
+Extend the exact allow-list behind `--qualification_candidate` with the two C1
+IDs. Preserve its existing hard contract: fresh run, factor 1, seed 0, 7k,
+internal holdout, cached images, pinned transfer, and no checkpoints.
 
-Research candidate mode requires:
+Add a separate full-length research candidate mode for Phase C. It requires
+factor 1, seed 0, 30k, internal holdout, candidate ID in the config hash, and
+resume only from `<output_dir>/checkpoints/recovery.pt`. Production Phase D uses
+the existing production orchestration with a new immutable candidate ID.
 
-- fresh or exact rolling-checkpoint resume;
-- factor 1, seed 0, 30k steps, checkpoint interval 3k;
-- cached images and pinned transfer;
-- internal holdout;
-- candidate ID included in the config hash;
-- resume path exactly `<output_dir>/checkpoints/recovery.pt`.
-
-Candidate mode is mutually exclusive with profile, backend qualification,
-7k qualification, and B0 full-length qualification modes.
+The full-length research mode remains mutually exclusive with profile, backend
+qualification, 7k qualification, and B0 full-length qualification modes.
 
 ### 9.2 Rendering and density adapter
 
@@ -269,7 +289,9 @@ config and passes them to the renderer and strategy.
 ### 9.3 Diagnostics and decision artifact
 
 Add one focused high-frequency metrics module and one C1 decision module. The
-decision output is deterministic JSON containing:
+per-step `metrics.jsonl` remains the primary training record and stores loss,
+Gaussian count, means learning rate, and sample index; `timing.json` stores the
+timing breakdown. The deterministic decision JSON contains:
 
 - candidate IDs and source run paths;
 - config and manifest hashes;
@@ -286,18 +308,22 @@ Add a shell runner following existing Phase 4 scripts. It:
 - verifies the repository root and required manifests;
 - loads the accepted backend decision;
 - creates candidate-specific output directories without overwriting B0;
-- resumes only from a matching rolling recovery checkpoint;
-- runs Phase A candidates sequentially;
+- never resumes or saves model checkpoints for 7k screening;
+- runs the four Phase-A candidate/scene pairs sequentially;
 - computes the Phase A decision;
 - stops before Phase B when no candidate passes;
-- runs the HCM0421 B0 control and locked winner only after Phase A passes.
+- runs only the locked winner on the four remaining screening scenes;
+- stops before Phase C when the six-scene gate fails;
+- runs the fresh HCM0181 30k confirmation with one rolling recovery file;
+- emits, but does not automatically launch, the exact seven-scene production
+  command after Phase C passes, so the expensive final spend is explicit.
 
 ## 10. Failure handling
 
-- Existing non-empty run directories are rejected unless a valid recovery
-  checkpoint matches the config and manifest hashes.
+- Existing non-empty 7k run directories are rejected. Existing non-empty 30k
+  directories require a valid rolling recovery checkpoint with matching hashes.
 - CUDA OOM, non-finite values, missing validation renders, incomplete metrics,
-  or a checkpoint below 30k prevent selection.
+  or failure to reach the stage horizon prevent selection.
 - A failed candidate does not cause another candidate to be declared winner by
   default; the remaining candidate must independently pass against B0.
 - The runner records failure type and message in a ledger before exiting.
@@ -316,15 +342,18 @@ Unit tests must prove:
   as missing energy, and detect an added checker/noise pattern as spurious energy;
 - decision rules reject non-finite/incomplete/resource-invalid runs and select
   deterministically;
-- runner commands contain factor 1, 30k, 3k checkpointing, seed 0, cache,
-  pinned transfer, accepted backend, precision, and rolling checkpoint flags.
+- 7k runner commands contain factor 1, 7k, seed 0, cache, pinned transfer,
+  accepted backend/precision, and checkpoint saving disabled;
+- 30k runner commands contain factor 1, 30k, 3k rolling recovery, seed 0,
+  cache, pinned transfer, and the same accepted backend/precision;
+- decision logic enforces two-scene locking, six-scene gating, and 30k gating.
 
 GPU verification on the VM must include:
 
 1. existing real gsplat CUDA forward/backward smoke;
 2. a bounded C1 candidate smoke that reaches one densification event and confirms
    `means2d.absgrad` exists and all gradients are finite;
-3. the full Phase A runs only after the smoke passes.
+3. the four 7k Phase-A runs only after the smoke passes.
 
 ## 12. Out of scope
 
