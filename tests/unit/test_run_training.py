@@ -332,6 +332,20 @@ def test_training_config_applies_locked_candidate_threshold():
     ) is False
 
 
+def test_training_config_applies_locked_c1_density_settings():
+    manifest = SimpleNamespace(scene_id="HCM0421")
+    config = run_training.build_training_config(
+        _args(qualification_candidate="C1-absgrad-t08-revopacity-v1"),
+        manifest,
+        resize=(8, 6),
+    )
+
+    assert config["qualification_candidate"] == "C1-absgrad-t08-revopacity-v1"
+    assert config["grow_grad2d"] == pytest.approx(0.0008)
+    assert config["absgrad"] is True
+    assert config["revised_opacity"] is True
+
+
 def test_internal_holdout_requires_colocated_artifact(tmp_path, monkeypatch):
     manifest = SimpleNamespace(scene_id="HCM0181")
     with pytest.raises(FileNotFoundError, match="holdout.json"):

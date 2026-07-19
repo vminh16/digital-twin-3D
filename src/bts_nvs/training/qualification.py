@@ -13,6 +13,7 @@ from bts_nvs.data.inventory import CALIBRATION_SCENE_IDS
 from bts_nvs.evaluation.metrics import MetricConfig, evaluate_image
 from bts_nvs.rendering.gsplat_renderer import render_gaussians
 from bts_nvs.training.trainer import _normalize_world_to_camera
+from bts_nvs.training.c1_candidates import QUALIFICATION_CANDIDATES
 
 
 CALIBRATION_SCENES = CALIBRATION_SCENE_IDS
@@ -176,7 +177,7 @@ def _validate_report(report: dict) -> None:
         raise ValueError("qualification report must use schema 1 at step 7000")
     if report.get("scene_id") not in CALIBRATION_SCENES:
         raise ValueError("qualification report contains an unexpected scene")
-    if report.get("candidate_id") not in CANDIDATES:
+    if report.get("candidate_id") not in QUALIFICATION_CANDIDATES:
         raise ValueError("qualification report contains an unexpected candidate")
     if not isinstance(report.get("image_count"), int) or report["image_count"] <= 0:
         raise ValueError("qualification report image_count must be positive")

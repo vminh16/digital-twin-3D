@@ -53,6 +53,9 @@ class TrainingPrecision:
         if projected_means.grad is None:
             raise RuntimeError("AMP requires a retained projected means gradient")
         projected_means.grad.div_(scale)
+        absolute_gradient = getattr(projected_means, "absgrad", None)
+        if isinstance(absolute_gradient, torch.Tensor):
+            absolute_gradient.div_(scale)
         return scale
 
     def step(self, optimizers: Mapping[str, torch.optim.Optimizer]) -> None:

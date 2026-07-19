@@ -26,6 +26,10 @@ from bts_nvs.models.optimizer import setup_optimizers
 from bts_nvs.rendering.density_strategy import GsplatStrategy
 from bts_nvs.rendering.gsplat_renderer import render_gaussians
 from bts_nvs.training.checkpoint import load_checkpoint
+from bts_nvs.training.c1_candidates import (
+    QUALIFICATION_CANDIDATES,
+    candidate_settings,
+)
 from bts_nvs.training.trainer import Trainer
 from bts_nvs.training.qualification import (
     CALIBRATION_SCENES,
@@ -117,7 +121,7 @@ def parse_args():
     )
     parser.add_argument(
         "--qualification_candidate",
-        choices=("B0-reference", "B0-compact"),
+        choices=QUALIFICATION_CANDIDATES,
         default=None,
         help="Run one locked Phase 4.4 candidate on the internal holdout.",
     )
@@ -390,6 +394,10 @@ def validate_preflight_gradients(parameters) -> None:
 def run_cuda_preflight(
     optimizer_backend: str = "adam",
     precision_mode: str = "fp32",
+    *,
+    grow_grad2d: float = 0.0002,
+    absgrad: bool = False,
+    revised_opacity: bool = False,
 ) -> None:
     """Fail before scene loading unless real gsplat CUDA forward/backward works."""
     if not torch.cuda.is_available():
@@ -408,7 +416,13 @@ def run_cuda_preflight(
     try:
         optimizers = setup_optimizers(gaussians, backend=optimizer_backend)
         precision = TrainingPrecision(precision_mode, device)
-        strategy = GsplatStrategy(gaussians, optimizers)
+        strategy = GsplatStrategy(
+            gaussians,
+            optimizers,
+            grow_grad2d=grow_grad2d,
+            absgrad=absgrad,
+            revised_opacity=revised_opacity,
+        )
         strategy_state = strategy.initialize_state(scene_scale=1.0)
         with precision.autocast():
             result = render_gaussians(
@@ -416,6 +430,7 @@ def run_cuda_preflight(
                 viewmat=torch.eye(4, device=device),
                 intrinsics=CameraIntrinsics(32, 32, 24.0, 24.0, 16.0, 16.0),
                 active_sh_degree=0,
+                absgrad=absgrad,
             )
             loss = result.rgb.square().mean()
         strategy.step_pre_backward(strategy_state, step=1, info=result.info)
@@ -430,6 +445,14 @@ def run_cuda_preflight(
             raise RuntimeError(
                 "gsplat preflight did not produce a finite projected gradient"
             )
+        if absgrad:
+            projected_absgrad = getattr(means2d, "absgrad", None)
+            if not isinstance(projected_absgrad, torch.Tensor) or not torch.isfinite(
+                projected_absgrad
+            ).all():
+                raise RuntimeError(
+                    "gsplat preflight did not produce a finite AbsGrad gradient"
+                )
         strategy.step_post_backward(
             strategy_state,
             step=1,
@@ -450,6 +473,7 @@ def build_training_config(
     split: HoldoutSplit | None = None,
 ) -> dict:
     width, height = resize
+    density = candidate_settings(args.qualification_candidate)
     config = {
         "scene_id": manifest.scene_id,
         "resize_factor": args.resize_factor,
@@ -468,9 +492,9 @@ def build_training_config(
         "seed": args.seed,
         "max_steps": args.max_steps,
         "prune_opa": 0.005,
-        "grow_grad2d": (
-            0.0003 if args.qualification_candidate == "B0-compact" else 0.0002
-        ),
+        "grow_grad2d": density.grow_grad2d,
+        "absgrad": density.absgrad,
+        "revised_opacity": density.revised_opacity,
         "grow_scale3d": 0.01,
         "refine_start_step": 500,
         "refine_stop_step": 15000,
@@ -563,7 +587,14 @@ def main():
         if args.full_length_qualification
         else None
     )
-    run_cuda_preflight(args.optimizer_backend, args.precision)
+    density = candidate_settings(args.qualification_candidate)
+    run_cuda_preflight(
+        args.optimizer_backend,
+        args.precision,
+        grow_grad2d=density.grow_grad2d,
+        absgrad=density.absgrad,
+        revised_opacity=density.revised_opacity,
+    )
 
     scene_root = Path(args.scene_dir)
     manifest_dir = (

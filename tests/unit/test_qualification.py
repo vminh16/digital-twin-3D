@@ -17,6 +17,7 @@ from bts_nvs.training.qualification import (
     evaluate_internal_validation,
     save_full_length_report,
     save_qualification_decision,
+    save_qualification_report,
 )
 
 
@@ -88,6 +89,15 @@ def test_decision_json_is_standard_and_deterministic(tmp_path):
     assert path.read_bytes() == first
     assert json.loads(first)["selected_candidate"] == "B0-compact"
     assert b"NaN" not in first and b"Infinity" not in first
+
+
+def test_qualification_report_accepts_c1_without_changing_b0_matrix(tmp_path):
+    report = _reports()[0] | {"candidate_id": "C1-absgrad-t08-v1"}
+
+    save_qualification_report(report, tmp_path / "report.json")
+
+    assert json.loads((tmp_path / "report.json").read_text()) == report
+    assert qualification.CANDIDATES == ("B0-reference", "B0-compact")
 
 
 def test_internal_validation_reports_every_image_and_ignores_invalid_border(

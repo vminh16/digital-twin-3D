@@ -95,6 +95,29 @@ def test_amp_unscales_all_optimizers_and_non_leaf_projected_gradient(
     assert fake.update_calls == 1
 
 
+def test_amp_unscales_projected_absgrad(monkeypatch: pytest.MonkeyPatch) -> None:
+    import bts_nvs.training.precision as precision_module
+    from bts_nvs.training.precision import TrainingPrecision
+
+    fake = _FakeScaler(scale=8.0)
+    monkeypatch.setattr(
+        precision_module.torch.amp,
+        "GradScaler",
+        lambda *args, **kwargs: fake,
+    )
+    parameter = torch.nn.Parameter(torch.tensor([2.0]))
+    optimizer = torch.optim.SGD([parameter], lr=0.1)
+    projected = parameter * 3.0
+    projected.retain_grad()
+    projected.absgrad = torch.tensor([16.0])
+    controller = TrainingPrecision("amp-fp16", torch.device("cuda"))
+
+    controller.backward_and_unscale(projected.sum(), {"p": optimizer}, projected)
+
+    assert torch.equal(projected.grad, torch.ones_like(projected))
+    assert torch.equal(projected.absgrad, torch.tensor([2.0]))
+
+
 def test_amp_rejects_cpu_and_missing_projected_gradient() -> None:
     from bts_nvs.training.precision import TrainingPrecision
 

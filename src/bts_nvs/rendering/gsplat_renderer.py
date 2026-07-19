@@ -19,6 +19,7 @@ def render_gaussians(
     active_sh_degree: int,
     backgrounds: torch.Tensor | None = None,
     render_mode: str = "RGB",
+    absgrad: bool = False,
 ) -> RenderResult:
     """Render one pinhole camera in normalized world coordinates.
 
@@ -79,7 +80,7 @@ def render_gaussians(
         backgrounds=background,
         render_mode=render_mode,
         sparse_grad=False,
-        absgrad=False,
+        absgrad=absgrad,
         rasterize_mode="classic",
     )
 

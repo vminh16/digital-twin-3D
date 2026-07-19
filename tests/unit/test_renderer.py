@@ -94,6 +94,29 @@ def test_renderer_passes_single_camera_contract_to_gsplat(monkeypatch) -> None:
         assert torch.isfinite(parameter.grad).all()
 
 
+def test_renderer_forwards_absgrad_to_gsplat(monkeypatch) -> None:
+    captured = {}
+
+    def fake_rasterization(**kwargs):
+        captured.update(kwargs)
+        return (
+            torch.zeros((1, 16, 16, 3)),
+            torch.zeros((1, 16, 16, 1)),
+            {"means2d": torch.zeros((1, 1, 2))},
+        )
+
+    monkeypatch.setattr(gsplat_renderer, "rasterization", fake_rasterization)
+    gsplat_renderer.render_gaussians(
+        _gaussians(),
+        torch.eye(4),
+        _intrinsics(),
+        active_sh_degree=0,
+        absgrad=True,
+    )
+
+    assert captured["absgrad"] is True
+
+
 @pytest.mark.parametrize(
     "viewmat",
     [torch.eye(3), torch.eye(4).repeat(2, 1, 1), torch.full((4, 4), float("nan"))],

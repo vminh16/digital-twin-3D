@@ -36,6 +36,8 @@ class GsplatStrategy:
         refine_stop_step: int = 15_000,
         refine_every: int = 100,
         reset_every: int = 3_000,
+        absgrad: bool = False,
+        revised_opacity: bool = False,
     ) -> None:
         if DefaultStrategy is None:
             raise ImportError("gsplat==1.4.0 is required for density control")
@@ -70,7 +72,8 @@ class GsplatStrategy:
             refine_stop_iter=refine_stop_step,
             refine_every=refine_every,
             reset_every=reset_every,
-            absgrad=False,
+            absgrad=absgrad,
+            revised_opacity=revised_opacity,
         )
         self.backend.check_sanity(self.params, self.optimizers)
 

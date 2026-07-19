@@ -90,6 +90,7 @@ def test_strategy_owns_canonical_parameters_and_explicit_config(monkeypatch) -> 
         "refine_every": 100,
         "reset_every": 3_000,
         "absgrad": False,
+        "revised_opacity": False,
     }
 
     state = strategy.initialize_state(scene_scale=1.0)
@@ -103,6 +104,22 @@ def test_strategy_owns_canonical_parameters_and_explicit_config(monkeypatch) -> 
     assert strategy.params["means"] is gaussians.means
     assert optimizers["means"].param_groups[0]["params"] == [gaussians.means]
     assert gaussians.state_dict()["means"].shape == (3, 3)
+
+
+def test_strategy_forwards_c1_density_flags(monkeypatch) -> None:
+    monkeypatch.setattr(density_strategy, "DefaultStrategy", _FakeDefaultStrategy)
+    gaussians = _gaussians()
+    strategy = GsplatStrategy(
+        gaussians,
+        setup_optimizers(gaussians),
+        grow_grad2d=0.0008,
+        absgrad=True,
+        revised_opacity=True,
+    )
+
+    assert strategy.backend.config["grow_grad2d"] == pytest.approx(0.0008)
+    assert strategy.backend.config["absgrad"] is True
+    assert strategy.backend.config["revised_opacity"] is True
 
 
 @pytest.mark.parametrize("step", [0, -1, True])

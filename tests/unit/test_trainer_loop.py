@@ -214,6 +214,33 @@ def test_trainer_normalizes_raw_camera_pose_before_render(
     torch.testing.assert_close(captured["viewmat"], expected)
 
 
+def test_trainer_propagates_c1_flags_to_training_render_and_strategy(
+    tmp_path: Path,
+    manifest_artifact: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured = {}
+
+    def capture_render(*args, **kwargs):
+        captured["absgrad"] = kwargs.pop("absgrad")
+        return _differentiable_render(*args, **kwargs)
+
+    monkeypatch.setattr(trainer_module, "render_gaussians", capture_render)
+    config = _config(max_steps=1)
+    config.update(
+        {"grow_grad2d": 0.0008, "absgrad": True, "revised_opacity": True}
+    )
+    trainer = _trainer(
+        tmp_path / "run", manifest_artifact, _MockDataset(), config=config
+    )
+
+    trainer.train(stop_step=1, checkpoint_every=1)
+
+    assert captured["absgrad"] is True
+    assert trainer.strategy.backend.config["absgrad"] is True
+    assert trainer.strategy.backend.config["revised_opacity"] is True
+
+
 def test_trainer_rejects_distorted_training_sample(
     tmp_path: Path,
     manifest_artifact: Path,
