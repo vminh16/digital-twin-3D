@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import math
 import os
 from pathlib import Path
 from typing import Mapping, Sequence
@@ -9,27 +8,23 @@ from typing import Mapping, Sequence
 import numpy as np
 
 from bts_nvs.training.c1_candidates import C1_CANDIDATES
+from bts_nvs.training.c1_screening import (
+    BASELINE_CANDIDATE,
+    MAX_VRAM_MB,
+    score50,
+)
 
 
 PHASE_A_SCENES = ("HCM0421", "HCM1439")
-BASELINE_CANDIDATE = "B0-reference"
-MAX_VRAM_MB = 23 * 1024
 
 
 def _finite_number(value: object, name: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError(f"{name} must be finite")
     result = float(value)
-    if not math.isfinite(result):
+    if not np.isfinite(result):
         raise ValueError(f"{name} must be finite")
     return result
-
-
-def score50(report: Mapping[str, object]) -> float:
-    psnr = _finite_number(report.get("psnr_db_mean"), "psnr_db_mean")
-    ssim = _finite_number(report.get("ssim_mean"), "ssim_mean")
-    lpips = _finite_number(report.get("lpips_mean"), "lpips_mean")
-    return 40.0 - 40.0 * lpips + 30.0 * ssim + 0.6 * psnr
 
 
 def _validate_report(report: Mapping[str, object], candidates: set[str]) -> None:

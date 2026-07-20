@@ -10,6 +10,8 @@ import yaml
 import bts_nvs.training.c1_phase_a_runner as runner
 from bts_nvs.training.c1_candidates import C1_CANDIDATES
 from bts_nvs.training.c1_phase_a import PHASE_A_SCENES
+from bts_nvs.training.c1_candidates import candidate_settings
+from bts_nvs.training.trainer import compute_config_sha256
 
 
 def _report(scene: str, candidate: str, psnr: float) -> dict:
@@ -102,7 +104,7 @@ def test_runner_executes_exact_four_pairs_and_reuses_completed_reports(
     monkeypatch.setattr(runner, "load_or_create_backend_decision", lambda _: decision)
     monkeypatch.setattr(
         runner,
-        "_diagnostics_for_run",
+        "diagnostics_for_run",
         lambda **kwargs: _diagnostic(kwargs["scene_id"], kwargs["candidate_id"]),
     )
     observed = []
@@ -113,7 +115,7 @@ def test_runner_executes_exact_four_pairs_and_reuses_completed_reports(
         run_dir = Path(command[command.index("--output_dir") + 1])
         run_dir.mkdir(parents=True)
         (run_dir / "validation_renders").mkdir()
-        settings = runner.candidate_settings(candidate)
+        settings = candidate_settings(candidate)
         config = {
             "scene_id": scene,
             "qualification_candidate": candidate,
@@ -132,7 +134,7 @@ def test_runner_executes_exact_four_pairs_and_reuses_completed_reports(
         }
         (run_dir / "config.yaml").write_text(yaml.safe_dump(config))
         report = _report(scene, candidate, 21.0)
-        report["config_sha256"] = runner.compute_config_sha256(config)
+        report["config_sha256"] = compute_config_sha256(config)
         (run_dir / "qualification_report.json").write_text(
             json.dumps(report)
         )
