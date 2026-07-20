@@ -1,0 +1,188 @@
+{
+  "optimizer_backend": "adam",
+  "precision": "fp32",
+  "qualification_report_sha256": "8861c7e964ba49710b9dcbd10dd2002cadb9c84a4abd7cdb4a136051cdb18214",
+  "scenes": [
+    {
+      "completed_step": 30000,
+      "config_sha256": "6c9207591ef3ef8995797eaefc35f87cf0032b75ecba0e6bec3d2e19d40896a7",
+      "error_message": null,
+      "error_type": null,
+      "manifest_sha256": "9161b4a3585e33d326e41496dab2f92af5e8de998077f50291ded1f83f70cb86",
+      "run_dir": "scenes/hcm0031",
+      "scene_id": "hcm0031",
+      "status": "trained"
+    },
+    {
+      "completed_step": 30000,
+      "config_sha256": "66c0b27de6c82492c822d491bfffc060dbb8a552df235d81140aa141b3a8a111",
+      "error_message": null,
+      "error_type": null,
+      "manifest_sha256": "93329288801f46f959d6001d8c764d761592347ea6e8e13fd826b2da849bcf5c",
+      "run_dir": "scenes/hcm0034",
+      "scene_id": "hcm0034",
+      "status": "trained"
+    },
+    {
+      "completed_step": 30000,
+      "config_sha256": "414efd0114d9747840960463a023dccac71425777c3d7a255f5710d9c9dfc824",
+      "error_message": null,
+      "error_type": null,
+      "manifest_sha256": "24d02f63ff6530c152a8f7a9dc09a01ee63d10debb8e61638aa7512d65a01ea6",
+      "run_dir": "scenes/HCM0181",
+      "scene_id": "HCM0181",
+      "status": "trained"
+    },
+    {
+      "completed_step": 30000,
+      "config_sha256": "f0e50ee207eec70e12407fed2cd34af14599fe6c22324a2403574f5e903b0dc0",
+      "error_message": null,
+      "error_type": null,
+      "manifest_sha256": "575ce055294f163d3d6d47ef683c59eecb2a18345310166f33931150ce8abd8a",
+      "run_dir": "scenes/HCM0193",
+      "scene_id": "HCM0193",
+      "status": "trained"
+    },
+    {
+      "completed_step": 0,
+      "config_sha256": null,
+      "error_message": null,
+      "error_type": null,
+      "manifest_sha256": null,
+      "run_dir": "scenes/HCM0204",
+      "scene_id": "HCM0204",
+      "status": "running"
+    },
+    {
+      "completed_step": 0,
+      "config_sha256": null,
+      "error_message": null,
+      "error_type": null,
+      "manifest_sha256": null,
+      "run_dir": "scenes/HCM0249",
+      "scene_id": "HCM0249",
+      "status": "pending"
+    },
+    {
+      "completed_step": 0,
+      "config_sha256": null,
+      "error_message": null,
+      "error_type": null,
+      "manifest_sha256": null,
+      "run_dir": "scenes/HCM0254",
+      "scene_id": "HCM0254",
+      "status": "pending"
+    },
+    {
+      "completed_step": 0,
+      "config_sha256": null,
+      "error_message": null,
+      "error_type": null,
+      "manifest_sha256": null,
+      "run_dir": "scenes/HCM0276",
+      "scene_id": "HCM0276",
+      "status": "pending"
+    },
+    {
+      "completed_step": 30000,
+      "config_sha256": "b2c080c5af3530645935ebc43d0cc3cab1131af3d80f69a06523f7eb0fd2bf0f",
+      "error_message": null,
+      "error_type": null,
+      "manifest_sha256": "4a257685bc274adc07bd98f8f549d7cd401ccf31b4cc9a9a44a79014ea43868e",
+      "run_dir": "scenes/HCM0421",
+      "scene_id": "HCM0421",
+      "status": "trained"
+    },
+    {
+      "completed_step": 30000,
+      "config_sha256": "e411065e20ab35b1ac86f446d17ee0f338538cb447341038521cb125a7caeadb",
+      "error_message": null,
+      "error_type": null,
+      "manifest_sha256": "fd1d7f1d144e3f1c3399f8eb77aec903cabbb2941a9a5ae80df7361bdbe0d45c",
+      "run_dir": "scenes/HCM0539",
+      "scene_id": "HCM0539",
+      "status": "trained"
+    },
+    {
+      "completed_step": 30000,
+      "config_sha256": "d3eba513a6d8091c0d35ee57afcaa798d079b1a558a4d1ab0bdb517fe184cf15",
+      "error_message": null,
+      "error_type": null,
+      "manifest_sha256": "f0ab03a427b2b5cdf3de3462af8e36e8bd83f2ccabfb876b11ce56aa65873134",
+      "run_dir": "scenes/HCM0540",
+      "scene_id": "HCM0540",
+      "status": "trained"
+    },
+    {
+      "completed_step": 30000,
+      "config_sha256": "a64d3ec648e6085ea5a2655b1e89e41b505031bfb7716d8bd0b98c30de14749e",
+      "error_message": null,
+      "error_type": null,
+      "manifest_sha256": "abfe7fb50c7dfcbb99e97dccabf559cde3bb940d223b76d849558a5140f8c87b",
+      "run_dir": "scenes/HCM0644",
+      "scene_id": "HCM0644",
+      "status": "trained"
+    },
+    {
+      "completed_step": 30000,
+      "config_sha256": "2f4162e708012a8cffbe691539dabaf750f8a260f55f0d8340b797becef3b25b",
+      "error_message": null,
+      "error_type": null,
+      "manifest_sha256": "1aa005b44ca0582933c98fa44e33e98d6f59287da02a7ac62f900fa06be76e82",
+      "run_dir": "scenes/HCM0674",
+      "scene_id": "HCM0674",
+      "status": "trained"
+    },
+    {
+      "completed_step": 0,
+      "config_sha256": null,
+      "error_message": null,
+      "error_type": null,
+      "manifest_sha256": null,
+      "run_dir": "scenes/HCM1439",
+      "scene_id": "HCM1439",
+      "status": "pending"
+    },
+    {
+      "completed_step": 0,
+      "config_sha256": null,
+      "error_message": null,
+      "error_type": null,
+      "manifest_sha256": null,
+      "run_dir": "scenes/HNI0131",
+      "scene_id": "HNI0131",
+      "status": "pending"
+    },
+    {
+      "completed_step": 0,
+      "config_sha256": null,
+      "error_message": null,
+      "error_type": null,
+      "manifest_sha256": null,
+      "run_dir": "scenes/HNI0265",
+      "scene_id": "HNI0265",
+      "status": "pending"
+    },
+    {
+      "completed_step": 0,
+      "config_sha256": null,
+      "error_message": null,
+      "error_type": null,
+      "manifest_sha256": null,
+      "run_dir": "scenes/HNI0366",
+      "scene_id": "HNI0366",
+      "status": "pending"
+    },
+    {
+      "completed_step": 0,
+      "config_sha256": null,
+      "error_message": null,
+      "error_type": null,
+      "manifest_sha256": null,
+      "run_dir": "scenes/HNI0437",
+      "scene_id": "HNI0437",
+      "status": "pending"
+    }
+  ],
+  "schema_version": 1
+}

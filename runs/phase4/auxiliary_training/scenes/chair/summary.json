@@ -1,0 +1,7 @@
+{
+  "total_steps": 30000,
+  "total_time_seconds": 3579.412611287,
+  "final_loss": 0.03169945999979973,
+  "final_num_gaussians": 1927937,
+  "max_vram_mb": 3503.1044921875
+}

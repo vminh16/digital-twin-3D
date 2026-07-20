@@ -1,0 +1,59 @@
+{
+  "elapsed_seconds": 357.2130793600081,
+  "scene_ids": [
+    "HCM0644",
+    "HCM0674",
+    "HCM0540",
+    "HCM0539",
+    "HCM0421"
+  ],
+  "scenes": [
+    {
+      "checkpoint_sha256": "3d4707a1037003111fe9855aa557d5a369fbcabca8f5d59e8fda0f6ad0526679",
+      "completed_step": 30000,
+      "config_sha256": "a64d3ec648e6085ea5a2655b1e89e41b505031bfb7716d8bd0b98c30de14749e",
+      "elapsed_seconds": 68.23119487200165,
+      "image_count": 60,
+      "manifest_sha256": "abfe7fb50c7dfcbb99e97dccabf559cde3bb940d223b76d849558a5140f8c87b",
+      "scene_id": "HCM0644"
+    },
+    {
+      "checkpoint_sha256": "cc0ad0b952cf326a02e256fec8eefdf40e1ae82f10c056f6e5df491b03200e05",
+      "completed_step": 30000,
+      "config_sha256": "2f4162e708012a8cffbe691539dabaf750f8a260f55f0d8340b797becef3b25b",
+      "elapsed_seconds": 67.3950616929942,
+      "image_count": 60,
+      "manifest_sha256": "1aa005b44ca0582933c98fa44e33e98d6f59287da02a7ac62f900fa06be76e82",
+      "scene_id": "HCM0674"
+    },
+    {
+      "checkpoint_sha256": "af7e634cebbb5cff7aca59a31978e64377e10f117ea154c2629342f8f90f0108",
+      "completed_step": 30000,
+      "config_sha256": "d3eba513a6d8091c0d35ee57afcaa798d079b1a558a4d1ab0bdb517fe184cf15",
+      "elapsed_seconds": 68.45449420899968,
+      "image_count": 60,
+      "manifest_sha256": "f0ab03a427b2b5cdf3de3462af8e36e8bd83f2ccabfb876b11ce56aa65873134",
+      "scene_id": "HCM0540"
+    },
+    {
+      "checkpoint_sha256": "87afe053fc13c81c728a20a2d29169e219b88f2c37b407d09035e95b929311b1",
+      "completed_step": 30000,
+      "config_sha256": "e411065e20ab35b1ac86f446d17ee0f338538cb447341038521cb125a7caeadb",
+      "elapsed_seconds": 69.13710324998829,
+      "image_count": 60,
+      "manifest_sha256": "fd1d7f1d144e3f1c3399f8eb77aec903cabbb2941a9a5ae80df7361bdbe0d45c",
+      "scene_id": "HCM0539"
+    },
+    {
+      "checkpoint_sha256": "80ac7fc2de728e36e38905637c17c9e3aa7b07183481c56e685abd0664674f51",
+      "completed_step": 30000,
+      "config_sha256": "b2c080c5af3530645935ebc43d0cc3cab1131af3d80f69a06523f7eb0fd2bf0f",
+      "elapsed_seconds": 69.25440732900461,
+      "image_count": 60,
+      "manifest_sha256": "4a257685bc274adc07bd98f8f549d7cd401ccf31b4cc9a9a44a79014ea43868e",
+      "scene_id": "HCM0421"
+    }
+  ],
+  "schema_version": 1,
+  "total_images": 300
+}

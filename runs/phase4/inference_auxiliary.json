@@ -1,0 +1,31 @@
+{
+  "elapsed_seconds": 15.869593192001048,
+  "jpeg_quality": 99,
+  "jpeg_subsampling": "4:4:4",
+  "scene_ids": [
+    "chair",
+    "bonsai"
+  ],
+  "scenes": [
+    {
+      "checkpoint_sha256": "5cfb6a472bb75e4a3efad02430d9c9197b6b8c4cbe468274e8c362a7b7547cf5",
+      "completed_step": 30000,
+      "config_sha256": "9a2789deabf7a4bbdf1a8d4258a1d9f6c915f161d1da191f87b07372d2124f0c",
+      "elapsed_seconds": 9.268963515001815,
+      "image_count": 58,
+      "manifest_sha256": "434738976a73e100be0e4d4a04d4f27c37fc982ff4bffe6053e2c6fbb29a75fa",
+      "scene_id": "chair"
+    },
+    {
+      "checkpoint_sha256": "f378920907666631ea052f18de2636a123926d0ae4ffa3786285dc99dff48f42",
+      "completed_step": 30000,
+      "config_sha256": "d9c64587b71afbfd161c546b7851a6b39af885d4d56849c89617d3b443086ed3",
+      "elapsed_seconds": 5.427386357001524,
+      "image_count": 28,
+      "manifest_sha256": "048be868760dc833ea0b299145aded9b1b13708542213bce88e0fdb064542e97",
+      "scene_id": "bonsai"
+    }
+  ],
+  "schema_version": 1,
+  "total_images": 86
+}

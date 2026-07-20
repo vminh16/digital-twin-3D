@@ -1,0 +1,72 @@
+{
+  "candidates": {
+    "C1-absgrad-t08-revopacity-v1": {
+      "eligible": true,
+      "mean_delta_score50": 1.1971444746700612,
+      "mean_hf_l1": 0.21410565967583173,
+      "mean_peak_gaussians": 1891203.5,
+      "scenes": {
+        "HCM0421": {
+          "baseline_score50": 68.20394336630537,
+          "both_edge_errors_worsened": false,
+          "candidate_score50": 69.2037351098167,
+          "delta_score50": 0.9997917435113379,
+          "hf_l1": 0.21425835996778125,
+          "max_vram_mb": 3200.5556640625,
+          "missing_edge_delta": -0.009319511037622463,
+          "peak_gaussians": 1835760,
+          "spurious_edge_delta": 0.0010297009908425275
+        },
+        "HCM1439": {
+          "baseline_score50": 61.9791830192473,
+          "both_edge_errors_worsened": false,
+          "candidate_score50": 63.373680225076086,
+          "delta_score50": 1.3944972058287846,
+          "hf_l1": 0.2139529593838822,
+          "max_vram_mb": 3413.6220703125,
+          "missing_edge_delta": -0.008166367675002895,
+          "peak_gaussians": 1946647,
+          "spurious_edge_delta": 0.0017317834645002791
+        }
+      }
+    },
+    "C1-absgrad-t08-v1": {
+      "eligible": true,
+      "mean_delta_score50": 0.6142529936128014,
+      "mean_hf_l1": 0.21658335068379347,
+      "mean_peak_gaussians": 1854354.0,
+      "scenes": {
+        "HCM0421": {
+          "baseline_score50": 68.20394336630537,
+          "both_edge_errors_worsened": false,
+          "candidate_score50": 68.80657970220953,
+          "delta_score50": 0.6026363359041653,
+          "hf_l1": 0.21661406757711582,
+          "max_vram_mb": 3162.9033203125,
+          "missing_edge_delta": -0.005669241511020828,
+          "peak_gaussians": 1815315,
+          "spurious_edge_delta": 0.002056290547772323
+        },
+        "HCM1439": {
+          "baseline_score50": 61.9791830192473,
+          "both_edge_errors_worsened": false,
+          "candidate_score50": 62.60505267056874,
+          "delta_score50": 0.6258696513214375,
+          "hf_l1": 0.21655263379047116,
+          "max_vram_mb": 3321.0927734375,
+          "missing_edge_delta": -0.003595394647746275,
+          "peak_gaussians": 1893393,
+          "spurious_edge_delta": 0.004571375681430699
+        }
+      }
+    }
+  },
+  "phase": "C1-phase-A",
+  "phase_a_passed": true,
+  "scenes": [
+    "HCM0421",
+    "HCM1439"
+  ],
+  "schema_version": 1,
+  "selected_candidate": "C1-absgrad-t08-revopacity-v1"
+}

@@ -1,0 +1,9 @@
+{
+  "accepted": true,
+  "amp_correctness_passed": false,
+  "amp_incremental_speedup_fraction": 0.02730276667598952,
+  "fused_correctness_passed": false,
+  "fused_speedup_fraction": 0.026794083528663082,
+  "selected_optimizer_backend": "adam",
+  "selected_precision": "fp32"
+}
