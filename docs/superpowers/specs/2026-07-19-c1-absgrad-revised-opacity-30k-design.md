@@ -303,7 +303,21 @@ timing breakdown. The deterministic decision JSON contains:
 
 ### 9.4 Runner
 
-Add a shell runner following existing Phase 4 scripts. It:
+Use the shared Python screening entry point; no C1 shell wrapper is added. The
+Phase-A invocation is:
+
+```bash
+python src/bts_nvs/training/run_c1_screening.py \
+  --stage phase-a \
+  --repo_root "$PWD" \
+  --scenes_root "$PWD/data/bts_scenes" \
+  --manifests_root "$PWD/runs/manifests" \
+  --backend_root "$PWD/runs/phase4/backend_qualification" \
+  --baseline_root "$PWD/runs/phase4/qualification" \
+  --output_root "$PWD/runs/c1/phase_a"
+```
+
+The runner:
 
 - verifies the repository root and required manifests;
 - loads the accepted backend decision;
@@ -312,11 +326,8 @@ Add a shell runner following existing Phase 4 scripts. It:
 - runs the four Phase-A candidate/scene pairs sequentially;
 - computes the Phase A decision;
 - stops before Phase B when no candidate passes;
-- runs only the locked winner on the four remaining screening scenes;
-- stops before Phase C when the six-scene gate fails;
-- runs the fresh HCM0181 30k confirmation with one rolling recovery file;
-- emits, but does not automatically launch, the exact seven-scene production
-  command after Phase C passes, so the expensive final spend is explicit.
+- stops after emitting the Phase-A decision. Later stages require an explicit,
+  separately reviewed invocation.
 
 ## 10. Failure handling
 

@@ -208,6 +208,22 @@ A failed process stops the sequence. A completed scene remains reusable after
 full validation. The runner does not delete, overwrite, or silently repair
 partial output. No decision is emitted from fewer than six paired scenes.
 
+### 8.1 Operational command
+
+Phase B is launched through the same thin Python entry point as Phase A:
+
+```bash
+python src/bts_nvs/training/run_c1_screening.py \
+  --stage phase-b \
+  --repo_root "$PWD" \
+  --scenes_root "$PWD/data/bts_scenes" \
+  --manifests_root "$PWD/runs/manifests" \
+  --backend_root "$PWD/runs/phase4/backend_qualification" \
+  --baseline_root "$PWD/runs/phase4/qualification" \
+  --phase_a_root "$PWD/runs/c1/phase_a" \
+  --output_root "$PWD/runs/c1/phase_b"
+```
+
 ## 9. Testing strategy
 
 Implementation proceeds in independently testable blocks:
