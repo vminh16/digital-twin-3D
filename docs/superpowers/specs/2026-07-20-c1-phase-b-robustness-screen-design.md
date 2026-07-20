@@ -141,13 +141,20 @@ New artifacts are written under:
 
 ```text
 runs/c1/phase_b/
-├── hcm0031/C1-absgrad-t08-revopacity-v1/
-├── HCM0181/C1-absgrad-t08-revopacity-v1/
-├── HNI0131/C1-absgrad-t08-revopacity-v1/
-├── HNI0265/C1-absgrad-t08-revopacity-v1/
+├── hcm0031/
+├── HCM0181/
+├── HNI0131/
+├── HNI0265/
 ├── baseline_diagnostics/
 └── phase_b_decision.json
 ```
+
+Phase B has exactly one locked candidate, so another candidate-ID directory
+would duplicate information already carried by `config.yaml`,
+`qualification_report.json`, and the decision artifact. Each scene directory is
+therefore the training run directory itself. Future experiments with multiple
+candidates must use a separate experiment root rather than reintroducing an
+unnecessary level here.
 
 `phase_b_decision.json` references, but does not copy, the two Phase-A candidate
 reports. It records all six paired scene deltas, aggregate metrics, exact sign
