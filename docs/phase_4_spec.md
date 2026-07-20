@@ -470,8 +470,8 @@ scenes đã khóa trước khi đọc metric, với split, seed và 7k horizon c
 **Runbook tối thiểu:**
 
 ```bash
-./scripts/prepare_phase4_artifacts.sh
-./scripts/run_phase4_qualification.sh
+./scripts/prepare_scene_manifests.sh
+./scripts/run_baseline_screening.sh
 ```
 
 Script đầu yêu cầu đúng 18 scene dưới `data/bts_scenes` và sinh manifest cùng
@@ -512,10 +512,10 @@ feature centroid nhất, dùng internal holdout cố định.
 **Runbook:**
 
 ```bash
-./scripts/run_phase4_30k_dry_run.sh
+./scripts/run_full_length_qualification.sh
 
 # Chỉ dùng sau khi một run dở đã có checkpoints/recovery.pt
-BTS_RESUME=1 ./scripts/run_phase4_30k_dry_run.sh
+BTS_RESUME=1 ./scripts/run_full_length_qualification.sh
 ```
 
 Runner chỉ giữ một rolling atomic checkpoint, không tạo chuỗi checkpoint theo

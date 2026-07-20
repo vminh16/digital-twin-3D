@@ -21,7 +21,7 @@ cd "${REPO_ROOT}"
 BTS_SCENES_ROOT="${SCENES_ROOT}" \
 BTS_MANIFESTS_ROOT="${MANIFESTS_ROOT}" \
 PYTHON_BIN="${PYTHON_BIN}" \
-"${BASH}" "${SCRIPT_DIR}/prepare_phase4_artifacts.sh"
+"${BASH}" "${SCRIPT_DIR}/prepare_scene_manifests.sh"
 
 if [[ -f "${REPORT}" ]]; then
     echo "30k dry run already complete: ${REPORT}"

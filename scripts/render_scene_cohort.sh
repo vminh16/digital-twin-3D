@@ -31,7 +31,7 @@ if [[ "${SKIP_PREPARE}" -eq 0 ]]; then
     BTS_SCENES_ROOT="${SCENES_ROOT}" \
     BTS_MANIFESTS_ROOT="${MANIFESTS_ROOT}" \
     PYTHON_BIN="${PYTHON_BIN}" \
-        bash "${REPO_ROOT}/scripts/prepare_phase4_artifacts.sh"
+        bash "${REPO_ROOT}/scripts/prepare_scene_manifests.sh"
 fi
 
 export PYTHONPATH="${REPO_ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"

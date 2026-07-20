@@ -20,7 +20,7 @@ cd "${REPO_ROOT}"
 BTS_SCENES_ROOT="${SCENES_ROOT}" \
 BTS_MANIFESTS_ROOT="${MANIFESTS_ROOT}" \
 PYTHON_BIN="${PYTHON_BIN}" \
-bash "${SCRIPT_DIR}/prepare_phase4_artifacts.sh"
+bash "${SCRIPT_DIR}/prepare_scene_manifests.sh"
 
 echo "Checking the pretrained LPIPS backend before GPU qualification..."
 BTS_RUN_LPIPS_SMOKE=1 "${PYTHON_BIN}" -m pytest \

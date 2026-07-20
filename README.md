@@ -122,7 +122,7 @@ CSV; COLMAP registration chỉ cung cấp kiểm tra pose/calibration và distor
 Canonical pool:
 
 ```bash
-bash scripts/prepare_phase4_artifacts.sh
+bash scripts/prepare_scene_manifests.sh
 ```
 
 Artifact cho `chair` và `bonsai` được tạo tự động bởi script train ở bước dưới.
@@ -134,7 +134,7 @@ Hai scene này dùng COLMAP `SIMPLE_PINHOLE`, được ánh xạ thành pinhole 
 Một checkout mới phải có qualification artifact trước production training:
 
 ```bash
-bash scripts/run_phase4_backend_qualification.sh
+bash scripts/qualify_training_backend.sh
 ```
 
 Runner production đọc backend/precision đã được chấp nhận từ
@@ -145,7 +145,7 @@ Runner production đọc backend/precision đã được chấp nhận từ
 Năm BTS scene cần nộp:
 
 ```bash
-bash scripts/run_phase4_full_training.sh \
+bash scripts/train_scene_cohort.sh \
   --scene_ids HCM0644 HCM0674 HCM0540 HCM0539 HCM0421
 ```
 
@@ -177,7 +177,7 @@ Render 5 BTS scene vào một output root mới:
 ```bash
 BTS_OUTPUT_ROOT="$PWD/outputs_bts" \
 BTS_INFERENCE_REPORT="$PWD/runs/phase4/inference_bts.json" \
-bash scripts/run_phase4_inference.sh \
+bash scripts/render_scene_cohort.sh \
   --jpeg_quality 98 \
   --scene_ids HCM0644 HCM0674 HCM0540 HCM0539 HCM0421
 ```
@@ -191,7 +191,7 @@ BTS_MANIFESTS_ROOT="$PWD/runs/manifests_auxiliary" \
 BTS_FULL_ROOT="$PWD/runs/phase4/auxiliary_training" \
 BTS_OUTPUT_ROOT="$PWD/outputs_auxiliary" \
 BTS_INFERENCE_REPORT="$PWD/runs/phase4/inference_auxiliary.json" \
-bash scripts/run_phase4_inference.sh \
+bash scripts/render_scene_cohort.sh \
   --skip_prepare \
   --allow_noncanonical_scenes \
   --jpeg_quality 98 \

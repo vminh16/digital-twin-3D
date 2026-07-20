@@ -106,7 +106,7 @@ BTS_RUN_CUDA_BACKEND_SMOKE=1 python -m pytest \
 Sau đó chạy ba job full-resolution tuần tự:
 
 ```bash
-bash scripts/run_phase4_backend_qualification.sh
+bash scripts/qualify_training_backend.sh
 cat runs/phase4/backend_qualification/backend_qualification.json
 ```
 
@@ -136,7 +136,7 @@ Activate the installed virtual environment, then start the sequential cohort:
 
 ```bash
 source .venv/bin/activate
-bash scripts/run_phase4_full_training.sh
+bash scripts/train_scene_cohort.sh
 ```
 
 Optional path overrides are limited to runtime locations:
@@ -147,7 +147,7 @@ BTS_MANIFESTS_ROOT="$PWD/runs/manifests" \
 BTS_BACKEND_ROOT="$PWD/runs/phase4/backend_qualification" \
 BTS_FULL_ROOT="$PWD/runs/phase4/full_training" \
 PYTHON_BIN="$PWD/.venv/bin/python" \
-bash scripts/run_phase4_full_training.sh
+bash scripts/train_scene_cohort.sh
 ```
 
 The wrapper regenerates/audits manifest artifacts, validates the exact canonical
@@ -174,7 +174,7 @@ To train only the five currently required scenes while retaining the canonical
 18-scene ledger, pass an ordered subset:
 
 ```bash
-bash scripts/run_phase4_full_training.sh \
+bash scripts/train_scene_cohort.sh \
   --scene_ids HCM0644 HCM0674 HCM0540 HCM0539 HCM0421
 ```
 
@@ -188,7 +188,7 @@ After all requested scene records are `trained`, render directly into
 `outputs/<scene_id>`:
 
 ```bash
-bash scripts/run_phase4_inference.sh \
+bash scripts/render_scene_cohort.sh \
   --scene_ids HCM0644 HCM0674 HCM0540 HCM0539 HCM0421
 ```
 
@@ -201,7 +201,7 @@ quality score. To use another destination without deleting an existing result:
 ```bash
 BTS_OUTPUT_ROOT="$PWD/outputs_candidate_2" \
 BTS_INFERENCE_REPORT="$PWD/runs/phase4/inference_report_candidate_2.json" \
-bash scripts/run_phase4_inference.sh \
+bash scripts/render_scene_cohort.sh \
   --scene_ids HCM0644 HCM0674 HCM0540 HCM0539 HCM0421
 ```
 

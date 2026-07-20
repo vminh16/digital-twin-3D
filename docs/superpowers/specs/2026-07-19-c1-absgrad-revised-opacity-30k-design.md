@@ -235,7 +235,7 @@ hard-coding a precision mode.
 Before C1:
 
 ```bash
-bash scripts/run_phase4_backend_qualification.sh
+bash scripts/qualify_training_backend.sh
 ```
 
 The accepted `optimizer_backend` and `precision` are loaded once from the
