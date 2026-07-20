@@ -24,7 +24,56 @@ Submission dùng JPEG quality 99, 4:4:4, optimized, non-progressive; ZIP cuối
 335 MB, dưới giới hạn 350 MB. Đây là kết quả từ evaluator chính thức, **không
 phải benchmark local**; cấu hình nội bộ của LPIPS/SSIM và `PSNR_max` chưa được
 xác nhận. Mọi thay đổi training, rendering hoặc codec sau mốc này phải dùng
-baseline/candidate ID mới. Hướng cải tiến tiếp theo chưa được chốt.
+baseline/candidate ID mới.
+
+### Chi phí train baseline 30k
+
+Các số dưới đây lấy từ `summary.json` của đúng bảy model tạo submission. Đây là
+thời gian training tuần tự trên NVIDIA L4, không gồm chuẩn bị dữ liệu, inference
+và đóng gói.
+
+| Scene | Thời gian | Peak VRAM |
+|---|---:|---:|
+| HCM0644 | 2.29 giờ | 9.32 GB |
+| HCM0674 | 2.24 giờ | 8.79 GB |
+| HCM0540 | 2.30 giờ | 10.04 GB |
+| HCM0539 | 2.45 giờ | 9.88 GB |
+| HCM0421 | 1.99 giờ | 8.94 GB |
+| chair | 0.99 giờ | 3.50 GB |
+| bonsai | 0.86 giờ | 1.84 GB |
+| **Tổng** | **13.13 L4 GPU-giờ** | **10.04 GB lớn nhất** |
+
+## Tiến độ nghiên cứu
+
+| Ngày | Mốc | Trạng thái | Kết quả ngắn gọn |
+|---|---|---|---|
+| 2026-07-19 | Đóng baseline `B0-submission-q99-v1` | Hoàn thành | Official Score 70.98330, đủ 7/7 scene |
+| 2026-07-20 | C1 Phase A: `AbsGrad × revised_opacity`, 2 scene × 2 candidate × 7k | **PASS** | Khóa `C1-absgrad-t08-revopacity-v1` |
+| Hiện tại | C1 Phase B: winner trên 4 scene 7k còn lại | Đã duyệt, chưa chạy | Kiểm tra robustness trên đủ 6 calibration scene |
+| Tiếp theo | C1 Phase C: fresh 30k trên HCM0181 có holdout | Chờ Phase B | Kiểm tra lợi ích 7k có tồn tại ở horizon 30k |
+| Cuối cùng | C1 Phase D: production 7 scene × 30k | Chờ Phase C | Tạo candidate submission mới, không sửa B0 đã đóng |
+
+### C1 Phase A — AbsGrad và revised opacity
+
+Mục tiêu C1 là giảm blur/missing edge tại antenna, dây và lattice BTS bằng
+AbsGrad densification; `revised_opacity` được thử như cơ chế hạn chế haze,
+halo và cạnh giả sau clone/split. Phase A dùng cùng seed 0, full resolution,
+7,000 step và paired internal holdout với B0.
+
+| Candidate | Mean delta Score50 trên 2 scene | Quyết định |
+|---|---:|---|
+| `C1-absgrad-t08-v1` | +0.614 | Không chọn |
+| `C1-absgrad-t08-revopacity-v1` | **+1.197** | **Winner Phase A** |
+
+Winner tăng Score50 trên cả HCM0421 (`+1.000`) và HCM1439 (`+1.394`), cải
+thiện 35/36 ảnh validation, giảm HF-L1 khoảng 2.0–2.2% và missing-edge khoảng
+2.4–3.3%. Spurious-edge tăng khoảng 3%, nên noise vẫn là metric giám sát ở
+Phase B. Một outlier HCM0421 không tái tạo được bầu trời; Phase A vẫn pass nhưng
+không được giả định rằng chỉ tăng từ 7k lên 30k sẽ tự sửa lỗi background này.
+
+Bốn run candidate Phase A tốn tổng cộng **2,568.39 giây = 42.81 phút = 0.713
+L4 GPU-giờ**. B0 controls được tái sử dụng, không train lại. Phase B dự kiến thêm
+khoảng 45–54 phút training tuần tự cho bốn scene còn lại.
 
 ## Cài đặt không dùng Docker
 
