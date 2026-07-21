@@ -15,10 +15,27 @@ from bts_nvs.training.qualification import (
     build_full_length_report,
     build_qualification_decision,
     evaluate_internal_validation,
+    hash_validation_renders,
     save_full_length_report,
     save_qualification_decision,
     save_qualification_report,
 )
+
+
+def test_validation_render_hashes_bind_original_names_to_png_payloads(tmp_path):
+    render_dir = tmp_path / "renders"
+    render_dir.mkdir()
+    (render_dir / "a.png").write_bytes(b"render-a")
+    (render_dir / "b.png").write_bytes(b"render-b")
+
+    hashes = hash_validation_renders(render_dir, ("a.JPG", "b.JPG"))
+
+    assert tuple(hashes) == ("a.JPG", "b.JPG")
+    assert all(len(value) == 64 for value in hashes.values())
+
+    (render_dir / "b.png").unlink()
+    with pytest.raises(FileNotFoundError, match="b.png"):
+        hash_validation_renders(render_dir, ("a.JPG", "b.JPG"))
 
 
 def _reports(*, compact_psnr_delta=-0.1, compact_resource_ratio=0.8):
@@ -207,10 +224,13 @@ def test_full_length_report_applies_quality_and_resource_gates(tmp_path):
     }
     final_train = {"psnr_db_mean": 27.0}
     final_validation = {
-        "image_count": 8,
+        "image_count": 1,
         "psnr_db_mean": 23.0,
         "ssim_mean": 0.70,
         "lpips_mean": 0.20,
+        "images": {
+            "frame.JPG": {"psnr_db": 23.0, "ssim": 0.70, "lpips": 0.20}
+        },
     }
     metrics = [
         {"step": step, "loss": 0.1, "num_gaussians": 5_000_000}
@@ -221,10 +241,19 @@ def test_full_length_report_applies_quality_and_resource_gates(tmp_path):
     report = build_full_length_report(
         scene_id="HCM0181",
         git_commit="a" * 40,
+        candidate_id="C1-absgrad-t08-revopacity-v1",
+        config_sha256="b" * 64,
+        manifest_sha256="c" * 64,
+        validation_render_sha256={"frame.JPG": "d" * 64},
         initial_validation=initial,
         final_train=final_train,
         final_validation=final_validation,
-        summary={"total_steps": 30_000, "max_vram_mb": 8_000.0},
+        summary={
+            "total_steps": 30_000,
+            "max_vram_mb": 8_000.0,
+            "total_time_seconds": 100.0,
+            "final_num_gaussians": 4_000_000,
+        },
         metric_records=metrics,
         timing_records=timing,
         convergence={"final_render_non_blank": True},
@@ -235,16 +264,31 @@ def test_full_length_report_applies_quality_and_resource_gates(tmp_path):
     assert report["automated_gates_passed"] is True
     assert report["validation_psnr_delta_db"] == pytest.approx(5.0)
     assert report["train_validation_psnr_gap_db"] == pytest.approx(4.0)
+    assert report["candidate_id"] == "C1-absgrad-t08-revopacity-v1"
+    assert report["config_sha256"] == "b" * 64
+    assert report["manifest_sha256"] == "c" * 64
+    assert report["validation_render_sha256"] == {"frame.JPG": "d" * 64}
+    assert report["total_time_seconds"] == pytest.approx(100.0)
+    assert report["final_num_gaussians"] == 4_000_000
     assert json.loads(path.read_text()) == report
 
     final_validation["lpips_mean"] = 0.27
     failed = build_full_length_report(
         scene_id="HCM0181",
         git_commit="a" * 40,
+        candidate_id="C1-absgrad-t08-revopacity-v1",
+        config_sha256="b" * 64,
+        manifest_sha256="c" * 64,
+        validation_render_sha256={"frame.JPG": "d" * 64},
         initial_validation=initial,
         final_train=final_train,
         final_validation=final_validation,
-        summary={"total_steps": 30_000, "max_vram_mb": 8_000.0},
+        summary={
+            "total_steps": 30_000,
+            "max_vram_mb": 8_000.0,
+            "total_time_seconds": 100.0,
+            "final_num_gaussians": 4_000_000,
+        },
         metric_records=metrics,
         timing_records=timing,
         convergence={"final_render_non_blank": True},

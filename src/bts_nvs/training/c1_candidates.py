@@ -14,6 +14,7 @@ C1_CANDIDATES = (
     "C1-absgrad-t08-v1",
     "C1-absgrad-t08-revopacity-v1",
 )
+FULL_LENGTH_CANDIDATES = ("C1-absgrad-t08-revopacity-v1",)
 QUALIFICATION_CANDIDATES = (
     "B0-reference",
     "B0-compact",
@@ -35,3 +36,22 @@ def candidate_settings(candidate_id: str | None) -> CandidateSettings:
         return _SETTINGS[candidate_id]
     except KeyError as error:
         raise ValueError(f"unknown qualification candidate: {candidate_id}") from error
+
+
+def full_length_mode_enabled(args: object) -> bool:
+    return bool(
+        getattr(args, "full_length_qualification", False)
+        or getattr(args, "full_length_candidate", None) is not None
+    )
+
+
+def selected_density_candidate(args: object) -> str | None:
+    full_length_candidate = getattr(args, "full_length_candidate", None)
+    if full_length_candidate is not None:
+        if (
+            getattr(args, "qualification_candidate", None) is not None
+            or getattr(args, "full_length_qualification", False)
+        ):
+            raise ValueError("full-length candidate modes are mutually exclusive")
+        return full_length_candidate
+    return getattr(args, "qualification_candidate", None)

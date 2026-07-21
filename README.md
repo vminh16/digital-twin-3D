@@ -49,8 +49,8 @@ và đóng gói.
 |---|---|---|---|
 | 2026-07-19 | Đóng baseline `B0-submission-q99-v1` | Hoàn thành | Official Score 70.98330, đủ 7/7 scene |
 | 2026-07-20 | C1 Phase A: `AbsGrad × revised_opacity`, 2 scene × 2 candidate × 7k | **PASS** | Khóa `C1-absgrad-t08-revopacity-v1` |
-| Hiện tại | C1 Phase B: winner trên 4 scene 7k còn lại | Đã duyệt, chưa chạy | Kiểm tra robustness trên đủ 6 calibration scene |
-| Tiếp theo | C1 Phase C: fresh 30k trên HCM0181 có holdout | Chờ Phase B | Kiểm tra lợi ích 7k có tồn tại ở horizon 30k |
+| 2026-07-21 | C1 Phase B: winner trên 4 scene 7k còn lại | **PASS** | 5/6 scene và 122/130 ảnh tốt hơn; mean delta Score50 `+0.823` |
+| Hiện tại | C1 Phase C: fresh 30k trên HCM0181 có holdout | Sẵn sàng chạy | So sánh với B0 30k cùng holdout; một rolling recovery checkpoint |
 | Cuối cùng | C1 Phase D: production 7 scene × 30k | Chờ Phase C | Tạo candidate submission mới, không sửa B0 đã đóng |
 
 ### C1 Phase A — AbsGrad và revised opacity
@@ -74,6 +74,54 @@ không được giả định rằng chỉ tăng từ 7k lên 30k sẽ tự sử
 Bốn run candidate Phase A tốn tổng cộng **2,568.39 giây = 42.81 phút = 0.713
 L4 GPU-giờ**. B0 controls được tái sử dụng, không train lại. Phase B dự kiến thêm
 khoảng 45–54 phút training tuần tự cho bốn scene còn lại.
+
+### C1 Phase B — robustness trên sáu scene
+
+`C1-absgrad-t08-revopacity-v1` pass gate đã đăng ký trước: mean delta Score50
+`+0.823`, median `+0.920`, LPIPS giảm `0.01060`, SSIM tăng `0.00842` và PSNR
+tăng `0.244 dB`. Năm trong sáu scene và 122/130 ảnh validation cải thiện. Tổng
+thời gian sáu run C1 là 68.62 phút, nhanh hơn 25.9% so với B0 paired; peak VRAM
+lớn nhất 3.70 GB. Exact sign test theo scene có `p=0.21875`, nên đây là bằng
+chứng screening chứ chưa phải tuyên bố tổng quát hóa.
+
+Ba outlier lớn tại `hcm0031`, `HCM0421` và `HNI0131` đều liên quan đến vùng
+bầu trời tối/đen. C1 giảm missing-edge aggregate nhưng spurious-edge tăng nhẹ;
+Phase C giữ nguyên candidate để kiểm tra hiệu ứng tại 30k, không âm thầm thêm
+loss hoặc xử lý background.
+
+### C1 Phase C — confirmation 30k trên HCM0181
+
+Phase C train fresh đúng `C1-absgrad-t08-revopacity-v1`, seed 0, factor 1,
+30,000 step và internal holdout của B0 30k. Runner đọc backend đã được qualify,
+chỉ giữ `runs/c1/phase_c/HCM0181/checkpoints/recovery.pt` mỗi 3,000 step và tự
+resume khi run chưa hoàn tất. B0 lịch sử là Adam/FP32 và backend qualification
+hiện tại cũng chọn Adam/FP32; runner fail trước training nếu backend này thay
+đổi, thay vì tạo một so sánh không paired. Không resume checkpoint 7k.
+
+B0 30k reference đã bị bỏ khỏi HEAD để giảm dung lượng worktree nhưng vẫn nằm
+trong lịch sử tại `411c8de`. Trên một checkout sạch, materialize artifact này
+một lần rồi chạy Phase C:
+
+```bash
+git archive 411c8de runs/phase4/dry_run_30k/HCM0181 | tar -x
+
+python src/bts_nvs/training/run_c1_confirmation.py \
+  --repo_root "$PWD" \
+  --scenes_root "$PWD/data/bts_scenes" \
+  --manifests_root "$PWD/runs/manifests" \
+  --backend_root "$PWD/runs/phase4/backend_qualification" \
+  --baseline_root "$PWD/runs/phase4/dry_run_30k/HCM0181" \
+  --phase_b_root "$PWD/runs/c1/phase_b" \
+  --output_root "$PWD/runs/c1/phase_c"
+```
+
+Chạy lại cùng lệnh sẽ resume từ rolling recovery nếu có; một run có report hoàn
+chỉnh chỉ được tái sử dụng sau khi checkpoint, config, manifest, report và hash
+của từng validation render khớp nhau. Phase C chỉ pass khi Score50 tăng, LPIPS
+không tăng, missing-edge và spurious-edge không đồng thời xấu đi, integrity pass
+và peak VRAM dưới đúng 23 GB. `phase_c_decision.json` lưu provenance; ledger lưu
+trạng thái hoặc lỗi. Runner không tự khởi động Phase D. Mốc chi phí dự kiến từ
+B0 là khoảng 2.9 L4 GPU-giờ.
 
 ## Cài đặt không dùng Docker
 

@@ -27,14 +27,18 @@ from bts_nvs.rendering.density_strategy import GsplatStrategy
 from bts_nvs.rendering.gsplat_renderer import render_gaussians
 from bts_nvs.training.checkpoint import load_checkpoint
 from bts_nvs.training.c1_candidates import (
+    FULL_LENGTH_CANDIDATES,
     QUALIFICATION_CANDIDATES,
     candidate_settings,
+    full_length_mode_enabled,
+    selected_density_candidate,
 )
 from bts_nvs.training.trainer import Trainer
 from bts_nvs.training.qualification import (
     CALIBRATION_SCENES,
     build_full_length_report,
     evaluate_internal_validation,
+    hash_validation_renders,
     save_full_length_report,
     save_qualification_report,
 )
@@ -131,6 +135,12 @@ def parse_args():
         help="Run the locked HCM0181 Phase 4.5 30k internal-holdout dry run.",
     )
     parser.add_argument(
+        "--full_length_candidate",
+        choices=FULL_LENGTH_CANDIDATES,
+        default=None,
+        help="Run a locked 30k research candidate on the HCM0181 holdout.",
+    )
+    parser.add_argument(
         "--optimizer_backend",
         choices=("adam", "adam-fused"),
         default="adam",
@@ -178,6 +188,7 @@ def validate_backend_qualification_args(args) -> None:
         or args.profile_input
         or args.qualification_candidate is not None
         or args.full_length_qualification
+        or args.full_length_candidate is not None
     ):
         raise ValueError(
             "backend qualification requires a fresh factor-1, seed-0, "
@@ -225,6 +236,8 @@ def validate_profile_args(args) -> None:
 def validate_qualification_args(args) -> None:
     if args.qualification_candidate is None:
         return
+    if args.full_length_qualification or args.full_length_candidate is not None:
+        raise ValueError("qualification and full-length modes are mutually exclusive")
     if (
         args.max_steps != 7000
         or args.resize_factor != 1
@@ -240,10 +253,13 @@ def validate_qualification_args(args) -> None:
 
 
 def validate_full_length_args(args) -> None:
-    if not args.full_length_qualification:
+    if not full_length_mode_enabled(args):
         return
+    selected_density_candidate(args)
     if args.qualification_candidate is not None:
-        raise ValueError("full-length qualification is mutually exclusive with candidate mode")
+        raise ValueError(
+            "full-length modes are mutually exclusive with qualification mode"
+        )
     if (
         args.max_steps != 30_000
         or args.resize_factor != 1
@@ -259,11 +275,13 @@ def validate_full_length_args(args) -> None:
     if args.resume is not None:
         expected = Path(args.output_dir) / "checkpoints" / "recovery.pt"
         if Path(args.resume).resolve() != expected.resolve():
-            raise ValueError("full-length resume must use output checkpoints/recovery.pt")
+            raise ValueError(
+                "full-length resume must use output checkpoints/recovery.pt"
+            )
 
 
 def validate_full_length_scene(scene_id: str, args) -> None:
-    if args.full_length_qualification and scene_id != "HCM0181":
+    if full_length_mode_enabled(args) and scene_id != "HCM0181":
         raise ValueError("full-length qualification requires HCM0181")
 
 
@@ -326,7 +344,7 @@ def internal_holdout_enabled(args) -> bool:
         args.internal_holdout
         or args.profile_input
         or args.qualification_candidate is not None
-        or args.full_length_qualification
+        or full_length_mode_enabled(args)
         or args.backend_qualification
     )
 
@@ -473,7 +491,7 @@ def build_training_config(
     split: HoldoutSplit | None = None,
 ) -> dict:
     width, height = resize
-    density = candidate_settings(args.qualification_candidate)
+    density = candidate_settings(selected_density_candidate(args))
     config = {
         "scene_id": manifest.scene_id,
         "resize_factor": args.resize_factor,
@@ -487,7 +505,9 @@ def build_training_config(
         "optimizer_backend": args.optimizer_backend,
         "precision": args.precision,
         "backend_qualification": bool(args.backend_qualification),
-        "rolling_checkpoint": bool(args.rolling_checkpoint),
+        "rolling_checkpoint": bool(
+            args.rolling_checkpoint or full_length_mode_enabled(args)
+        ),
         "internal_holdout": split is not None,
         "seed": args.seed,
         "max_steps": args.max_steps,
@@ -505,6 +525,8 @@ def build_training_config(
     }
     if args.qualification_candidate is not None:
         config["qualification_candidate"] = args.qualification_candidate
+    if args.full_length_candidate is not None:
+        config["full_length_candidate"] = args.full_length_candidate
     if split is not None:
         config.update(
             {
@@ -584,10 +606,10 @@ def main():
     validate_output_directory(Path(args.output_dir), args.resume)
     source_commit = (
         read_clean_git_commit(Path(__file__).resolve().parents[3])
-        if args.full_length_qualification
+        if full_length_mode_enabled(args)
         else None
     )
-    density = candidate_settings(args.qualification_candidate)
+    density = candidate_settings(selected_density_candidate(args))
     run_cuda_preflight(
         args.optimizer_backend,
         args.precision,
@@ -669,7 +691,7 @@ def main():
         )
         if (
             args.qualification_candidate is not None
-            or args.full_length_qualification
+            or full_length_mode_enabled(args)
         )
         and split is not None
         else None
@@ -716,7 +738,7 @@ def main():
 
     lpips_backend = None
     initial_validation = None
-    if args.full_length_qualification:
+    if full_length_mode_enabled(args):
         lpips_backend = LpipsBackend(backbone="alex", device=str(trainer.device))
         initial_validation_path = Path(args.output_dir) / "initial_validation.json"
         if args.resume:
@@ -736,7 +758,7 @@ def main():
             checkpoint_every=args.checkpoint_every,
             save_checkpoints=should_save_checkpoints(args),
             rolling_checkpoint=(
-                args.rolling_checkpoint or args.full_length_qualification
+                args.rolling_checkpoint or full_length_mode_enabled(args)
             ),
         )
     else:
@@ -756,7 +778,7 @@ def main():
         f"SSIM delta={report['ssim_delta']:.6f}, "
         f"non_blank={report['final_render_non_blank']}"
     )
-    if args.full_length_qualification:
+    if full_length_mode_enabled(args):
         assert validation_dataset is not None
         assert lpips_backend is not None
         assert initial_validation is not None
@@ -789,6 +811,13 @@ def main():
         full_length_report = build_full_length_report(
             scene_id=manifest.scene_id,
             git_commit=source_commit,
+            candidate_id=args.full_length_candidate,
+            config_sha256=trainer.config_hash,
+            manifest_sha256=trainer.manifest_hash,
+            validation_render_sha256=hash_validation_renders(
+                Path(args.output_dir) / "validation_renders",
+                tuple(final_validation["images"]),
+            ),
             initial_validation=initial_validation,
             final_train=final_train,
             final_validation=final_validation,

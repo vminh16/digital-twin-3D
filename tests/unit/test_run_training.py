@@ -27,6 +27,7 @@ def _args(**changes):
         "internal_holdout": False,
         "qualification_candidate": None,
         "full_length_qualification": False,
+        "full_length_candidate": None,
         "backend_qualification": False,
         "optimizer_backend": "adam",
         "precision": "fp32",
@@ -314,6 +315,57 @@ def test_full_length_config_uses_reference_threshold():
 
     assert config["full_length_qualification"] is True
     assert config["grow_grad2d"] == pytest.approx(0.0002)
+
+
+def test_full_length_candidate_locks_phase_c_contract(tmp_path):
+    output = tmp_path / "run"
+    valid = _args(
+        output_dir=str(output),
+        full_length_candidate="C1-absgrad-t08-revopacity-v1",
+        resize_factor=1,
+        max_steps=30_000,
+        checkpoint_every=3_000,
+        seed=0,
+        cache_images=True,
+        pinned_transfer=True,
+    )
+
+    run_training.validate_full_length_args(valid)
+    run_training.validate_full_length_scene("HCM0181", valid)
+    config = run_training.build_training_config(
+        valid, SimpleNamespace(scene_id="HCM0181"), resize=(1320, 989)
+    )
+
+    assert config["full_length_candidate"] == "C1-absgrad-t08-revopacity-v1"
+    assert config["grow_grad2d"] == pytest.approx(0.0008)
+    assert config["absgrad"] is True
+    assert config["revised_opacity"] is True
+    assert config["rolling_checkpoint"] is True
+    assert run_training.internal_holdout_enabled(valid) is True
+
+
+def test_full_length_candidate_resume_is_colocated(tmp_path):
+    output = tmp_path / "run"
+    recovery = output / "checkpoints" / "recovery.pt"
+    recovery.parent.mkdir(parents=True)
+    recovery.write_bytes(b"checkpoint")
+    valid = _args(
+        output_dir=str(output),
+        full_length_candidate="C1-absgrad-t08-revopacity-v1",
+        resize_factor=1,
+        max_steps=30_000,
+        checkpoint_every=3_000,
+        seed=0,
+        cache_images=True,
+        pinned_transfer=True,
+        resume=str(recovery),
+    )
+
+    run_training.validate_full_length_args(valid)
+    with pytest.raises(ValueError, match="recovery.pt"):
+        run_training.validate_full_length_args(
+            _args(**(vars(valid) | {"resume": str(tmp_path / "foreign.pt")}))
+        )
 
 
 def test_training_config_applies_locked_candidate_threshold():

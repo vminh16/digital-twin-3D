@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import os
@@ -18,6 +19,22 @@ from bts_nvs.training.c1_candidates import QUALIFICATION_CANDIDATES
 
 CALIBRATION_SCENES = CALIBRATION_SCENE_IDS
 CANDIDATES = ("B0-reference", "B0-compact")
+
+
+def hash_validation_renders(
+    render_dir: Path, image_names: tuple[str, ...]
+) -> dict[str, str]:
+    output: dict[str, str] = {}
+    for image_name in image_names:
+        render = Path(render_dir) / Path(image_name).with_suffix(".png").name
+        if not render.is_file():
+            raise FileNotFoundError(f"validation render does not exist: {render}")
+        digest = hashlib.sha256()
+        with render.open("rb") as handle:
+            while chunk := handle.read(1024 * 1024):
+                digest.update(chunk)
+        output[image_name] = digest.hexdigest()
+    return output
 
 
 @torch.no_grad()
@@ -80,6 +97,10 @@ def build_full_length_report(
     *,
     scene_id: str,
     git_commit: str,
+    candidate_id: str | None,
+    config_sha256: str,
+    manifest_sha256: str,
+    validation_render_sha256: dict[str, str],
     initial_validation: dict,
     final_train: dict,
     final_validation: dict,
@@ -92,6 +113,24 @@ def build_full_length_report(
         raise ValueError("full-length qualification requires HCM0181")
     if len(git_commit) != 40:
         raise ValueError("git_commit must be a full SHA-1")
+    if candidate_id is not None and candidate_id not in QUALIFICATION_CANDIDATES:
+        raise ValueError("full-length candidate identity is invalid")
+    if len(config_sha256) != 64 or len(manifest_sha256) != 64:
+        raise ValueError("full-length report hashes must be SHA-256")
+    if not validation_render_sha256 or any(
+        not isinstance(name, str)
+        or not isinstance(digest, str)
+        or len(digest) != 64
+        for name, digest in validation_render_sha256.items()
+    ):
+        raise ValueError("full-length render hashes are invalid")
+    validation_images = final_validation.get("images")
+    if (
+        not isinstance(validation_images, dict)
+        or final_validation.get("image_count") != len(validation_images)
+        or set(validation_render_sha256) != set(validation_images)
+    ):
+        raise ValueError("full-length render hashes do not match validation images")
     if len(metric_records) != 30_000 or [
         item.get("step") for item in metric_records
     ] != list(range(1, 30_001)):
@@ -123,12 +162,15 @@ def build_full_length_report(
     )
     peak_gaussians = max(int(item["num_gaussians"]) for item in metric_records)
     max_vram_mb = float(summary["max_vram_mb"])
+    total_time_seconds = float(summary["total_time_seconds"])
+    final_num_gaussians = int(summary["final_num_gaussians"])
     values = (
         psnr_delta,
         ssim_delta,
         lpips_improvement,
         train_validation_gap,
         max_vram_mb,
+        total_time_seconds,
     )
     if not all(math.isfinite(value) for value in values):
         raise ValueError("full-length qualification report contains non-finite value")
@@ -147,6 +189,10 @@ def build_full_length_report(
         "scene_id": scene_id,
         "step": 30_000,
         "git_commit": git_commit,
+        "candidate_id": candidate_id,
+        "config_sha256": config_sha256,
+        "manifest_sha256": manifest_sha256,
+        "validation_render_sha256": validation_render_sha256,
         "automated_gates": gates,
         "automated_gates_passed": all(gates.values()),
         "validation_psnr_delta_db": psnr_delta,
@@ -155,6 +201,8 @@ def build_full_length_report(
         "train_validation_psnr_gap_db": train_validation_gap,
         "peak_gaussians": peak_gaussians,
         "max_vram_mb": max_vram_mb,
+        "total_time_seconds": total_time_seconds,
+        "final_num_gaussians": final_num_gaussians,
         "timing_record_count": len(timing_records),
         "manual_visual_review_required": True,
         "initial_validation": initial_validation,
