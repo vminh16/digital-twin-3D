@@ -1,0 +1,12 @@
+{
+  "backend_report_sha256": "8861c7e964ba49710b9dcbd10dd2002cadb9c84a4abd7cdb4a136051cdb18214",
+  "candidate_id": "C1-absgrad-t08-revopacity-v1",
+  "error_message": null,
+  "error_type": null,
+  "optimizer_backend": "adam",
+  "phase": "C1-phase-C",
+  "precision": "fp32",
+  "scene_id": "HCM0181",
+  "schema_version": 1,
+  "status": "running"
+}
