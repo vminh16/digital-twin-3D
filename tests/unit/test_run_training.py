@@ -31,6 +31,9 @@ def _args(**changes):
         "optimizer_backend": "adam",
         "precision": "fp32",
         "rolling_checkpoint": False,
+        "candidate_id": None,
+        "experiment_stage": None,
+        "stop_step": None,
     }
     values.update(changes)
     return Namespace(**values)
@@ -456,3 +459,325 @@ def test_initial_metrics_round_trip_for_resume(tmp_path: Path):
     run_training.write_json_record(path, metrics)
 
     assert run_training.read_json_record(path) == metrics
+
+
+def _generic_args(stage: str, candidate_id: str, **changes):
+    values = {
+        "experiment_stage": stage,
+        "candidate_id": candidate_id,
+        "resize_factor": 1,
+        "max_steps": 7_000,
+        "seed": 0,
+        "cache_images": True,
+        "pinned_transfer": True,
+        "internal_holdout": True,
+    }
+    values.update(changes)
+    return _args(**values)
+
+
+def test_parse_args_accepts_generic_identity_and_stop_step(monkeypatch):
+    monkeypatch.setattr(
+        run_training.sys,
+        "argv",
+        [
+            "run_training.py",
+            "--scene_dir",
+            "scene",
+            "--output_dir",
+            "run",
+            "--candidate_id",
+            "B0-reference",
+            "--experiment_stage",
+            "reference",
+            "--stop_step",
+            "7000",
+        ],
+    )
+
+    args = run_training.parse_args()
+
+    assert args.candidate_id == "B0-reference"
+    assert args.experiment_stage == "reference"
+    assert args.stop_step == 7_000
+
+
+def test_generic_identity_is_all_or_none_and_uses_stage_candidate_contract():
+    assert run_training.validate_generic_experiment_args(_args()) is None
+
+    with pytest.raises(ValueError, match="generic experiment"):
+        run_training.validate_generic_experiment_args(_args(stop_step=100))
+    with pytest.raises(ValueError, match="together"):
+        run_training.validate_generic_experiment_args(
+            _args(candidate_id="B0-reference")
+        )
+    with pytest.raises(ValueError, match="legacy"):
+        run_training.validate_generic_experiment_args(
+            _generic_args(
+                "reference", "B0-reference", qualification_candidate="B0-reference"
+            )
+        )
+    with pytest.raises(ValueError, match="reference"):
+        run_training.validate_generic_experiment_args(
+            _generic_args("reference", "E1-density-absgrad-t04-v1")
+        )
+    with pytest.raises(ValueError, match="screen"):
+        run_training.validate_generic_experiment_args(
+            _generic_args("screen", "B0-reference")
+        )
+
+
+def test_generic_reference_and_screen_lock_fresh_7k_holdout_contract():
+    reference = _generic_args("reference", "B0-reference")
+    screen = _generic_args("screen", "E1-density-absgrad-t04-v1")
+
+    run_training.validate_generic_experiment_args(reference)
+    run_training.validate_generic_experiment_args(screen)
+    assert run_training.training_target_step(reference) == 7_000
+    assert run_training.should_save_checkpoints(reference) is False
+    assert run_training.should_save_checkpoints(screen) is False
+
+    for change in (
+        {"max_steps": 6_999},
+        {"stop_step": 6_999},
+        {"resize_factor": 2},
+        {"seed": 1},
+        {"cache_images": False},
+        {"pinned_transfer": False},
+        {"internal_holdout": False},
+        {"resume": "recovery.pt"},
+        {"rolling_checkpoint": True},
+    ):
+        with pytest.raises(ValueError, match="reference"):
+            run_training.validate_generic_experiment_args(
+                _args(**(vars(reference) | change))
+            )
+
+
+def test_generic_confirmation_locks_30k_schedule_and_rolling_recovery(tmp_path):
+    output = tmp_path / "confirm"
+    valid = _generic_args(
+        "confirm",
+        "E1-density-absgrad-t04-v1",
+        output_dir=str(output),
+        max_steps=30_000,
+        stop_step=15_000,
+        checkpoint_every=3_000,
+        rolling_checkpoint=True,
+    )
+
+    run_training.validate_generic_experiment_args(valid)
+    assert run_training.training_target_step(valid) == 15_000
+    assert run_training.should_save_checkpoints(valid) is True
+
+    recovery = output / "checkpoints" / "recovery.pt"
+    resumed = _args(**(vars(valid) | {"stop_step": 30_000, "resume": str(recovery)}))
+    run_training.validate_generic_experiment_args(resumed)
+
+    for change in (
+        {"max_steps": 15_000},
+        {"stop_step": None},
+        {"stop_step": 20_000},
+        {"checkpoint_every": 6_000},
+        {"rolling_checkpoint": False},
+        {"internal_holdout": False},
+        {"resume": str(output / "checkpoints" / "other.pt")},
+    ):
+        with pytest.raises(ValueError, match="confirm"):
+            run_training.validate_generic_experiment_args(
+                _args(**(vars(valid) | change))
+            )
+
+
+def test_generic_production_locks_full_30k_without_holdout():
+    valid = _generic_args(
+        "production",
+        "E1-density-scale005-v1",
+        max_steps=30_000,
+        stop_step=30_000,
+        checkpoint_every=3_000,
+        rolling_checkpoint=True,
+        internal_holdout=False,
+    )
+
+    run_training.validate_generic_experiment_args(valid)
+    assert run_training.training_target_step(valid) == 30_000
+    assert run_training.internal_holdout_enabled(valid) is False
+    assert run_training.should_save_checkpoints(valid) is True
+
+    for change in (
+        {"stop_step": None},
+        {"stop_step": 15_000},
+        {"internal_holdout": True},
+    ):
+        with pytest.raises(ValueError, match="production"):
+            run_training.validate_generic_experiment_args(
+                _args(**(vars(valid) | change))
+            )
+
+
+def test_generic_candidate_overrides_do_not_include_stop_step():
+    manifest = SimpleNamespace(scene_id="HCM0539")
+    first = _generic_args(
+        "confirm",
+        "E1-density-absgrad-t04-v1",
+        max_steps=30_000,
+        stop_step=15_000,
+        checkpoint_every=3_000,
+        rolling_checkpoint=True,
+    )
+    second = _args(**(vars(first) | {"stop_step": 30_000}))
+
+    config_15k = run_training.build_training_config(
+        first, manifest, resize=(1320, 989)
+    )
+    config_30k = run_training.build_training_config(
+        second, manifest, resize=(1320, 989)
+    )
+
+    assert config_15k == config_30k
+    assert config_15k["candidate_id"] == "E1-density-absgrad-t04-v1"
+    assert config_15k["experiment_stage"] == "confirm"
+    assert config_15k["absgrad"] is True
+    assert config_15k["grow_grad2d"] == pytest.approx(0.0004)
+    assert "stop_step" not in config_15k
+
+
+def test_experiment_resource_summary_uses_summary_and_metric_records(tmp_path):
+    output = tmp_path / "run"
+    run_training.write_json_record(
+        output / "summary.json",
+        {
+            "total_time_seconds": 123.5,
+            "max_vram_mb": 4096.0,
+            "final_num_gaussians": 11,
+        },
+    )
+    (output / "metrics.jsonl").write_text(
+        "\n".join(
+            json.dumps({"step": step, "num_gaussians": count})
+            for step, count in ((1, 5), (2, 13), (3, 11))
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    assert run_training.build_experiment_resource_summary(output) == {
+        "total_time_seconds": 123.5,
+        "max_vram_mb": 4096.0,
+        "peak_gaussians": 13,
+        "final_num_gaussians": 11,
+    }
+
+
+def test_generic_internal_holdout_writes_all_module_one_reports(
+    monkeypatch, tmp_path
+):
+    output = tmp_path / "screen"
+    args = _generic_args(
+        "screen",
+        "E1-density-absgrad-t04-v1",
+        output_dir=str(output),
+    )
+    manifest = SimpleNamespace(scene_id="HCM0539")
+    split = SimpleNamespace(manifest_sha256="a" * 64)
+    validation_dataset = object()
+    trainer = SimpleNamespace(
+        device=torch.device("cpu"),
+        config_hash="b" * 64,
+        manifest_hash="c" * 64,
+    )
+    full_frame = {
+        "image_count": 3,
+        "psnr_db_mean": 24.0,
+        "ssim_mean": 0.8,
+        "lpips_mean": 0.2,
+        "valid_fraction_mean": 0.95,
+        "images": {name: {} for name in ("a.JPG", "b.JPG", "c.JPG")},
+    }
+    detail = {"schema_version": 1, "scene_id": "HCM0539", "image_count": 3}
+    pose = {
+        "schema_version": 1,
+        "scene_id": "HCM0539",
+        "holdout_manifest_sha256": "a" * 64,
+        "image_count": 3,
+    }
+    backend = object()
+    observed = {}
+
+    def evaluate(trainer_arg, dataset_arg, backend_arg, render_dir):
+        observed["evaluation"] = (
+            trainer_arg,
+            dataset_arg,
+            backend_arg,
+            render_dir,
+        )
+        return full_frame
+
+    def build_report(**arguments):
+        observed["experiment"] = arguments
+        return {"schema_version": 1, "candidate_id": arguments["candidate_id"]}
+
+    monkeypatch.setattr(run_training, "LpipsBackend", lambda **kwargs: backend)
+    monkeypatch.setattr(run_training, "evaluate_internal_validation", evaluate)
+    monkeypatch.setattr(
+        run_training, "evaluate_detail_directory", lambda dataset, path: detail
+    )
+    monkeypatch.setattr(run_training, "build_pose_strata", lambda *_: pose)
+    monkeypatch.setattr(run_training, "build_experiment_report", build_report)
+
+    run_training.write_json_record(
+        output / "summary.json",
+        {
+            "total_time_seconds": 20.0,
+            "max_vram_mb": 1024.0,
+            "final_num_gaussians": 9,
+        },
+    )
+    (output / "metrics.jsonl").write_text(
+        json.dumps({"step": 7_000, "num_gaussians": 12}) + "\n",
+        encoding="utf-8",
+    )
+
+    run_training.generate_generic_experiment_reports(
+        args=args,
+        trainer=trainer,
+        manifest=manifest,
+        split=split,
+        validation_dataset=validation_dataset,
+    )
+
+    assert observed["evaluation"] == (
+        trainer,
+        validation_dataset,
+        backend,
+        output / "validation_renders",
+    )
+    assert observed["experiment"] == {
+        "scene_id": "HCM0539",
+        "candidate_id": "E1-density-absgrad-t04-v1",
+        "step": 7_000,
+        "config_sha256": "b" * 64,
+        "manifest_sha256": "c" * 64,
+        "holdout_sha256": "a" * 64,
+        "full_frame_report": full_frame,
+        "detail_report": detail,
+        "pose_strata_report": pose,
+        "resource_summary": {
+            "total_time_seconds": 20.0,
+            "max_vram_mb": 1024.0,
+            "peak_gaussians": 12,
+            "final_num_gaussians": 9,
+        },
+    }
+    qualification = json.loads(
+        (output / "qualification_report.json").read_text(encoding="utf-8")
+    )
+    assert qualification["candidate_id"] == "E1-density-absgrad-t04-v1"
+    assert qualification["step"] == 7_000
+    assert json.loads((output / "detail_metrics.json").read_text()) == detail
+    assert json.loads((output / "pose_strata.json").read_text()) == pose
+    assert json.loads((output / "experiment_report.json").read_text()) == {
+        "schema_version": 1,
+        "candidate_id": "E1-density-absgrad-t04-v1",
+    }
