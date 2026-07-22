@@ -19,6 +19,8 @@ def render_gaussians(
     active_sh_degree: int,
     backgrounds: torch.Tensor | None = None,
     render_mode: str = "RGB",
+    absgrad: bool = False,
+    rasterize_mode: str = "classic",
 ) -> RenderResult:
     """Render one pinhole camera in normalized world coordinates.
 
@@ -31,6 +33,10 @@ def render_gaussians(
         raise ValueError("active_sh_degree must be an integer from 0 to 3")
     if render_mode not in {"RGB", "RGB+D"}:
         raise ValueError("render_mode must be 'RGB' or 'RGB+D'")
+    if not isinstance(absgrad, bool):
+        raise ValueError("absgrad must be boolean")
+    if rasterize_mode not in {"classic", "antialiased"}:
+        raise ValueError("rasterize_mode must be 'classic' or 'antialiased'")
 
     device = gaussians.means.device
     dtype = gaussians.means.dtype
@@ -79,8 +85,8 @@ def render_gaussians(
         backgrounds=background,
         render_mode=render_mode,
         sparse_grad=False,
-        absgrad=False,
-        rasterize_mode="classic",
+        absgrad=absgrad,
+        rasterize_mode=rasterize_mode,
     )
 
     rendered = rendered[0]
