@@ -133,7 +133,8 @@ separately, and never stage user-owned `.gitignore` or `docs/research/` changes.
 
 Local verification on Windows:
 
-- `pytest -q tests/unit`: **554 passed, 5 skipped in 16.73s**.
+- Final `pytest -q tests/unit` on commit `8e53868`: **554 passed, 5 skipped in
+  16.95s**.
 - Synthetic resume subset: **3 passed in 3.52s**, covering continuous-vs-resumed
   updates, runner recovery-path wiring, and strict 15k confirmation recovery.
 - `git diff --check`: passed for Module 3 changes.
