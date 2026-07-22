@@ -48,6 +48,7 @@ def test_fp32_precision_preserves_ordinary_backward_and_step() -> None:
     optimizer = torch.optim.SGD([parameter], lr=0.1)
     projected = parameter * 3.0
     projected.retain_grad()
+    projected.absgrad = torch.tensor([9.0])
     controller = TrainingPrecision("fp32", torch.device("cpu"))
 
     assert isinstance(controller.autocast(), nullcontext)
@@ -55,6 +56,7 @@ def test_fp32_precision_preserves_ordinary_backward_and_step() -> None:
         projected.sum(), {"p": optimizer}, projected
     ) == 1.0
     assert torch.equal(projected.grad, torch.ones_like(projected))
+    assert torch.equal(projected.absgrad, torch.tensor([9.0]))
     controller.step({"p": optimizer})
 
     assert torch.allclose(parameter, torch.tensor([1.7]))
@@ -93,6 +95,56 @@ def test_amp_unscales_all_optimizers_and_non_leaf_projected_gradient(
     controller.step(optimizers)
     assert fake.stepped == list(optimizers.values())
     assert fake.update_calls == 1
+
+
+def test_amp_unscales_signed_and_absolute_projected_gradients_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import bts_nvs.training.precision as precision_module
+    from bts_nvs.training.precision import TrainingPrecision
+
+    fake = _FakeScaler(scale=8.0)
+    monkeypatch.setattr(
+        precision_module.torch.amp,
+        "GradScaler",
+        lambda *args, **kwargs: fake,
+    )
+    parameter = torch.nn.Parameter(torch.tensor([2.0]))
+    optimizer = torch.optim.SGD([parameter], lr=0.1)
+    projected = parameter * 3.0
+    projected.retain_grad()
+    projected.absgrad = torch.tensor([16.0])
+    controller = TrainingPrecision("amp-fp16", torch.device("cuda"))
+
+    controller.backward_and_unscale(projected.sum(), {"p": optimizer}, projected)
+
+    assert torch.equal(projected.grad, torch.ones_like(projected))
+    assert torch.equal(projected.absgrad, torch.tensor([2.0]))
+
+
+@pytest.mark.parametrize("absolute_gradient", ["invalid", torch.tensor([float("inf")])])
+def test_amp_rejects_invalid_absolute_projected_gradient(
+    monkeypatch: pytest.MonkeyPatch,
+    absolute_gradient,
+) -> None:
+    import bts_nvs.training.precision as precision_module
+    from bts_nvs.training.precision import TrainingPrecision
+
+    fake = _FakeScaler(scale=8.0)
+    monkeypatch.setattr(
+        precision_module.torch.amp,
+        "GradScaler",
+        lambda *args, **kwargs: fake,
+    )
+    parameter = torch.nn.Parameter(torch.tensor([2.0]))
+    optimizer = torch.optim.SGD([parameter], lr=0.1)
+    projected = parameter * 3.0
+    projected.retain_grad()
+    projected.absgrad = absolute_gradient
+    controller = TrainingPrecision("amp-fp16", torch.device("cuda"))
+
+    with pytest.raises(RuntimeError, match="absolute projected means gradient"):
+        controller.backward_and_unscale(projected.sum(), {"p": optimizer}, projected)
 
 
 def test_amp_rejects_cpu_and_missing_projected_gradient() -> None:

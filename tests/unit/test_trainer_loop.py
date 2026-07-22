@@ -14,6 +14,7 @@ import bts_nvs.training.trainer as trainer_module
 from bts_nvs.cameras.distortion import CameraDistortion
 from bts_nvs.cameras.intrinsics import CameraIntrinsics
 from bts_nvs.data.dataset import CameraSample
+from bts_nvs.experiments.candidates import candidate_training_overrides
 from bts_nvs.models.gaussian_parameters import GaussianParameters
 from bts_nvs.rendering.render_result import RenderResult
 from bts_nvs.training.checkpoint import load_checkpoint, save_checkpoint
@@ -99,6 +100,17 @@ def isolate_checkpoint_tests_from_host_disk(monkeypatch: pytest.MonkeyPatch) -> 
     )
 
 
+@pytest.fixture(autouse=True)
+def isolate_trainer_tests_from_package_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        trainer_module,
+        "version",
+        lambda package: f"test-{package}-version",
+    )
+
+
 @pytest.fixture
 def manifest_artifact(tmp_path: Path) -> Path:
     artifact = tmp_path / "manifest"
@@ -163,6 +175,8 @@ def _differentiable_render(
     active_sh_degree,
     backgrounds=None,
     render_mode="RGB",
+    absgrad=False,
+    rasterize_mode="classic",
 ):
     value = torch.sigmoid(gaussians.sh0.mean())
     rgb = value.expand(intrinsics.height, intrinsics.width, 3)
@@ -212,6 +226,49 @@ def test_trainer_normalizes_raw_camera_pose_before_render(
     expected = torch.eye(4, dtype=torch.float64)
     expected[0, 3] = -0.2 * dataset.sampled_indices[0]
     torch.testing.assert_close(captured["viewmat"], expected)
+
+
+@pytest.mark.parametrize(
+    "candidate_id,expected_absgrad,expected_grow_grad2d",
+    [
+        ("B0-reference", False, 0.0002),
+        ("E1-density-absgrad-t04-v1", True, 0.0004),
+    ],
+)
+def test_trainer_forwards_candidate_density_settings(
+    tmp_path: Path,
+    manifest_artifact: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    candidate_id: str,
+    expected_absgrad: bool,
+    expected_grow_grad2d: float,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def capture_render(*args, **kwargs):
+        if "absgrad" in kwargs:
+            captured["render_absgrad"] = kwargs.pop("absgrad")
+            captured["rasterize_mode"] = kwargs.pop("rasterize_mode")
+        return _differentiable_render(*args, **kwargs)
+
+    monkeypatch.setattr(trainer_module, "render_gaussians", capture_render)
+    config = _config(max_steps=1)
+    config.update(candidate_training_overrides(candidate_id))
+    trainer = _trainer(
+        tmp_path / candidate_id,
+        manifest_artifact,
+        _MockDataset(),
+        config=config,
+    )
+
+    trainer.train(stop_step=1, checkpoint_every=1)
+
+    assert captured["render_absgrad"] is expected_absgrad
+    assert captured["rasterize_mode"] == "classic"
+    assert trainer.strategy.backend.config["absgrad"] is expected_absgrad
+    assert trainer.strategy.backend.config["grow_grad2d"] == pytest.approx(
+        expected_grow_grad2d
+    )
 
 
 def test_trainer_rejects_distorted_training_sample(

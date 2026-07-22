@@ -345,6 +345,7 @@ class Trainer:
             refine_stop_step=self.config.get("refine_stop_step", 15000),
             refine_every=self.config.get("refine_every", 100),
             reset_every=self.config.get("reset_every", 3000),
+            absgrad=self.config.get("absgrad", False),
         )
         self.strategy_state = self.strategy.initialize_state(scene_scale=1.0)
 
@@ -619,6 +620,8 @@ class Trainer:
                     intrinsics=sample.intrinsics,
                     active_sh_degree=active_sh_degree,
                     render_mode="RGB",
+                    absgrad=self.config.get("absgrad", False),
+                    rasterize_mode=self.config.get("rasterize_mode", "classic"),
                 )
             t_fwd = time.perf_counter() - t_fwd_start
 
