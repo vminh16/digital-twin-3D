@@ -1,8 +1,11 @@
 import argparse
 import json
 import math
+import os
+import shutil
 import subprocess
 import sys
+import tempfile
 from dataclasses import replace
 from pathlib import Path
 
@@ -53,6 +56,14 @@ from bts_nvs.training.resources import (
     require_no_swap,
 )
 from bts_nvs.training.precision import TrainingPrecision
+
+
+CONFIRMATION_SNAPSHOT_REPORTS = (
+    "qualification_report.json",
+    "detail_metrics.json",
+    "pose_strata.json",
+    "experiment_report.json",
+)
 
 
 def parse_args():
@@ -379,11 +390,13 @@ def validate_generic_experiment_args(args) -> None:
             not rolling_runtime
             or args.stop_step not in (15_000, 30_000)
             or not args.internal_holdout
+            or (args.resume is not None and args.stop_step != 30_000)
         ):
             raise ValueError(
                 "confirm requires a factor-1, seed-0, 30000-step schedule "
                 "stopped at 15000 or 30000 with internal holdout, cached "
-                "images, pinned transfer, and 3000-step rolling recovery"
+                "images, pinned transfer, and 3000-step rolling recovery; "
+                "resume must target step 30000"
             )
         return
     if (
@@ -458,6 +471,30 @@ def validate_recovery_checkpoint(
             f"recovery checkpoint ended at step {state['step']}, "
             f"expected {expected_step}"
         )
+
+
+def validate_confirmation_resume(
+    args,
+    *,
+    manifest_hash: str,
+    config_hash: str,
+) -> None:
+    if (
+        args.experiment_stage != ExperimentStage.CONFIRM.value
+        or args.resume is None
+    ):
+        return
+    expected_recovery = Path(args.output_dir) / "checkpoints" / "recovery.pt"
+    if Path(args.resume).resolve() != expected_recovery.resolve():
+        raise ValueError("confirm resume must use output checkpoints/recovery.pt")
+    if training_target_step(args) != 30_000:
+        raise ValueError("confirm resume must target step 30000")
+    validate_recovery_checkpoint(
+        expected_recovery,
+        manifest_hash,
+        config_hash,
+        15_000,
+    )
 
 
 def optimization_required(start_step: int, target_step: int) -> bool:
@@ -853,6 +890,44 @@ def generate_generic_experiment_reports(
     return experiment
 
 
+def preserve_confirmation_snapshot(args) -> Path | None:
+    if (
+        args.experiment_stage != ExperimentStage.CONFIRM.value
+        or training_target_step(args) != 15_000
+    ):
+        return None
+
+    output = Path(args.output_dir)
+    snapshots = output / "snapshots"
+    snapshots.mkdir(parents=True, exist_ok=True)
+    destination = snapshots / "step_000015000"
+    if destination.exists():
+        raise FileExistsError(f"confirmation snapshot already exists: {destination}")
+
+    with tempfile.TemporaryDirectory(
+        dir=snapshots,
+        prefix=f".{destination.name}.",
+    ) as temporary:
+        staging = Path(temporary)
+        for name in CONFIRMATION_SNAPSHOT_REPORTS:
+            source = output / name
+            if not source.is_file():
+                raise FileNotFoundError(
+                    f"required confirmation report does not exist: {source}"
+                )
+            shutil.copy2(source, staging / name)
+
+        render_source = output / "validation_renders"
+        if not render_source.is_dir():
+            raise FileNotFoundError(
+                f"required confirmation renders do not exist: {render_source}"
+            )
+        shutil.copytree(render_source, staging / "validation_renders")
+        os.replace(staging, destination)
+
+    return destination
+
+
 def main():
     args = parse_args()
     validate_resize_factor(args.resize_factor)
@@ -976,6 +1051,11 @@ def main():
 
     # 7. Check for resume
     if args.resume:
+        validate_confirmation_resume(
+            args,
+            manifest_hash=trainer.manifest_hash,
+            config_hash=trainer.config_hash,
+        )
         print(f"Resuming training from checkpoint: {args.resume}")
         trainer.resume(args.resume)
 
@@ -1108,6 +1188,7 @@ def main():
             split=split,
             validation_dataset=validation_dataset,
         )
+        preserve_confirmation_snapshot(args)
         print(
             "Validation: "
             f"score50={experiment_report['overall']['score50']:.6f}, "

@@ -626,6 +626,11 @@ def test_generic_confirmation_locks_30k_schedule_and_rolling_recovery(tmp_path):
     resumed = _args(**(vars(valid) | {"stop_step": 30_000, "resume": str(recovery)}))
     run_training.validate_generic_experiment_args(resumed)
 
+    with pytest.raises(ValueError, match="resume.*30000"):
+        run_training.validate_generic_experiment_args(
+            _args(**(vars(valid) | {"resume": str(recovery)}))
+        )
+
     for change in (
         {"max_steps": 15_000},
         {"stop_step": None},
@@ -639,6 +644,74 @@ def test_generic_confirmation_locks_30k_schedule_and_rolling_recovery(tmp_path):
             run_training.validate_generic_experiment_args(
                 _args(**(vars(valid) | change))
             )
+
+
+def test_confirmation_resume_requires_complete_15k_recovery(
+    monkeypatch, tmp_path
+):
+    output = tmp_path / "confirm"
+    recovery = output / "checkpoints" / "recovery.pt"
+    args = _generic_args(
+        "confirm",
+        "E1-density-absgrad-t04-v1",
+        output_dir=str(output),
+        max_steps=30_000,
+        stop_step=30_000,
+        checkpoint_every=3_000,
+        rolling_checkpoint=True,
+        resume=str(recovery),
+    )
+    observed = {}
+
+    def validate(path, manifest_hash, config_hash, expected_step):
+        observed.update(
+            path=path,
+            manifest_hash=manifest_hash,
+            config_hash=config_hash,
+            expected_step=expected_step,
+        )
+
+    monkeypatch.setattr(run_training, "validate_recovery_checkpoint", validate)
+
+    run_training.validate_confirmation_resume(
+        args,
+        manifest_hash="manifest",
+        config_hash="config",
+    )
+
+    assert observed == {
+        "path": recovery,
+        "manifest_hash": "manifest",
+        "config_hash": "config",
+        "expected_step": 15_000,
+    }
+
+
+def test_non_confirmation_or_fresh_run_skips_confirmation_recovery_validation(
+    monkeypatch,
+):
+    def fail(*args, **kwargs):
+        raise AssertionError("recovery validation should not run")
+
+    monkeypatch.setattr(run_training, "validate_recovery_checkpoint", fail)
+
+    run_training.validate_confirmation_resume(
+        _generic_args(
+            "confirm",
+            "E1-density-absgrad-t04-v1",
+            max_steps=30_000,
+            stop_step=15_000,
+            checkpoint_every=3_000,
+            rolling_checkpoint=True,
+        ),
+        manifest_hash="manifest",
+        config_hash="config",
+    )
+    run_training.validate_confirmation_resume(
+        _generic_args("screen", "E1-density-absgrad-t04-v1"),
+        manifest_hash="manifest",
+        config_hash="config",
+    )
 
 
 def test_generic_production_locks_full_30k_without_holdout():
@@ -940,3 +1013,81 @@ def test_generic_internal_holdout_writes_all_module_one_reports(
         "schema_version": 1,
         "candidate_id": "E1-density-absgrad-t04-v1",
     }
+
+
+def test_15k_confirmation_snapshot_atomically_preserves_auditable_reports(
+    tmp_path,
+):
+    output = tmp_path / "confirm"
+    report_names = (
+        "qualification_report.json",
+        "detail_metrics.json",
+        "pose_strata.json",
+        "experiment_report.json",
+    )
+    for index, name in enumerate(report_names):
+        run_training.write_json_record(output / name, {"version": index})
+    render = output / "validation_renders" / "camera.JPG"
+    render.parent.mkdir(parents=True)
+    render.write_bytes(b"render-15k")
+    recovery = output / "checkpoints" / "recovery.pt"
+    recovery.parent.mkdir(parents=True)
+    recovery.write_bytes(b"model-state")
+    args = _generic_args(
+        "confirm",
+        "E1-density-absgrad-t04-v1",
+        output_dir=str(output),
+        max_steps=30_000,
+        stop_step=15_000,
+        checkpoint_every=3_000,
+        rolling_checkpoint=True,
+    )
+
+    snapshot = run_training.preserve_confirmation_snapshot(args)
+
+    assert snapshot == output / "snapshots" / "step_000015000"
+    assert sorted(path.name for path in snapshot.iterdir()) == [
+        "detail_metrics.json",
+        "experiment_report.json",
+        "pose_strata.json",
+        "qualification_report.json",
+        "validation_renders",
+    ]
+    for index, name in enumerate(report_names):
+        assert run_training.read_json_record(snapshot / name) == {"version": index}
+    assert (snapshot / "validation_renders" / "camera.JPG").read_bytes() == b"render-15k"
+    assert not list(snapshot.rglob("*.pt"))
+
+    run_training.write_json_record(output / "experiment_report.json", {"version": 30})
+    render.write_bytes(b"render-30k")
+    assert run_training.read_json_record(snapshot / "experiment_report.json") == {
+        "version": 3
+    }
+    assert (snapshot / "validation_renders" / "camera.JPG").read_bytes() == b"render-15k"
+
+
+@pytest.mark.parametrize(
+    "stage,stop_step",
+    (("confirm", 30_000), ("screen", 7_000)),
+)
+def test_non_15k_confirmation_keeps_reports_at_run_root_only(
+    tmp_path, stage, stop_step
+):
+    output = tmp_path / stage
+    output.mkdir()
+    args = _generic_args(
+        stage,
+        (
+            "E1-density-absgrad-t04-v1"
+            if stage != "reference"
+            else "B0-reference"
+        ),
+        output_dir=str(output),
+        max_steps=30_000 if stage == "confirm" else 7_000,
+        stop_step=stop_step,
+        checkpoint_every=3_000,
+        rolling_checkpoint=stage == "confirm",
+    )
+
+    assert run_training.preserve_confirmation_snapshot(args) is None
+    assert not (output / "snapshots").exists()
