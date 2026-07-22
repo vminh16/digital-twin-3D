@@ -12,6 +12,8 @@ from bts_nvs.experiments.experiment import (
     STAGE_HORIZONS,
     Experiment,
     ExperimentStage,
+    validate_paired_wall_time_ratio,
+    validate_peak_vram_mb,
 )
 
 
@@ -39,6 +41,57 @@ def test_schema_locks_cohort_stages_horizons_and_resource_limits() -> None:
     }
     assert MAX_PEAK_VRAM_MB == 23 * 1024
     assert MAX_PAIRED_WALL_TIME_RATIO == 1.25
+
+
+@pytest.mark.parametrize("ratio", [0.0, 0.5, MAX_PAIRED_WALL_TIME_RATIO])
+def test_paired_wall_time_ratio_accepts_finite_values_within_limit(
+    ratio: float,
+) -> None:
+    assert validate_paired_wall_time_ratio(ratio) is None
+
+
+@pytest.mark.parametrize(
+    "ratio",
+    [
+        True,
+        False,
+        -0.01,
+        MAX_PAIRED_WALL_TIME_RATIO + 0.01,
+        float("nan"),
+        float("inf"),
+        float("-inf"),
+    ],
+)
+def test_paired_wall_time_ratio_rejects_invalid_or_over_budget_values(
+    ratio: float,
+) -> None:
+    with pytest.raises(ValueError, match="paired_wall_time_ratio"):
+        validate_paired_wall_time_ratio(ratio)
+
+
+@pytest.mark.parametrize("peak_vram_mb", [0.0, MAX_PEAK_VRAM_MB - 0.5])
+def test_peak_vram_accepts_finite_values_strictly_below_limit(
+    peak_vram_mb: float,
+) -> None:
+    assert validate_peak_vram_mb(peak_vram_mb) is None
+
+
+@pytest.mark.parametrize(
+    "peak_vram_mb",
+    [
+        True,
+        False,
+        -0.01,
+        MAX_PEAK_VRAM_MB,
+        MAX_PEAK_VRAM_MB + 0.5,
+        float("nan"),
+        float("inf"),
+        float("-inf"),
+    ],
+)
+def test_peak_vram_rejects_invalid_or_at_limit_values(peak_vram_mb: float) -> None:
+    with pytest.raises(ValueError, match="peak_vram_mb"):
+        validate_peak_vram_mb(peak_vram_mb)
 
 
 @pytest.mark.parametrize(

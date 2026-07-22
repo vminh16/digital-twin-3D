@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+import math
 from pathlib import Path
 from types import MappingProxyType
 
@@ -36,6 +37,33 @@ STAGE_HORIZONS = MappingProxyType(
         ExperimentStage.PRODUCTION: 30_000,
     }
 )
+
+
+def validate_paired_wall_time_ratio(paired_wall_time_ratio: float) -> None:
+    _validate_finite_nonnegative(
+        paired_wall_time_ratio, "paired_wall_time_ratio"
+    )
+    if paired_wall_time_ratio > MAX_PAIRED_WALL_TIME_RATIO:
+        raise ValueError(
+            "paired_wall_time_ratio must be at most "
+            f"{MAX_PAIRED_WALL_TIME_RATIO}"
+        )
+
+
+def validate_peak_vram_mb(peak_vram_mb: float) -> None:
+    _validate_finite_nonnegative(peak_vram_mb, "peak_vram_mb")
+    if peak_vram_mb >= MAX_PEAK_VRAM_MB:
+        raise ValueError(f"peak_vram_mb must be below {MAX_PEAK_VRAM_MB}")
+
+
+def _validate_finite_nonnegative(value: float, name: str) -> None:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(value)
+        or value < 0.0
+    ):
+        raise ValueError(f"{name} must be a finite nonnegative number")
 
 
 @dataclass(frozen=True)
