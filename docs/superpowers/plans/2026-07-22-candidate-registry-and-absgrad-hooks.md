@@ -453,7 +453,7 @@ Expected locally: one skipped test with the environment-variable reason; no CUDA
 
 Observed locally on 2026-07-22: `1 skipped`; CUDA was not allocated.
 
-- [ ] **Step 3: Run the smoke on the NVIDIA L4**
+- [x] **Step 3: Run the smoke on the NVIDIA L4**
 
 Run on the VM from a clean tracked worktree:
 
@@ -463,8 +463,9 @@ BTS_RUN_ABSGRAD_SMOKE=1 pytest -q tests/integration/test_absgrad_density_smoke.p
 
 Expected: one test passes, the first refinement event completes, and signed/absolute projected gradients remain finite. Any OOM, missing `absgrad`, non-finite state, zero Gaussian count, or unsupported gsplat API fails Module 2 before a 7k run is authorized.
 
-Status on 2026-07-22: pending execution on the NVIDIA L4. Module 2 is implemented
-but is not L4-qualified and does not authorize a 7k run until this command passes.
+Status on 2026-07-22: user reported that the NVIDIA L4 smoke passed. The exact
+terminal transcript was not imported into this workspace; this record preserves
+the distinction between user-confirmed VM evidence and locally executed tests.
 
 - [x] **Step 4: Run the complete Module 2 CPU suite**
 
@@ -538,8 +539,8 @@ rg -n "TB[D]|TO[D]O|implement[ ]later|fill[ ]in details|similar[ ]to Task" \
 Expected: no whitespace errors and no incomplete markers.
 
 Observed local full unit suite on 2026-07-22: `415 passed, 5 skipped`.
-The allowed diff and forbidden-C1 scans passed. The only outstanding gate is
-the explicitly opt-in NVIDIA L4 smoke recorded in Task 5 Step 3.
+The allowed diff and forbidden-C1 scans passed. The NVIDIA L4 smoke was later
+reported as passed by the user and recorded in Task 5 Step 3.
 
 - [x] **Step 4: Record verification and commit only the plan update**
 
