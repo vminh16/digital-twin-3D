@@ -142,16 +142,17 @@ The following C1 content must not be imported:
 
 ## 6. Output contract
 
-The program uses a shallow experiment layout:
+The program uses a shallow, stage-first experiment layout. Stage is part of
+the path because a 7k screen and a 30k confirmation for the same
+scene/candidate are different evidence and must coexist without overwrite:
 
 ```text
 runs/scene_opt_v1/
 ├── experiment.json
-├── references/
-│   └── <scene_id>/
-├── candidates/
-│   └── <scene_id>/
-│       └── <candidate_id>/
+├── reference/<scene_id>/
+├── screen/<scene_id>/<candidate_id>/
+├── confirm/<scene_id>/<candidate_id>/
+├── production/<scene_id>/<candidate_id>/
 ├── decisions/
 │   └── <scene_id>.json
 └── cohort_decision.json
