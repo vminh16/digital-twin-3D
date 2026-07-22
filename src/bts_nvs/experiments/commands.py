@@ -111,7 +111,9 @@ def _validate_stage_run(
         return
 
     expected_recovery = output_dir / _RECOVERY_PATH
-    if resume_path is not None and resume_path != expected_recovery:
+    if resume_path is not None and (
+        resume_path.resolve(strict=False) != expected_recovery.resolve(strict=False)
+    ):
         raise ValueError("resume_path must be output_dir/checkpoints/recovery.pt")
 
     if stage is ExperimentStage.CONFIRM:

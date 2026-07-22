@@ -150,6 +150,45 @@ def test_confirmation_resume_targets_its_own_recovery_file(tmp_path: Path) -> No
     assert options["--resume"] == str(recovery)
 
 
+@pytest.mark.parametrize(
+    "resume_path",
+    (
+        "absolute-output/checkpoints/recovery.pt",
+        "relative-output/checkpoints/../checkpoints/recovery.pt",
+    ),
+)
+def test_confirmation_resume_accepts_equivalent_recovery_path_spellings(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    resume_path: str,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    experiment = Experiment(
+        stage=ExperimentStage.CONFIRM,
+        scene_id="HCM0644",
+        candidate_id="E1-density-absgrad-t04-v1",
+        authorized_scene_winner="E1-density-absgrad-t04-v1",
+    )
+    output_dir = Path("relative-output")
+    if resume_path.startswith("absolute-output"):
+        output_dir = Path("absolute-output")
+        resume = tmp_path / resume_path
+    else:
+        resume = Path(resume_path)
+
+    options = _option_values(
+        _build(
+            tmp_path,
+            experiment,
+            output_dir=output_dir,
+            stop_step=30_000,
+            resume_path=resume,
+        )
+    )
+
+    assert options["--resume"] == str(resume)
+
+
 def test_fresh_b0_confirmation_supplies_the_cli_authorization(tmp_path: Path) -> None:
     experiment = Experiment(
         stage=ExperimentStage.CONFIRM,
