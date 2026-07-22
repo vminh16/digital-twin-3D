@@ -37,7 +37,7 @@
 - Produces: `CandidateSettings`, `CANDIDATE_IDS`, `candidate_settings(candidate_id)`, and `candidate_training_overrides(candidate_id)`.
 - Consumers: Tasks 3–5 and the later generic experiment runner.
 
-- [ ] **Step 1: Write failing registry tests**
+- [x] **Step 1: Write failing registry tests**
 
 Create tests that lock every field, reject mutation, reject unknown IDs, and prove that each experimental candidate changes exactly one B0 mechanism:
 
@@ -101,7 +101,7 @@ def test_training_overrides_are_complete_plain_values() -> None:
 
 Add parameterized tests proving `CandidateSettings` rejects booleans in numeric fields, non-finite/non-positive thresholds, `prune_opa >= 1`, non-positive `refine_stop_step`, empty IDs, and unknown rasterize/appearance/sampling modes.
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 Run:
 
@@ -111,7 +111,7 @@ pytest -q tests/unit/test_experiment_candidates.py
 
 Expected: collection fails because `bts_nvs.experiments` does not exist.
 
-- [ ] **Step 3: Implement the immutable contract**
+- [x] **Step 3: Implement the immutable contract**
 
 Implement this exact dataclass in `contracts.py`:
 
@@ -134,11 +134,11 @@ class CandidateSettings:
 
 `__post_init__` must validate all fields without coercing values. Allowed mode values in Module 2 are `rasterize_mode in {"classic", "antialiased"}`, `appearance_mode == "baseline"`, and `sampling_mode == "uniform"`. Allowing the rasterizer enum does not authorize an antialiased candidate; the registry remains the executable authority.
 
-- [ ] **Step 4: Implement the closed registry**
+- [x] **Step 4: Implement the closed registry**
 
 Store exactly three preconstructed settings objects in a private mapping. `candidate_settings()` must require a non-empty string and return only a registered object. `candidate_training_overrides()` must return a fresh plain dictionary so callers cannot mutate registry state.
 
-- [ ] **Step 5: Run focused tests**
+- [x] **Step 5: Run focused tests**
 
 Run:
 
@@ -148,7 +148,7 @@ pytest -q tests/unit/test_experiment_candidates.py
 
 Expected: all candidate tests pass.
 
-- [ ] **Step 6: Commit Task 1**
+- [x] **Step 6: Commit Task 1**
 
 ```bash
 git add src/bts_nvs/experiments/__init__.py src/bts_nvs/experiments/contracts.py src/bts_nvs/experiments/candidates.py tests/unit/test_experiment_candidates.py
@@ -165,7 +165,7 @@ git commit -m "feat: add locked experiment candidates"
 - Produces: `canonical_json_sha256(record)`, `save_json_artifact(record, path)`, and `load_json_artifact(path, expected_sha256=None)`.
 - Consumers: Module 3 experiment/decision artifacts; this task does not refactor Module 1 writers.
 
-- [ ] **Step 1: Write failing provenance tests**
+- [x] **Step 1: Write failing provenance tests**
 
 ```python
 import json
@@ -202,13 +202,13 @@ def test_artifact_save_is_atomic_canonical_and_hash_checked(tmp_path) -> None:
 
 Also reject non-object top-level JSON, malformed expected hashes, NaN/Infinity, unreadable JSON, and booleans where a digest string is required. Verify a failed serialization leaves an existing artifact unchanged and leaves no `.tmp` file.
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 Run `pytest -q tests/unit/test_experiment_provenance.py`.
 
 Expected: import fails because `provenance.py` is missing.
 
-- [ ] **Step 3: Implement canonical hash and atomic I/O**
+- [x] **Step 3: Implement canonical hash and atomic I/O**
 
 Hash UTF-8 bytes from:
 
@@ -224,7 +224,7 @@ json.dumps(
 
 Save a human-readable sorted JSON representation to a sibling temporary file, append exactly one LF, and use `os.replace`. Remove the temporary file in a `finally` block only when it still exists. `load_json_artifact` must recompute the semantic hash after parsing and compare with `hmac.compare_digest`.
 
-- [ ] **Step 4: Run focused and existing artifact tests**
+- [x] **Step 4: Run focused and existing artifact tests**
 
 Run:
 
@@ -234,7 +234,7 @@ pytest -q tests/unit/test_experiment_provenance.py tests/unit/test_experiment_re
 
 Expected: all tests pass; existing artifact writers remain unchanged.
 
-- [ ] **Step 5: Commit Task 2**
+- [x] **Step 5: Commit Task 2**
 
 ```bash
 git add src/bts_nvs/experiments/provenance.py tests/unit/test_experiment_provenance.py
@@ -254,7 +254,7 @@ git commit -m "feat: add experiment provenance utilities"
 - `GsplatStrategy(..., absgrad: bool = False, ...)`.
 - Consumes: primitive values from `CandidateSettings`; no import from the registry is allowed in rendering modules.
 
-- [ ] **Step 1: Add failing renderer hook tests**
+- [x] **Step 1: Add failing renderer hook tests**
 
 Extend the fake-rasterization tests:
 
@@ -285,7 +285,7 @@ def test_renderer_forwards_absgrad_and_rasterize_mode(monkeypatch) -> None:
 
 Add rejection tests for non-boolean `absgrad` and rasterizer values outside `classic`/`antialiased`. Keep the existing default assertion that B0 passes `absgrad=False` and `rasterize_mode="classic"`.
 
-- [ ] **Step 2: Add failing strategy hook tests**
+- [x] **Step 2: Add failing strategy hook tests**
 
 ```python
 def test_strategy_forwards_absgrad_without_revised_opacity(monkeypatch) -> None:
@@ -304,7 +304,7 @@ def test_strategy_forwards_absgrad_without_revised_opacity(monkeypatch) -> None:
 
 Add a non-boolean `absgrad` rejection test and retain the exact B0 backend dictionary assertion.
 
-- [ ] **Step 3: Run focused tests and verify RED**
+- [x] **Step 3: Run focused tests and verify RED**
 
 Run:
 
@@ -314,17 +314,17 @@ pytest -q tests/unit/test_renderer.py tests/unit/test_strategy.py
 
 Expected: new calls fail because the signatures do not yet accept the hook fields.
 
-- [ ] **Step 4: Implement minimal primitive hooks**
+- [x] **Step 4: Implement minimal primitive hooks**
 
 Add validated keyword-only arguments and forward them directly to gsplat. Do not import candidate IDs into rendering code. Do not add revised opacity. Defaults must remain `False` and `classic`.
 
-- [ ] **Step 5: Run focused tests**
+- [x] **Step 5: Run focused tests**
 
 Run `pytest -q tests/unit/test_renderer.py tests/unit/test_strategy.py`.
 
 Expected: all renderer and strategy tests pass; real CUDA tests remain skipped unless their existing requirements are available.
 
-- [ ] **Step 6: Commit Task 3**
+- [x] **Step 6: Commit Task 3**
 
 ```bash
 git add src/bts_nvs/rendering/gsplat_renderer.py src/bts_nvs/rendering/density_strategy.py tests/unit/test_renderer.py tests/unit/test_strategy.py
@@ -343,7 +343,7 @@ git commit -m "feat: add generic density runtime hooks"
 - `TrainingPrecision.backward_and_unscale(...)` continues returning the loss scale and additionally unscales `projected_means.absgrad` when it exists.
 - `Trainer` reads optional `absgrad` and `rasterize_mode` config values and forwards them without candidate-specific branches.
 
-- [ ] **Step 1: Write the failing AMP tests**
+- [x] **Step 1: Write the failing AMP tests**
 
 ```python
 def test_amp_unscales_signed_and_absolute_projected_gradients_once(monkeypatch) -> None:
@@ -368,7 +368,7 @@ def test_amp_unscales_signed_and_absolute_projected_gradients_once(monkeypatch) 
 
 Also verify FP32 does not alter a supplied `absgrad`, AMP still works when the attribute is absent, and a non-tensor `absgrad` raises a targeted runtime error instead of being ignored.
 
-- [ ] **Step 2: Write the failing trainer forwarding test**
+- [x] **Step 2: Write the failing trainer forwarding test**
 
 Construct a trainer with config overrides from `E1-density-absgrad-t04-v1`. Monkeypatch environment-version lookup where required so this CPU test does not depend on installed gsplat package metadata. Capture the training render call and assert:
 
@@ -381,7 +381,7 @@ assert trainer.strategy.backend.config["grow_grad2d"] == pytest.approx(0.0004)
 
 Add a paired B0 test asserting false/classic/0.0002. The test must execute one actual `Trainer.train(..., stop_after_step=1)` path with fake renderer/strategy components rather than inspecting config only.
 
-- [ ] **Step 3: Run focused tests and verify RED**
+- [x] **Step 3: Run focused tests and verify RED**
 
 Run:
 
@@ -391,7 +391,7 @@ pytest -q tests/unit/test_training_precision.py tests/unit/test_trainer_loop.py 
 
 Expected: new assertions fail because AbsGrad is neither unscaled nor forwarded.
 
-- [ ] **Step 4: Implement AMP unscale and trainer forwarding**
+- [x] **Step 4: Implement AMP unscale and trainer forwarding**
 
 After `scaler.unscale_()` handles optimizer-owned leaf gradients, divide both projected gradient tensors by the captured scale. Require signed `.grad`; when `.absgrad` exists require it to be a finite tensor before and after division. In `Trainer`, use configuration defaults only:
 
@@ -402,7 +402,7 @@ rasterize_mode = self.config.get("rasterize_mode", "classic")
 
 Forward `absgrad` to both training rasterization and `GsplatStrategy`; forward `rasterize_mode` only to rasterization. Do not branch on candidate ID. Train-view diagnostics remain B0-style because they do not backpropagate or influence density control.
 
-- [ ] **Step 5: Run focused and adjacent tests**
+- [x] **Step 5: Run focused and adjacent tests**
 
 Run:
 
@@ -412,7 +412,7 @@ pytest -q tests/unit/test_training_precision.py tests/unit/test_renderer.py test
 
 Expected on a complete development environment: all tests pass. On the current local Windows environment, record any pre-existing `PackageNotFoundError: gsplat` separately; do not alter production code to hide missing dependency metadata.
 
-- [ ] **Step 6: Commit Task 4**
+- [x] **Step 6: Commit Task 4**
 
 ```bash
 git add src/bts_nvs/training/precision.py src/bts_nvs/training/trainer.py tests/unit/test_training_precision.py tests/unit/test_trainer_loop.py
@@ -428,7 +428,7 @@ git commit -m "feat: forward candidate density settings"
 - Consumes the registered `E1-density-absgrad-t04-v1` settings and existing CUDA preflight components.
 - Produces no run artifacts or checkpoints; success is the pytest result and finite runtime assertions.
 
-- [ ] **Step 1: Write the opt-in L4 integration smoke**
+- [x] **Step 1: Write the opt-in L4 integration smoke**
 
 Guard the test with `BTS_RUN_ABSGRAD_SMOKE=1`. It must use the real renderer and `DefaultStrategy`, one tiny CUDA Gaussian set, `adam-fused` plus `amp-fp16`, the exact registered candidate settings, and enough one-based steps to execute the first refinement event. At the event assert:
 
@@ -441,7 +441,7 @@ assert gaussians.num_gaussians > 0
 
 The test must call the same `TrainingPrecision`, `render_gaussians`, and `GsplatStrategy` APIs used by `Trainer`. It must not create a second reusable training loop, save checkpoints, decode scene images, or require external data.
 
-- [ ] **Step 2: Verify default local behavior**
+- [x] **Step 2: Verify default local behavior**
 
 Run:
 
@@ -450,6 +450,8 @@ pytest -q tests/integration/test_absgrad_density_smoke.py
 ```
 
 Expected locally: one skipped test with the environment-variable reason; no CUDA allocation.
+
+Observed locally on 2026-07-22: `1 skipped`; CUDA was not allocated.
 
 - [ ] **Step 3: Run the smoke on the NVIDIA L4**
 
@@ -461,7 +463,10 @@ BTS_RUN_ABSGRAD_SMOKE=1 pytest -q tests/integration/test_absgrad_density_smoke.p
 
 Expected: one test passes, the first refinement event completes, and signed/absolute projected gradients remain finite. Any OOM, missing `absgrad`, non-finite state, zero Gaussian count, or unsupported gsplat API fails Module 2 before a 7k run is authorized.
 
-- [ ] **Step 4: Run the complete Module 2 CPU suite**
+Status on 2026-07-22: pending execution on the NVIDIA L4. Module 2 is implemented
+but is not L4-qualified and does not authorize a 7k run until this command passes.
+
+- [x] **Step 4: Run the complete Module 2 CPU suite**
 
 Run:
 
@@ -478,7 +483,9 @@ pytest -q \
 
 Expected on the VM environment with pinned dependencies: all selected tests pass.
 
-- [ ] **Step 5: Commit Task 5**
+Observed locally on 2026-07-22: `143 passed, 3 skipped`.
+
+- [x] **Step 5: Commit Task 5**
 
 ```bash
 git add tests/integration/test_absgrad_density_smoke.py
@@ -493,13 +500,13 @@ git commit -m "test: gate AbsGrad density path on L4"
 **Interfaces:**
 - Produces the checked implementation record and Module 2 handoff; no runtime behavior.
 
-- [ ] **Step 1: Verify the allowed diff scope**
+- [x] **Step 1: Verify the allowed diff scope**
 
 Run `git diff --name-status fb9eb4a..HEAD`.
 
 Expected files are limited to the new `experiments` package/tests, the four runtime hook files and their tests, the opt-in integration smoke, and this plan.
 
-- [ ] **Step 2: Verify B0 compatibility and forbidden C1 content**
+- [x] **Step 2: Verify B0 compatibility and forbidden C1 content**
 
 Run:
 
@@ -515,7 +522,7 @@ rg -n "revised_opacity|C1-|0\.0008|phase_[abc]" \
 
 Expected: B0-focused tests pass and `rg` returns no matches.
 
-- [ ] **Step 3: Verify formatting and incomplete markers**
+- [x] **Step 3: Verify formatting and incomplete markers**
 
 Run:
 
@@ -530,7 +537,11 @@ rg -n "TB[D]|TO[D]O|implement[ ]later|fill[ ]in details|similar[ ]to Task" \
 
 Expected: no whitespace errors and no incomplete markers.
 
-- [ ] **Step 4: Record verification and commit only the plan update**
+Observed local full unit suite on 2026-07-22: `415 passed, 5 skipped`.
+The allowed diff and forbidden-C1 scans passed. The only outstanding gate is
+the explicitly opt-in NVIDIA L4 smoke recorded in Task 5 Step 3.
+
+- [x] **Step 4: Record verification and commit only the plan update**
 
 ```bash
 git add docs/superpowers/plans/2026-07-22-candidate-registry-and-absgrad-hooks.md
