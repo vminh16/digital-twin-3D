@@ -124,7 +124,7 @@ def run_one(
         "holdout_sha256": holdout_sha256,
     }
     try:
-        completed = subprocess.run(command, cwd=repo, check=False)
+        completed = subprocess.run(command, cwd=repo, check=False, shell=False)
         if completed.returncode != 0:
             raise RuntimeError(
                 f"experiment training exited with code {completed.returncode}"

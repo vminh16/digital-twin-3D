@@ -51,6 +51,12 @@ def _paths(tmp_path: Path) -> dict[str, Path]:
 
 def _patch_valid_inputs(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
     calls: list[list[str]] = []
+
+    def _run(argv, **kwargs):
+        assert kwargs["shell"] is False
+        calls.append(list(argv))
+        return SimpleNamespace(returncode=0)
+
     monkeypatch.setattr(
         "bts_nvs.experiments.run_experiment.load_or_create_backend_decision",
         lambda path: SimpleNamespace(
@@ -76,7 +82,7 @@ def _patch_valid_inputs(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
     )
     monkeypatch.setattr(
         "bts_nvs.experiments.run_experiment.subprocess.run",
-        lambda argv, **kwargs: calls.append(list(argv)) or SimpleNamespace(returncode=0),
+        _run,
     )
     monkeypatch.setattr(
         "bts_nvs.experiments.run_experiment._config_sha256",
