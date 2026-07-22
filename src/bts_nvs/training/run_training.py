@@ -446,6 +446,8 @@ def validate_recovery_checkpoint(
     manifest_hash: str,
     config_hash: str,
     expected_step: int,
+    *,
+    require_precision_state: bool = False,
 ) -> None:
     state = load_checkpoint(
         path,
@@ -463,6 +465,8 @@ def validate_recovery_checkpoint(
         "manifest_hash",
         "config_hash",
     }
+    if require_precision_state:
+        required.add("precision_state")
     missing = sorted(required.difference(state))
     if missing:
         raise ValueError(f"recovery checkpoint is missing: {', '.join(missing)}")
@@ -471,6 +475,24 @@ def validate_recovery_checkpoint(
             f"recovery checkpoint ended at step {state['step']}, "
             f"expected {expected_step}"
         )
+
+
+def validate_confirmation_recovery(
+    args,
+    *,
+    manifest_hash: str,
+    config_hash: str,
+    expected_step: int,
+) -> None:
+    if args.experiment_stage != ExperimentStage.CONFIRM.value:
+        return
+    validate_recovery_checkpoint(
+        Path(args.output_dir) / "checkpoints" / "recovery.pt",
+        manifest_hash,
+        config_hash,
+        expected_step,
+        require_precision_state=True,
+    )
 
 
 def validate_confirmation_resume(
@@ -489,11 +511,11 @@ def validate_confirmation_resume(
         raise ValueError("confirm resume must use output checkpoints/recovery.pt")
     if training_target_step(args) != 30_000:
         raise ValueError("confirm resume must target step 30000")
-    validate_recovery_checkpoint(
-        expected_recovery,
-        manifest_hash,
-        config_hash,
-        15_000,
+    validate_confirmation_recovery(
+        args,
+        manifest_hash=manifest_hash,
+        config_hash=config_hash,
+        expected_step=15_000,
     )
 
 
@@ -849,13 +871,16 @@ def generate_generic_experiment_reports(
     manifest,
     split: HoldoutSplit,
     validation_dataset,
+    lpips_backend=None,
 ) -> dict[str, object]:
     output = Path(args.output_dir)
     render_dir = output / "validation_renders"
+    if lpips_backend is None:
+        lpips_backend = LpipsBackend(backbone="alex", device=str(trainer.device))
     validation = evaluate_internal_validation(
         trainer,
         validation_dataset,
-        LpipsBackend(backbone="alex", device=str(trainer.device)),
+        lpips_backend,
         render_dir,
     )
     resources = build_experiment_resource_summary(output)
@@ -888,6 +913,30 @@ def generate_generic_experiment_reports(
     )
     save_experiment_report(experiment, output / "experiment_report.json")
     return experiment
+
+
+def prepare_initial_validation(args, trainer, validation_dataset):
+    enabled = (
+        args.full_length_qualification
+        or args.experiment_stage == ExperimentStage.CONFIRM.value
+    )
+    if not enabled:
+        return None, None
+
+    lpips_backend = LpipsBackend(backbone="alex", device=str(trainer.device))
+    initial_validation_path = Path(args.output_dir) / "initial_validation.json"
+    if args.resume:
+        initial_validation = read_json_record(initial_validation_path)
+    else:
+        assert validation_dataset is not None
+        initial_validation = evaluate_internal_validation(
+            trainer,
+            validation_dataset,
+            lpips_backend,
+            None,
+        )
+        write_json_record(initial_validation_path, initial_validation)
+    return lpips_backend, initial_validation
 
 
 def preserve_confirmation_snapshot(args) -> Path | None:
@@ -1078,19 +1127,11 @@ def main():
         )
         write_json_record(initial_metrics_path, initial_metrics)
 
-    lpips_backend = None
-    initial_validation = None
-    if args.full_length_qualification:
-        lpips_backend = LpipsBackend(backbone="alex", device=str(trainer.device))
-        initial_validation_path = Path(args.output_dir) / "initial_validation.json"
-        if args.resume:
-            initial_validation = read_json_record(initial_validation_path)
-        else:
-            assert validation_dataset is not None
-            initial_validation = evaluate_internal_validation(
-                trainer, validation_dataset, lpips_backend, None
-            )
-            write_json_record(initial_validation_path, initial_validation)
+    lpips_backend, initial_validation = prepare_initial_validation(
+        args,
+        trainer,
+        validation_dataset,
+    )
 
     # 8. Start optimization run
     target_step = training_target_step(args)
@@ -1107,6 +1148,12 @@ def main():
         )
     else:
         print(f"Checkpoint is already at step {target_step}; finalizing artifacts...")
+    validate_confirmation_recovery(
+        args,
+        manifest_hash=trainer.manifest_hash,
+        config_hash=trainer.config_hash,
+        expected_step=target_step,
+    )
     finalize_generic_resume_summary(
         Path(args.output_dir),
         prior_generic_summary,
@@ -1187,6 +1234,7 @@ def main():
             manifest=manifest,
             split=split,
             validation_dataset=validation_dataset,
+            lpips_backend=lpips_backend,
         )
         preserve_confirmation_snapshot(args)
         print(

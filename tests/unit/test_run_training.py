@@ -462,6 +462,74 @@ def test_initial_metrics_round_trip_for_resume(tmp_path: Path):
     assert run_training.read_json_record(path) == metrics
 
 
+def test_fresh_generic_confirmation_writes_initial_validation(
+    monkeypatch, tmp_path
+):
+    output = tmp_path / "confirm"
+    args = _generic_args(
+        "confirm",
+        "E1-density-absgrad-t04-v1",
+        output_dir=str(output),
+    )
+    trainer = SimpleNamespace(device=torch.device("cpu"))
+    validation_dataset = object()
+    backend = object()
+    validation = {"image_count": 3, "lpips_mean": 0.25}
+    observed = []
+
+    monkeypatch.setattr(run_training, "LpipsBackend", lambda **kwargs: backend)
+
+    def evaluate(trainer_arg, dataset_arg, backend_arg, render_dir):
+        observed.append((trainer_arg, dataset_arg, backend_arg, render_dir))
+        return validation
+
+    monkeypatch.setattr(run_training, "evaluate_internal_validation", evaluate)
+
+    actual_backend, actual_validation = run_training.prepare_initial_validation(
+        args,
+        trainer,
+        validation_dataset,
+    )
+
+    assert actual_backend is backend
+    assert actual_validation == validation
+    assert observed == [(trainer, validation_dataset, backend, None)]
+    assert run_training.read_json_record(output / "initial_validation.json") == validation
+
+
+def test_resumed_generic_confirmation_reuses_initial_validation_without_recompute(
+    monkeypatch, tmp_path
+):
+    output = tmp_path / "confirm"
+    initial_validation = {"image_count": 3, "lpips_mean": 0.25}
+    run_training.write_json_record(
+        output / "initial_validation.json",
+        initial_validation,
+    )
+    args = _generic_args(
+        "confirm",
+        "E1-density-absgrad-t04-v1",
+        output_dir=str(output),
+        resume=str(output / "checkpoints" / "recovery.pt"),
+    )
+    backend = object()
+    monkeypatch.setattr(run_training, "LpipsBackend", lambda **kwargs: backend)
+
+    def fail(*args, **kwargs):
+        raise AssertionError("initial validation must not be recomputed on resume")
+
+    monkeypatch.setattr(run_training, "evaluate_internal_validation", fail)
+
+    actual_backend, actual_validation = run_training.prepare_initial_validation(
+        args,
+        SimpleNamespace(device=torch.device("cpu")),
+        object(),
+    )
+
+    assert actual_backend is backend
+    assert actual_validation == initial_validation
+
+
 def _generic_args(stage: str, candidate_id: str, **changes):
     values = {
         "experiment_stage": stage,
@@ -663,12 +731,20 @@ def test_confirmation_resume_requires_complete_15k_recovery(
     )
     observed = {}
 
-    def validate(path, manifest_hash, config_hash, expected_step):
+    def validate(
+        path,
+        manifest_hash,
+        config_hash,
+        expected_step,
+        *,
+        require_precision_state,
+    ):
         observed.update(
             path=path,
             manifest_hash=manifest_hash,
             config_hash=config_hash,
             expected_step=expected_step,
+            require_precision_state=require_precision_state,
         )
 
     monkeypatch.setattr(run_training, "validate_recovery_checkpoint", validate)
@@ -684,6 +760,103 @@ def test_confirmation_resume_requires_complete_15k_recovery(
         "manifest_hash": "manifest",
         "config_hash": "config",
         "expected_step": 15_000,
+        "require_precision_state": True,
+    }
+
+
+def test_confirmation_rejects_missing_precision_state_but_legacy_allows_it(
+    monkeypatch, tmp_path
+):
+    output = tmp_path / "confirm"
+    recovery = output / "checkpoints" / "recovery.pt"
+    complete_legacy_state = {
+        "step": 15_000,
+        "gaussians": {},
+        "optimizers": {},
+        "scheduler": {},
+        "strategy_state": {},
+        "active_sh_degree": 3,
+        "rng_states": {},
+        "manifest_hash": "manifest",
+        "config_hash": "config",
+    }
+    monkeypatch.setattr(
+        run_training,
+        "load_checkpoint",
+        lambda *args, **kwargs: complete_legacy_state,
+    )
+
+    run_training.validate_recovery_checkpoint(
+        recovery,
+        "manifest",
+        "config",
+        15_000,
+    )
+
+    args = _generic_args(
+        "confirm",
+        "E1-density-absgrad-t04-v1",
+        output_dir=str(output),
+        max_steps=30_000,
+        stop_step=30_000,
+        checkpoint_every=3_000,
+        rolling_checkpoint=True,
+        resume=str(recovery),
+    )
+    with pytest.raises(ValueError, match="precision_state"):
+        run_training.validate_confirmation_resume(
+            args,
+            manifest_hash="manifest",
+            config_hash="config",
+        )
+
+
+def test_final_confirmation_recovery_requires_current_step_and_precision_state(
+    monkeypatch, tmp_path
+):
+    output = tmp_path / "confirm"
+    args = _generic_args(
+        "confirm",
+        "E1-density-absgrad-t04-v1",
+        output_dir=str(output),
+        max_steps=30_000,
+        stop_step=30_000,
+        checkpoint_every=3_000,
+        rolling_checkpoint=True,
+    )
+    observed = {}
+
+    def validate(
+        path,
+        manifest_hash,
+        config_hash,
+        expected_step,
+        *,
+        require_precision_state,
+    ):
+        observed.update(
+            path=path,
+            manifest_hash=manifest_hash,
+            config_hash=config_hash,
+            expected_step=expected_step,
+            require_precision_state=require_precision_state,
+        )
+
+    monkeypatch.setattr(run_training, "validate_recovery_checkpoint", validate)
+
+    run_training.validate_confirmation_recovery(
+        args,
+        manifest_hash="manifest",
+        config_hash="config",
+        expected_step=30_000,
+    )
+
+    assert observed == {
+        "path": output / "checkpoints" / "recovery.pt",
+        "manifest_hash": "manifest",
+        "config_hash": "config",
+        "expected_step": 30_000,
+        "require_precision_state": True,
     }
 
 
@@ -1058,12 +1231,22 @@ def test_15k_confirmation_snapshot_atomically_preserves_auditable_reports(
     assert (snapshot / "validation_renders" / "camera.JPG").read_bytes() == b"render-15k"
     assert not list(snapshot.rglob("*.pt"))
 
-    run_training.write_json_record(output / "experiment_report.json", {"version": 30})
-    render.write_bytes(b"render-30k")
-    assert run_training.read_json_record(snapshot / "experiment_report.json") == {
-        "version": 3
+    preserved_files = {
+        path.relative_to(snapshot).as_posix(): path.read_bytes()
+        for path in snapshot.rglob("*")
+        if path.is_file()
     }
-    assert (snapshot / "validation_renders" / "camera.JPG").read_bytes() == b"render-15k"
+    for index, name in enumerate(report_names, start=30):
+        run_training.write_json_record(output / name, {"version": index})
+    render.write_bytes(b"render-30k")
+    resumed_args = _args(**(vars(args) | {"stop_step": 30_000}))
+
+    assert run_training.preserve_confirmation_snapshot(resumed_args) is None
+    assert {
+        path.relative_to(snapshot).as_posix(): path.read_bytes()
+        for path in snapshot.rglob("*")
+        if path.is_file()
+    } == preserved_files
 
 
 @pytest.mark.parametrize(
