@@ -3,10 +3,14 @@
   "candidate_id": "C1-absgrad-t08-revopacity-v1",
   "error_message": null,
   "error_type": null,
+  "failed_gates": [
+    "score_improved",
+    "lpips_not_worse"
+  ],
   "optimizer_backend": "adam",
   "phase": "C1-phase-C",
   "precision": "fp32",
   "scene_id": "HCM0181",
   "schema_version": 1,
-  "status": "running"
+  "status": "rejected"
 }
