@@ -96,6 +96,20 @@ def test_integrity_growth_and_15k_cannot_accept() -> None:
     assert invalid["gates"]["primitive_growth_controlled"] is False
 
 
+def test_7k_can_select_a_screen_winner_but_cannot_accept_for_production() -> None:
+    b0 = _report("B0-reference", step=7_000)
+    candidate = _report("E1-density-absgrad-t04-v1", step=7_000)
+
+    evaluated = evaluate_candidate(b0, candidate)
+    selected = select_scene_candidate(b0, [candidate])
+
+    assert evaluated["screen_qualified"] is True
+    assert evaluated["eligible"] is False
+    assert evaluated["status"] == "screen_passed"
+    assert selected["decision_stage"] == "screen"
+    assert selected["selected_candidate_id"] == "E1-density-absgrad-t04-v1"
+
+
 def test_pair_identity_and_nonfinite_values_are_rejected() -> None:
     candidate = _report("E1-density-absgrad-t04-v1")
     candidate["holdout_sha256"] = "e" * 64
@@ -153,12 +167,22 @@ def test_scene_selection_uses_exact_tie_break_order_and_b0_fallback() -> None:
     assert fallback["fallback_to_b0"] is True
 
 
+def test_15k_cannot_create_a_scene_selection() -> None:
+    with pytest.raises(ValueError, match="15000"):
+        select_scene_candidate(
+            _report("B0-reference", step=15_000),
+            [_report("E1-density-absgrad-t04-v1", step=15_000)],
+        )
+
+
 def test_cohort_decision_requires_exact_locked_scenes_and_isolated_choices() -> None:
     decisions = []
     for index, scene_id in enumerate(COHORT_SCENE_IDS):
         decision = {
             "schema_version": 1,
             "scene_id": scene_id,
+            "step": 30_000,
+            "decision_stage": "confirmation",
             "selected_candidate_id": (
                 "E1-density-absgrad-t04-v1" if index == 0 else "B0-reference"
             ),

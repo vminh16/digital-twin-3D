@@ -46,8 +46,8 @@ def evaluate_candidate(
     if candidate_id == "B0-reference":
         raise ValueError("candidate_report must be a non-B0 candidate")
     step = _positive_int(candidate.get("step"), "step")
-    if step not in (15_000, 30_000):
-        raise ValueError("decision step must be 15000 or 30000")
+    if step not in (7_000, 15_000, 30_000):
+        raise ValueError("decision step must be 7000, 15000, or 30000")
     if not isinstance(integrity_passed, bool) or not isinstance(
         primitive_growth_controlled, bool
     ):
@@ -133,10 +133,13 @@ def evaluate_candidate(
         )
 
     all_gates = all(gates.values())
+    screen_qualified = bool(step == 7_000 and all_gates)
     eligible = bool(step == 30_000 and all_gates and not reversed_after_15k)
     status = (
         "accepted"
         if eligible
+        else "screen_passed"
+        if screen_qualified
         else "pending_confirmation"
         if step == 15_000 and all_gates
         else "rejected"
@@ -159,6 +162,7 @@ def evaluate_candidate(
         ),
         "candidate_peak_gaussians": peak_gaussians,
         "reversed_after_15k": reversed_after_15k,
+        "screen_qualified": screen_qualified,
         "eligible": eligible,
         "status": status,
     }
@@ -190,7 +194,12 @@ def select_scene_candidate(
                 result_15k=(results_15k or {}).get(candidate_id),
             )
         )
-    eligible = [result for result in evaluations if result["eligible"] is True]
+    b0 = _report(b0_report, "b0_report")
+    step = int(b0["step"])
+    if step == 15_000:
+        raise ValueError("15000-step evidence cannot create a scene selection")
+    selection_field = "screen_qualified" if step == 7_000 else "eligible"
+    eligible = [result for result in evaluations if result[selection_field] is True]
     selected = (
         min(
             eligible,
@@ -205,11 +214,11 @@ def select_scene_candidate(
         if eligible
         else None
     )
-    b0 = _report(b0_report, "b0_report")
     body: dict[str, object] = {
         "schema_version": 1,
         "scene_id": b0["scene_id"],
         "step": b0["step"],
+        "decision_stage": "screen" if step == 7_000 else "confirmation",
         "manifest_sha256": b0["manifest_sha256"],
         "holdout_sha256": b0["holdout_sha256"],
         "selected_candidate_id": (
@@ -237,6 +246,8 @@ def build_cohort_decision(
             raise ValueError("scene decisions do not match the locked cohort")
         selected = _string(decision.get("selected_candidate_id"), "selected_candidate_id")
         candidate_settings(selected)
+        if decision.get("decision_stage") != "confirmation" or decision.get("step") != 30_000:
+            raise ValueError("cohort requires 30000-step confirmation decisions")
         digest = _string(decision.get("decision_sha256"), "decision_sha256")
         if _SHA256.fullmatch(digest) is None:
             raise ValueError("decision_sha256 must be a lowercase SHA-256 digest")
