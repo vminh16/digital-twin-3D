@@ -445,10 +445,10 @@ def validate_recovery_checkpoint(
     path: Path,
     manifest_hash: str,
     config_hash: str,
-    expected_step: int,
+    expected_step: int | None,
     *,
     require_precision_state: bool = False,
-) -> None:
+) -> int:
     state = load_checkpoint(
         path,
         expected_manifest_hash=manifest_hash,
@@ -470,11 +470,15 @@ def validate_recovery_checkpoint(
     missing = sorted(required.difference(state))
     if missing:
         raise ValueError(f"recovery checkpoint is missing: {', '.join(missing)}")
-    if state["step"] != expected_step:
+    step = state["step"]
+    if isinstance(step, bool) or not isinstance(step, int) or step <= 0:
+        raise ValueError("recovery checkpoint step must be a positive integer")
+    if expected_step is not None and step != expected_step:
         raise ValueError(
-            f"recovery checkpoint ended at step {state['step']}, "
+            f"recovery checkpoint ended at step {step}, "
             f"expected {expected_step}"
         )
+    return step
 
 
 def validate_confirmation_recovery(

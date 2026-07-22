@@ -273,9 +273,12 @@ def test_recovery_checkpoint_must_be_complete_and_at_expected_step(
         lambda *args, **kwargs: complete,
     )
 
-    run_training.validate_recovery_checkpoint(
+    assert run_training.validate_recovery_checkpoint(
         tmp_path / "recovery.pt", "manifest", "config", 30_000
-    )
+    ) == 30_000
+    assert run_training.validate_recovery_checkpoint(
+        tmp_path / "recovery.pt", "manifest", "config", None
+    ) == 30_000
 
     monkeypatch.setattr(
         run_training,
