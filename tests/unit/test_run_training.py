@@ -33,6 +33,7 @@ def _args(**changes):
         "rolling_checkpoint": False,
         "candidate_id": None,
         "experiment_stage": None,
+        "authorized_candidate_id": None,
         "stop_step": None,
     }
     values.update(changes)
@@ -465,6 +466,9 @@ def _generic_args(stage: str, candidate_id: str, **changes):
     values = {
         "experiment_stage": stage,
         "candidate_id": candidate_id,
+        "authorized_candidate_id": (
+            candidate_id if stage in ("confirm", "production") else None
+        ),
         "resize_factor": 1,
         "max_steps": 7_000,
         "seed": 0,
@@ -476,7 +480,7 @@ def _generic_args(stage: str, candidate_id: str, **changes):
     return _args(**values)
 
 
-def test_parse_args_accepts_generic_identity_and_stop_step(monkeypatch):
+def test_parse_args_accepts_generic_identity_authorization_and_stop_step(monkeypatch):
     monkeypatch.setattr(
         run_training.sys,
         "argv",
@@ -487,19 +491,22 @@ def test_parse_args_accepts_generic_identity_and_stop_step(monkeypatch):
             "--output_dir",
             "run",
             "--candidate_id",
-            "B0-reference",
+            "E1-density-absgrad-t04-v1",
             "--experiment_stage",
-            "reference",
+            "confirm",
+            "--authorized_candidate_id",
+            "E1-density-absgrad-t04-v1",
             "--stop_step",
-            "7000",
+            "15000",
         ],
     )
 
     args = run_training.parse_args()
 
-    assert args.candidate_id == "B0-reference"
-    assert args.experiment_stage == "reference"
-    assert args.stop_step == 7_000
+    assert args.candidate_id == "E1-density-absgrad-t04-v1"
+    assert args.experiment_stage == "confirm"
+    assert args.authorized_candidate_id == "E1-density-absgrad-t04-v1"
+    assert args.stop_step == 15_000
 
 
 def test_generic_identity_is_all_or_none_and_uses_stage_candidate_contract():
@@ -507,6 +514,10 @@ def test_generic_identity_is_all_or_none_and_uses_stage_candidate_contract():
 
     with pytest.raises(ValueError, match="generic experiment"):
         run_training.validate_generic_experiment_args(_args(stop_step=100))
+    with pytest.raises(ValueError, match="generic experiment"):
+        run_training.validate_generic_experiment_args(
+            _args(authorized_candidate_id="E1-density-absgrad-t04-v1")
+        )
     with pytest.raises(ValueError, match="together"):
         run_training.validate_generic_experiment_args(
             _args(candidate_id="B0-reference")
@@ -524,6 +535,47 @@ def test_generic_identity_is_all_or_none_and_uses_stage_candidate_contract():
     with pytest.raises(ValueError, match="screen"):
         run_training.validate_generic_experiment_args(
             _generic_args("screen", "B0-reference")
+        )
+
+
+@pytest.mark.parametrize("stage", ("reference", "screen"))
+def test_generic_early_stages_reject_candidate_authorization(stage):
+    candidate_id = (
+        "B0-reference" if stage == "reference" else "E1-density-absgrad-t04-v1"
+    )
+
+    with pytest.raises(ValueError, match="authorization.*absent"):
+        run_training.validate_generic_experiment_args(
+            _generic_args(
+                stage,
+                candidate_id,
+                authorized_candidate_id=candidate_id,
+            )
+        )
+
+
+@pytest.mark.parametrize("stage", ("confirm", "production"))
+@pytest.mark.parametrize(
+    "authorized_candidate_id",
+    (None, "E1-density-scale005-v1"),
+)
+def test_generic_late_stages_require_explicit_matching_candidate_authorization(
+    stage, authorized_candidate_id
+):
+    candidate_id = "E1-density-absgrad-t04-v1"
+
+    with pytest.raises(ValueError, match="authorization.*match candidate_id"):
+        run_training.validate_generic_experiment_args(
+            _generic_args(
+                stage,
+                candidate_id,
+                max_steps=30_000,
+                stop_step=30_000,
+                checkpoint_every=3_000,
+                rolling_checkpoint=True,
+                internal_holdout=stage == "confirm",
+                authorized_candidate_id=authorized_candidate_id,
+            )
         )
 
 
@@ -668,6 +720,113 @@ def test_experiment_resource_summary_uses_summary_and_metric_records(tmp_path):
         "peak_gaussians": 13,
         "final_num_gaussians": 11,
     }
+
+
+def test_resumed_training_summary_merge_accumulates_resources_only():
+    prior = {
+        "total_steps": 15_000,
+        "total_time_seconds": 120.5,
+        "max_vram_mb": 4096.0,
+        "final_num_gaussians": 10,
+    }
+    current = {
+        "total_steps": 30_000,
+        "total_time_seconds": 180.25,
+        "max_vram_mb": 3584.0,
+        "final_num_gaussians": 12,
+        "current_segment_field": "authoritative",
+    }
+
+    merged = run_training.merge_resumed_training_summaries(prior, current)
+
+    assert merged == {
+        **current,
+        "total_time_seconds": 300.75,
+        "max_vram_mb": 4096.0,
+    }
+    assert prior["total_time_seconds"] == 120.5
+    assert current["total_time_seconds"] == 180.25
+
+
+@pytest.mark.parametrize(
+    "source, field, value",
+    (
+        ("prior", "total_time_seconds", True),
+        ("prior", "max_vram_mb", -1.0),
+        ("current", "total_time_seconds", "180.0"),
+        ("current", "max_vram_mb", float("inf")),
+        ("current", "total_time_seconds", float("nan")),
+    ),
+)
+def test_resumed_training_summary_merge_rejects_invalid_resources(
+    source, field, value
+):
+    prior = {"total_time_seconds": 120.0, "max_vram_mb": 4096.0}
+    current = {"total_time_seconds": 180.0, "max_vram_mb": 3584.0}
+    (prior if source == "prior" else current)[field] = value
+
+    with pytest.raises(ValueError, match=f"{source} {field}.*finite nonnegative"):
+        run_training.merge_resumed_training_summaries(prior, current)
+
+
+def test_finalize_generic_resume_summary_feeds_merged_experiment_resources(tmp_path):
+    output = tmp_path / "confirm"
+    prior = {
+        "total_steps": 15_000,
+        "total_time_seconds": 120.0,
+        "max_vram_mb": 4096.0,
+        "final_num_gaussians": 10,
+    }
+    current = {
+        "total_steps": 30_000,
+        "total_time_seconds": 180.0,
+        "max_vram_mb": 3584.0,
+        "final_num_gaussians": 12,
+    }
+    run_training.write_json_record(output / "summary.json", current)
+    (output / "metrics.jsonl").write_text(
+        "\n".join(
+            json.dumps({"step": step, "num_gaussians": count})
+            for step, count in ((15_000, 10), (30_000, 12))
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    run_training.finalize_generic_resume_summary(
+        output,
+        prior,
+        optimization_ran=True,
+    )
+
+    assert run_training.build_experiment_resource_summary(output) == {
+        "total_time_seconds": 300.0,
+        "max_vram_mb": 4096.0,
+        "peak_gaussians": 12,
+        "final_num_gaussians": 12,
+    }
+    assert run_training.read_json_record(output / "summary.json")["total_steps"] == 30_000
+
+
+def test_finalize_generic_resume_summary_does_not_double_count_without_optimization(
+    tmp_path,
+):
+    output = tmp_path / "confirm"
+    prior = {
+        "total_steps": 30_000,
+        "total_time_seconds": 300.0,
+        "max_vram_mb": 4096.0,
+        "final_num_gaussians": 12,
+    }
+    run_training.write_json_record(output / "summary.json", prior)
+
+    run_training.finalize_generic_resume_summary(
+        output,
+        prior,
+        optimization_ran=False,
+    )
+
+    assert run_training.read_json_record(output / "summary.json") == prior
 
 
 def test_generic_internal_holdout_writes_all_module_one_reports(

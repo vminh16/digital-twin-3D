@@ -114,6 +114,12 @@ def parse_args():
         help="Generic experiment stage.",
     )
     parser.add_argument(
+        "--authorized_candidate_id",
+        type=str,
+        default=None,
+        help="Candidate identity authorized by an external decision artifact.",
+    )
+    parser.add_argument(
         "--checkpoint_every",
         type=int,
         default=3000,
@@ -290,16 +296,20 @@ def validate_full_length_args(args) -> None:
 
 def _generic_experiment(args, scene_id: str) -> Experiment:
     stage = ExperimentStage(args.experiment_stage)
-    authorization = {}
-    if stage is ExperimentStage.CONFIRM:
-        authorization["authorized_scene_winner"] = args.candidate_id
-    elif stage is ExperimentStage.PRODUCTION:
-        authorization["authorized_cohort_candidate"] = args.candidate_id
     return Experiment(
         stage=stage,
         scene_id=scene_id,
         candidate_id=args.candidate_id,
-        **authorization,
+        authorized_scene_winner=(
+            args.authorized_candidate_id
+            if stage is ExperimentStage.CONFIRM
+            else None
+        ),
+        authorized_cohort_candidate=(
+            args.authorized_candidate_id
+            if stage is ExperimentStage.PRODUCTION
+            else None
+        ),
     )
 
 
@@ -307,8 +317,11 @@ def validate_generic_experiment_args(args) -> None:
     candidate_id = args.candidate_id
     stage_name = args.experiment_stage
     if candidate_id is None and stage_name is None:
-        if args.stop_step is not None:
-            raise ValueError("stop_step is only supported for a generic experiment")
+        if args.stop_step is not None or args.authorized_candidate_id is not None:
+            raise ValueError(
+                "stop_step and authorized_candidate_id are only supported for a "
+                "generic experiment"
+            )
         return
     if candidate_id is None or stage_name is None:
         raise ValueError("candidate_id and experiment_stage must be supplied together")
@@ -319,6 +332,13 @@ def validate_generic_experiment_args(args) -> None:
         or args.backend_qualification
     ):
         raise ValueError("generic experiment identity cannot be combined with legacy modes")
+
+    stage = ExperimentStage(stage_name)
+    if stage in (ExperimentStage.REFERENCE, ExperimentStage.SCREEN):
+        if args.authorized_candidate_id is not None:
+            raise ValueError("generic authorization must be absent for reference/screen")
+    elif args.authorized_candidate_id != candidate_id:
+        raise ValueError("generic authorization must match candidate_id")
 
     experiment = _generic_experiment(args, COHORT_SCENE_IDS[0])
     common_runtime = (
@@ -685,6 +705,49 @@ def read_json_record(path: Path) -> dict:
     return record
 
 
+def _validated_summary_resources(summary: dict, source: str) -> tuple[float, float]:
+    values = []
+    for field in ("total_time_seconds", "max_vram_mb"):
+        value = summary[field]
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(value)
+            or value < 0.0
+        ):
+            raise ValueError(
+                f"{source} {field} must be a finite nonnegative number"
+            )
+        values.append(float(value))
+    return values[0], values[1]
+
+
+def merge_resumed_training_summaries(prior: dict, current: dict) -> dict:
+    prior_time, prior_vram = _validated_summary_resources(prior, "prior")
+    current_time, current_vram = _validated_summary_resources(current, "current")
+    return {
+        **current,
+        "total_time_seconds": prior_time + current_time,
+        "max_vram_mb": max(prior_vram, current_vram),
+    }
+
+
+def finalize_generic_resume_summary(
+    output_dir: Path,
+    prior_summary: dict | None,
+    *,
+    optimization_ran: bool,
+) -> None:
+    if prior_summary is None or not optimization_ran:
+        return
+    summary_path = Path(output_dir) / "summary.json"
+    current_summary = read_json_record(summary_path)
+    write_json_record(
+        summary_path,
+        merge_resumed_training_summaries(prior_summary, current_summary),
+    )
+
+
 def _read_metric_records(path: Path) -> list[dict]:
     source = Path(path)
     if not source.is_file():
@@ -916,6 +979,13 @@ def main():
         print(f"Resuming training from checkpoint: {args.resume}")
         trainer.resume(args.resume)
 
+    prior_generic_summary = None
+    if args.candidate_id is not None and args.resume is not None:
+        prior_generic_summary = read_json_record(
+            Path(args.output_dir) / "summary.json"
+        )
+        _validated_summary_resources(prior_generic_summary, "prior")
+
     previews = Path(args.output_dir) / "train_previews"
     initial_metrics_path = previews / "initial_metrics.json"
     if args.resume:
@@ -944,7 +1014,8 @@ def main():
 
     # 8. Start optimization run
     target_step = training_target_step(args)
-    if optimization_required(trainer.start_step, target_step):
+    optimization_ran = optimization_required(trainer.start_step, target_step)
+    if optimization_ran:
         print(f"Starting optimization through step {target_step}...")
         trainer.train(
             stop_step=target_step,
@@ -956,6 +1027,11 @@ def main():
         )
     else:
         print(f"Checkpoint is already at step {target_step}; finalizing artifacts...")
+    finalize_generic_resume_summary(
+        Path(args.output_dir),
+        prior_generic_summary,
+        optimization_ran=optimization_ran,
+    )
     final_metrics = trainer.evaluate_train_view(
         0,
         render_path=previews / f"step_{target_step:09d}.png",
