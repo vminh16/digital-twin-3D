@@ -31,7 +31,7 @@
 - Consumes: dataset samples exposing `image`, `valid_mask`, and `image_name`; a dataset exposing `manifest.scene_id`; PNG validation renders.
 - Produces: `detail_metrics(prediction, target, valid_mask=None) -> dict[str, float]` and `evaluate_detail_directory(dataset, render_dir) -> dict[str, object]`.
 
-- [ ] **Step 1: Write tests for identity, blur, noise, shifted edges, invalid arrays, masks, and render-directory identity**
+- [x] **Step 1: Write tests for identity, blur, noise, shifted edges, invalid arrays, masks, and render-directory identity**
 
 ```python
 from types import SimpleNamespace
@@ -76,7 +76,7 @@ def test_blur_noise_and_shift_activate_expected_diagnostics():
 
 Add focused tests that reject non-RGB, mismatched, non-finite, out-of-range, and invalid-mask inputs. Add a tiny fake dataset test proving invalid pixels are replaced by reference values, output names are canonical PNG names, missing files fail, extra files fail, and `.JPG`/`.png` name collisions fail.
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 Run:
 
@@ -86,7 +86,7 @@ pytest -q tests/unit/test_detail_metrics.py
 
 Expected: collection fails with `ModuleNotFoundError: No module named 'bts_nvs.evaluation.detail_metrics'`.
 
-- [ ] **Step 3: Implement the minimal detail module**
+- [x] **Step 3: Implement the minimal detail module**
 
 Implement fixed luminance, 3x3 Sobel magnitude, 3x3 Laplacian, target top-10-percent edge mask, target bottom-50-percent flat mask, and a symmetric edge distance normalized by image diagonal. Both-empty edge masks return `0.0`; exactly-one-empty returns `1.0`. Restrict aggregates to valid pixels and replace invalid prediction pixels with target pixels.
 
@@ -105,7 +105,7 @@ Implement fixed luminance, 3x3 Sobel magnitude, 3x3 Laplacian, target top-10-per
 }
 ```
 
-- [ ] **Step 4: Run focused and adjacent metric tests**
+- [x] **Step 4: Run focused and adjacent metric tests**
 
 Run:
 
@@ -115,7 +115,7 @@ pytest -q tests/unit/test_detail_metrics.py tests/unit/test_metrics.py tests/uni
 
 Expected: all tests pass.
 
-- [ ] **Step 5: Commit Task 1**
+- [x] **Step 5: Commit Task 1**
 
 ```bash
 git add src/bts_nvs/evaluation/detail_metrics.py tests/unit/test_detail_metrics.py
@@ -132,7 +132,7 @@ git commit -m "feat: add validation detail diagnostics"
 - Consumes: `SceneManifest`, validated `HoldoutSplit`, and `manifest_pose_distance_matrix()` from `bts_nvs.data.holdout`.
 - Produces: `assign_pose_strata(distances: Mapping[str, float]) -> dict[str, str]`, `build_pose_strata(manifest, split) -> dict[str, object]`, and `save_pose_strata(report, path) -> None`.
 
-- [ ] **Step 1: Write tests for deterministic tertiles and nearest retained-train pose metadata**
+- [x] **Step 1: Write tests for deterministic tertiles and nearest retained-train pose metadata**
 
 ```python
 def test_assign_pose_strata_is_order_independent_and_exhaustive():
@@ -158,7 +158,7 @@ def test_build_pose_strata_records_nearest_retained_train_camera():
 
 Also test duplicate/non-finite distance rejection, deterministic tie-breaking by filename, canonical JSON round-trip, and rejection when a split does not match the manifest.
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 Run:
 
@@ -168,7 +168,7 @@ pytest -q tests/unit/test_pose_strata.py
 
 Expected: collection fails with `ModuleNotFoundError: No module named 'bts_nvs.evaluation.pose_strata'`.
 
-- [ ] **Step 3: Implement deterministic pose strata**
+- [x] **Step 3: Implement deterministic pose strata**
 
 Use existing combined pose distance to select the nearest retained training camera. Record separate normalized center distance and optical-axis angle in degrees. Sort validation records by `(pose_distance, image_name)`, partition ordered indices with `numpy.array_split(..., 3)`, and assign labels in `easy`, `medium`, `hard` order.
 
@@ -196,7 +196,7 @@ Return:
 
 Save JSON atomically with sorted keys, finite values, UTF-8, and one trailing newline.
 
-- [ ] **Step 4: Run focused and existing holdout tests**
+- [x] **Step 4: Run focused and existing holdout tests**
 
 Run:
 
@@ -206,7 +206,7 @@ pytest -q tests/unit/test_pose_strata.py tests/unit/test_holdout.py
 
 Expected: all tests pass.
 
-- [ ] **Step 5: Commit Task 2**
+- [x] **Step 5: Commit Task 2**
 
 ```bash
 git add src/bts_nvs/evaluation/pose_strata.py tests/unit/test_pose_strata.py
@@ -223,7 +223,7 @@ git commit -m "feat: stratify validation cameras by pose"
 - Consumes: existing per-image `psnr_db`/`ssim`/`lpips` validation report, Task 1 detail report, Task 2 pose-strata report, immutable identity fields, and a resource summary.
 - Produces: `local_score50(metrics) -> float`, `build_experiment_report(...) -> dict[str, object]`, and `save_experiment_report(report, path) -> None`.
 
-- [ ] **Step 1: Write tests for valid aggregation, hard-stratum reporting, set mismatches, hashes, resources, and canonical JSON**
+- [x] **Step 1: Write tests for valid aggregation, hard-stratum reporting, set mismatches, hashes, resources, and canonical JSON**
 
 ```python
 def test_build_experiment_report_aggregates_matching_images_by_stratum():
@@ -256,7 +256,7 @@ non-finite metrics/resources, non-positive steps, empty IDs, malformed SHA-256
 values, and negative Gaussian/resource values. Verify save is byte-identical on
 repeat and contains neither `NaN` nor `Infinity`.
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 Run:
 
@@ -266,7 +266,7 @@ pytest -q tests/unit/test_experiment_report.py
 
 Expected: collection fails with `ModuleNotFoundError: No module named 'bts_nvs.evaluation.experiment_report'`.
 
-- [ ] **Step 3: Implement report validation and aggregation**
+- [x] **Step 3: Implement report validation and aggregation**
 
 Use the fixed local diagnostic formula:
 
@@ -280,7 +280,7 @@ Aggregate all numeric image metrics overall and separately for `easy`,
 training internals. Return schema version 1 with exact scene/candidate/step
 identity and canonical dictionaries.
 
-- [ ] **Step 4: Run the complete Module 1 focused suite**
+- [x] **Step 4: Run the complete Module 1 focused suite**
 
 Run:
 
@@ -296,7 +296,7 @@ pytest -q \
 
 Expected: all tests pass.
 
-- [ ] **Step 5: Run the full CPU unit suite**
+- [x] **Step 5: Run the full CPU unit suite**
 
 Run:
 
@@ -306,7 +306,13 @@ pytest -q tests/unit
 
 Expected: all unit tests pass. GPU integration tests are not part of Module 1.
 
-- [ ] **Step 6: Commit Task 3**
+Observed on the local Windows environment: `335 passed, 5 skipped, 25 failed`.
+All 25 failures are in `tests/unit/test_trainer_loop.py` and stop during
+`Trainer` construction because the local environment has no installed
+`gsplat` distribution metadata. The focused Module 1 suite passes independently;
+no trainer or CUDA dependency was changed to mask this environment limitation.
+
+- [x] **Step 6: Commit Task 3**
 
 ```bash
 git add src/bts_nvs/evaluation/experiment_report.py tests/unit/test_experiment_report.py
@@ -322,7 +328,7 @@ git commit -m "feat: build scene experiment reports"
 - Consumes: all three task commits and the umbrella spec.
 - Produces: checked task boxes and a verified Module 1 handoff; no production behavior.
 
-- [ ] **Step 1: Verify scope and changed files**
+- [x] **Step 1: Verify scope and changed files**
 
 Run:
 
@@ -332,7 +338,7 @@ git diff --name-status c78025c..HEAD
 
 Expected: only this plan, three evaluation modules, and three focused unit-test files.
 
-- [ ] **Step 2: Verify formatting and incomplete markers**
+- [x] **Step 2: Verify formatting and incomplete markers**
 
 Run:
 
@@ -347,7 +353,7 @@ rg -n "TB[D]|TO[D]O|implement[ ]later|fill[ ]in details|similar[ ]to Task" \
 
 Expected: `git diff --check` succeeds and `rg` finds no matches.
 
-- [ ] **Step 3: Record the completed checklist and commit only the plan update**
+- [x] **Step 3: Record the completed checklist and commit only the plan update**
 
 ```bash
 git add docs/superpowers/plans/2026-07-22-validation-foundation.md
