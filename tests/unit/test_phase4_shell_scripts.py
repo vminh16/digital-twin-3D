@@ -10,6 +10,7 @@ JPEG_SUBMISSION_SCRIPT = REPO_ROOT / "scripts" / "prepare_jpeg_submission.sh"
 JPEG_SUBMISSION_CMD = REPO_ROOT / "scripts" / "prepare_jpeg_submission.cmd"
 FULL_TRAINING_SCRIPT = REPO_ROOT / "scripts" / "run_phase4_full_training.sh"
 INFERENCE_SCRIPT = REPO_ROOT / "scripts" / "run_phase4_inference.sh"
+SCENE_OPT_REFERENCE_SCRIPT = REPO_ROOT / "scripts" / "run_scene_opt_references.sh"
 
 
 def _read_script(path: Path) -> str:
@@ -191,6 +192,40 @@ def test_inference_script_writes_direct_scene_outputs_without_evaluation():
         "--lpips_backbone",
         "run_benchmark",
         "for scene",
+        "rm ",
+    ):
+        assert forbidden not in script
+
+
+def test_scene_opt_reference_script_is_a_thin_reusable_deployment_record():
+    script = _read_script(SCENE_OPT_REFERENCE_SCRIPT)
+
+    assert script.startswith("#!/usr/bin/env bash\nset -euo pipefail\n")
+    assert "-m bts_nvs.experiments.run_experiment" in script
+    assert '"validate"' in script
+    assert '"run"' in script
+    assert "--stage reference" in script
+    assert "--candidate-id B0-reference" in script
+    assert "--stop-step 7000" in script
+    assert "deployment_commands.log" in script
+    assert "data/bts_scenes" in script
+    assert "runs/manifests" in script
+    assert "data/auxiliary" in script
+    assert "runs/manifests_auxiliary" in script
+    for scene_id in (
+        "HCM0539",
+        "HCM0421",
+        "HCM0644",
+        "chair",
+        "bonsai",
+        "HCM0674",
+        "HCM0540",
+    ):
+        assert script.count(scene_id) >= 1
+    for forbidden in (
+        "run_training.py",
+        "--qualification_candidate",
+        "B0-compact",
         "rm ",
     ):
         assert forbidden not in script

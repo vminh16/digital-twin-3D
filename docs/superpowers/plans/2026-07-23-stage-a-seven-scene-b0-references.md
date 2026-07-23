@@ -109,19 +109,10 @@ explicit review.
 
 ## Task 2 — First reference canary
 
-Run only `HCM0539`:
+Run only `HCM0539` through the checked-in deployment record:
 
 ```bash
-python -m bts_nvs.experiments.run_experiment run \
-  --repo-root "$PWD" \
-  --scenes-root "$PWD/data/bts_scenes" \
-  --manifests-root "$PWD/runs/manifests" \
-  --backend-root "$PWD/runs/phase4/backend_qualification" \
-  --experiment-root "$PWD/runs/scene_opt_v1" \
-  --stage reference \
-  --scene-id HCM0539 \
-  --candidate-id B0-reference \
-  --stop-step 7000
+bash scripts/run_scene_opt_references.sh HCM0539
 ```
 
 The canary passes only if the command exits zero and post-run artifact
@@ -135,13 +126,24 @@ find runs/scene_opt_v1/reference/HCM0539 -type f \
 Expected output is empty. Preserve metrics and reports; do not create an
 additional model checkpoint.
 
+Every expanded Python command and the current Git commit are appended to:
+
+```text
+runs/scene_opt_v1/deployment_commands.log
+```
+
+Rerunning the command does not retrain a valid reference. It invokes the
+generic `validate` operation and skips only after the complete artifact
+contract passes. A partial, stale or mismatched directory fails and stops the
+script.
+
 ## Task 3 — Second B1 reference
 
 After reviewing HCM0539 runtime, peak VRAM, Gaussian growth, finite loss and
-validation completeness, execute the identical command with:
+validation completeness, execute:
 
-```text
---scene-id HCM0421
+```bash
+bash scripts/run_scene_opt_references.sh HCM0421
 ```
 
 Stop Stage A immediately for OOM, non-finite metric/loss, artifact validation
@@ -163,6 +165,22 @@ For `chair` and `bonsai`, replace only:
 ```
 
 All HCM scenes continue to use `data/bts_scenes` and `runs/manifests`.
+
+After the two canaries pass, run all seven in the locked order:
+
+```bash
+bash scripts/run_scene_opt_references.sh
+```
+
+The first two are validated and skipped; the remaining five run sequentially.
+To override runtime roots without editing the script:
+
+```bash
+PYTHON_BIN="$PWD/.venv/bin/python" \
+BTS_EXPERIMENT_ROOT="$PWD/runs/scene_opt_v1" \
+BTS_BACKEND_ROOT="$PWD/runs/phase4/backend_qualification" \
+bash scripts/run_scene_opt_references.sh
+```
 
 Do not use parallel scene training on one L4. Parallelism would change memory
 headroom and invalidate resource comparisons without reducing total GPU work

@@ -7,7 +7,12 @@ from bts_nvs.experiments.artifacts import ArtifactValidationResult
 from bts_nvs.experiments.decisions import build_cohort_decision
 from bts_nvs.experiments.experiment import COHORT_SCENE_IDS, ExperimentStage
 from bts_nvs.experiments.provenance import canonical_json_sha256, save_json_artifact
-from bts_nvs.experiments.run_experiment import main, run_one
+from bts_nvs.experiments.run_experiment import (
+    _validate_backend_config,
+    main,
+    run_one,
+    validate_existing,
+)
 
 
 def _scene_decision(
@@ -87,6 +92,10 @@ def _patch_valid_inputs(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
     monkeypatch.setattr(
         "bts_nvs.experiments.run_experiment._config_sha256",
         lambda path: "c" * 64,
+    )
+    monkeypatch.setattr(
+        "bts_nvs.experiments.run_experiment._validate_backend_config",
+        lambda path, decision: None,
     )
     monkeypatch.setattr(
         "bts_nvs.experiments.run_experiment.validate_run_artifacts",
@@ -301,3 +310,82 @@ def test_cli_parses_one_run_without_a_shell(
     ) == 0
     assert captured[0]["stage"] is ExperimentStage.SCREEN
     assert captured[0]["resume"] is False
+
+
+def test_validate_existing_reuses_full_artifact_validation_without_launch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = _paths(tmp_path)
+    calls = _patch_valid_inputs(monkeypatch)
+    output = paths["experiment_root"] / "reference" / "HCM0644"
+    output.mkdir(parents=True)
+    (output / "config.yaml").write_text("candidate_id: B0-reference\n", encoding="utf-8")
+
+    result = validate_existing(
+        **paths,
+        stage=ExperimentStage.REFERENCE,
+        scene_id="HCM0644",
+        candidate_id="B0-reference",
+        stop_step=7_000,
+    )
+
+    assert result.integrity_passed is True
+    assert calls == []
+
+
+def test_validate_existing_requires_a_completed_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = _paths(tmp_path)
+    _patch_valid_inputs(monkeypatch)
+
+    with pytest.raises(FileNotFoundError, match="existing experiment"):
+        validate_existing(
+            **paths,
+            stage=ExperimentStage.REFERENCE,
+            scene_id="HCM0644",
+            candidate_id="B0-reference",
+            stop_step=7_000,
+        )
+
+
+def test_existing_config_must_match_accepted_backend(tmp_path: Path) -> None:
+    config = tmp_path / "config.yaml"
+    config.write_text(
+        "optimizer_backend: adam\nprecision: fp32\n",
+        encoding="utf-8",
+    )
+    decision = SimpleNamespace(
+        optimizer_backend="adam-fused",
+        precision="amp-fp16",
+    )
+
+    with pytest.raises(ValueError, match="backend|precision"):
+        _validate_backend_config(config, decision)
+
+
+def test_cli_validate_dispatches_without_training(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured = []
+    monkeypatch.setattr(
+        "bts_nvs.experiments.run_experiment.validate_existing",
+        lambda **kwargs: captured.append(kwargs),
+    )
+
+    assert main(
+        [
+            "validate",
+            "--repo-root", str(tmp_path),
+            "--scenes-root", str(tmp_path),
+            "--manifests-root", str(tmp_path),
+            "--backend-root", str(tmp_path),
+            "--experiment-root", str(tmp_path),
+            "--stage", "reference",
+            "--scene-id", "HCM0644",
+            "--candidate-id", "B0-reference",
+            "--stop-step", "7000",
+        ]
+    ) == 0
+    assert captured[0]["stage"] is ExperimentStage.REFERENCE
+    assert "resume" not in captured[0]
