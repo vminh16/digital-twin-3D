@@ -38,6 +38,31 @@ confirmation or production.
 The generic runner enforces this contract and validates artifacts before a run
 is considered complete.
 
+Scene storage is split into two existing data profiles:
+
+| Profile | Scenes root | Manifests root | Scenes |
+|---|---|---|---|
+| BTS | `data/bts_scenes` | `runs/manifests` | five HCM scenes |
+| Auxiliary | `data/auxiliary` | `runs/manifests_auxiliary` | `chair`, `bonsai` |
+
+The experiment output root remains shared at `runs/scene_opt_v1`. A runner must
+select the correct input profile per scene; it must not copy auxiliary scenes
+into the canonical BTS pool.
+
+## Runtime reuse decision
+
+`scripts/run_phase4_qualification.sh` is historical baseline machinery, not a
+Stage A runner. Although it includes `B0-reference` at 7k, it is locked to six
+old calibration scenes, also runs `B0-compact`, invokes the legacy
+`--qualification_candidate` mode, writes `runs/phase4/qualification`, and emits
+the old aggregate decision. Executing it cannot create Stage A authorities.
+
+Stage A must reuse `bts_nvs.experiments.run_experiment.run_one` and the existing
+training entry point. Reusable orchestration may record a short deployment
+manifest or command, choose the BTS/auxiliary input profile, and invoke that
+generic runner sequentially. It must not copy training, validation, resume or
+decision logic into Bash.
+
 ## Execution order
 
 Run scenes sequentially on the single L4:
@@ -124,11 +149,20 @@ failure, unexpected checkpoint, uncontrolled Gaussian growth, or disk pressure.
 
 ## Task 4 — Remaining five references
 
-Run the same reference command sequentially for:
+Run the same generic reference operation sequentially for:
 
 ```text
 HCM0644 chair bonsai HCM0674 HCM0540
 ```
+
+For `chair` and `bonsai`, replace only:
+
+```text
+--scenes-root "$PWD/data/auxiliary"
+--manifests-root "$PWD/runs/manifests_auxiliary"
+```
+
+All HCM scenes continue to use `data/bts_scenes` and `runs/manifests`.
 
 Do not use parallel scene training on one L4. Parallelism would change memory
 headroom and invalidate resource comparisons without reducing total GPU work
