@@ -2,7 +2,9 @@
 
 **Date:** 2026-07-22
 
-**Status:** Approved umbrella design; module implementation is gated by this specification.
+**Status:** Current umbrella authority. Modules 1–3 are complete; Stage A
+seven-scene B0-reference execution is authorized but not yet evidenced in this
+workspace.
 
 **Execution branch:** `main`; this program does not create a new experiment branch.
 

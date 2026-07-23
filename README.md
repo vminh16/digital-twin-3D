@@ -24,7 +24,19 @@ Submission dùng JPEG quality 99, 4:4:4, optimized, non-progressive; ZIP cuối
 335 MB, dưới giới hạn 350 MB. Đây là kết quả từ evaluator chính thức, **không
 phải benchmark local**; cấu hình nội bộ của LPIPS/SSIM và `PSNR_max` chưa được
 xác nhận. Mọi thay đổi training, rendering hoặc codec sau mốc này phải dùng
-baseline/candidate ID mới. Hướng cải tiến tiếp theo chưa được chốt.
+baseline/candidate ID mới.
+
+## Trạng thái tối ưu hóa hiện tại
+
+Chương trình scene-specific đã hoàn thành Module 1–3: validation/detail audit,
+candidate registry và generic stage-first runner. NVIDIA L4 smoke gates đã
+được người dùng xác nhận pass. Stage A đã được phép chạy nhưng chưa có artifact
+`runs/scene_opt_v1` trong workspace này.
+
+Bước tiếp theo duy nhất được duyệt là tạo B0-reference 7k cho đủ bảy submission
+scene. Candidate screening và confirmation 30k chưa được phép chạy. Xem
+[documentation status](docs/README.md) và
+[Stage A execution plan](docs/superpowers/plans/2026-07-23-stage-a-seven-scene-b0-references.md).
 
 ## Cài đặt không dùng Docker
 

@@ -70,7 +70,12 @@ HCM0644 HCM0674 HCM0540 HCM0539 HCM0421 chair bonsai
 - Canonical research pool 18 BTS scene vẫn giữ riêng; hai auxiliary scene không
   được nhập vào pool đó hoặc dùng để suy luận cross-scene generalization.
 - Mọi thay đổi model, loss, optimizer, densification, renderer hoặc codec phải
-  tạo candidate/baseline ID mới. Hướng nghiên cứu tiếp theo chưa được phê duyệt.
+  tạo candidate/baseline ID mới.
+- Chương trình tối ưu scene-specific trong
+  `docs/superpowers/specs/2026-07-22-scene-specific-optimization-program-design.md`
+  là research authority hiện tại. Modules 1–3 đã hoàn tất; chỉ Stage A
+  `B0-reference` 7k được phép chạy tiếp. Candidate screen, confirmation và
+  production cần gate riêng theo spec.
 
 ## Evaluation metrics
 Final metric is a weighted composite, matching standard NVS benchmarking (Mip-NeRF / 3DGS-style evaluation):
