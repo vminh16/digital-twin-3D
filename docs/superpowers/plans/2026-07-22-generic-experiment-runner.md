@@ -123,7 +123,7 @@ separately, and never stage user-owned `.gitignore` or `docs/research/` changes.
 - [x] Run all Module 1--3 unit tests and existing trainer/evaluator tests.
 - [x] Run `git diff --check` and scan for Phase A/B/C names, revised opacity,
   hidden 0.0008 settings, duplicate training loops, and checkpoint buildup.
-- [ ] On the L4, run a one-step preflight and a synthetic resume smoke; do not
+- [x] On the L4, run a one-step preflight and a synthetic resume smoke; do not
   start a 7k scene run during Module 3 verification.
 - [x] Record exact local test counts and the pending VM commands in this plan.
 - [x] Commit the verification record. Passing this gate authorizes planning
@@ -147,7 +147,7 @@ Local verification on Windows:
 - Checkpoint policy remains zero model checkpoints at 7k and exactly one atomic
   `checkpoints/recovery.pt` at confirm/production; 15k preserves reports only.
 
-L4 verification remains required before this module gate can pass. Run only:
+L4 verification commands:
 
 ```bash
 BTS_RUN_CUDA_BACKEND_SMOKE=1 pytest -q tests/integration/test_cuda_backend_smoke.py
@@ -158,5 +158,10 @@ pytest -q \
 ```
 
 Do not launch a 7k scene run as part of this verification. Stage A remains
-unauthorized until both L4 commands pass and their exact output is recorded
-here.
+unauthorized until both L4 commands pass.
+
+VM evidence reported by the user on 2026-07-23: both requested smoke groups
+completed with three passing tests and no reported failure. The terminal
+transcript was not imported into this workspace, so this remains explicitly
+user-reported evidence. Module 3 is closed and Stage A B0-reference execution is
+authorized; this does not authorize Stage B1 candidate runs.
