@@ -1,0 +1,199 @@
+{
+  "algorithm": "nearest_train_tertiles_v1",
+  "holdout_algorithm": "pose_fps_guard2_v1",
+  "holdout_manifest_sha256": "c62ec9cf72bd3e34f2bc7a5c24254e5a875cc1a749fe31ad5c140d68ae8dced6",
+  "image_count": 27,
+  "images": {
+    "DJI_20241229171721_0002_V.JPG": {
+      "center_distance": 0.4721441534800167,
+      "nearest_train_image_name": "DJI_20241229171946_0074_V.JPG",
+      "pose_distance": 0.5158420087813088,
+      "rotation_angle_deg": 31.462455816930333,
+      "stratum": "medium"
+    },
+    "DJI_20241229171743_0003_V.JPG": {
+      "center_distance": 0.2931463490054805,
+      "nearest_train_image_name": "DJI_20241229172427_0268_V.JPG",
+      "pose_distance": 0.33289693178332735,
+      "rotation_angle_deg": 28.620419600049768,
+      "stratum": "medium"
+    },
+    "DJI_20241229171824_0010_V.JPG": {
+      "center_distance": 0.1038908806259699,
+      "nearest_train_image_name": "DJI_20241229171826_0012_V.JPG",
+      "pose_distance": 0.11933716579718773,
+      "rotation_angle_deg": 11.121325323276835,
+      "stratum": "easy"
+    },
+    "DJI_20241229171834_0020_V.JPG": {
+      "center_distance": 0.13102479743084203,
+      "nearest_train_image_name": "DJI_20241229172447_0283_V.JPG",
+      "pose_distance": 0.13271805889034835,
+      "rotation_angle_deg": 1.2191482508445446,
+      "stratum": "medium"
+    },
+    "DJI_20241229171842_0028_V.JPG": {
+      "center_distance": 0.12220599645066023,
+      "nearest_train_image_name": "DJI_20241229171844_0030_V.JPG",
+      "pose_distance": 0.13845998595209813,
+      "rotation_angle_deg": 11.70287244103529,
+      "stratum": "medium"
+    },
+    "DJI_20241229172020_0105_V.JPG": {
+      "center_distance": 0.11395079789061449,
+      "nearest_train_image_name": "DJI_20241229172022_0107_V.JPG",
+      "pose_distance": 0.13980402631682334,
+      "rotation_angle_deg": 18.61432446687038,
+      "stratum": "medium"
+    },
+    "DJI_20241229172027_0112_V.JPG": {
+      "center_distance": 0.10618480154749904,
+      "nearest_train_image_name": "DJI_20241229172029_0114_V.JPG",
+      "pose_distance": 0.12974924067903873,
+      "rotation_angle_deg": 16.966396174708585,
+      "stratum": "easy"
+    },
+    "DJI_20241229172034_0119_V.JPG": {
+      "center_distance": 0.09651417301638171,
+      "nearest_train_image_name": "DJI_20241229172036_0121_V.JPG",
+      "pose_distance": 0.12202777113585672,
+      "rotation_angle_deg": 18.369790646022008,
+      "stratum": "easy"
+    },
+    "DJI_20241229172040_0124_V.JPG": {
+      "center_distance": 0.15117989208341948,
+      "nearest_train_image_name": "DJI_20241229172004_0092_V.JPG",
+      "pose_distance": 0.17341282113915688,
+      "rotation_angle_deg": 16.007708920130927,
+      "stratum": "medium"
+    },
+    "DJI_20241229172044_0129_V.JPG": {
+      "center_distance": 0.12260980358174513,
+      "nearest_train_image_name": "DJI_20241229172011_0099_V.JPG",
+      "pose_distance": 0.1239533904748844,
+      "rotation_angle_deg": 0.9673825630602667,
+      "stratum": "easy"
+    },
+    "DJI_20241229172146_0170_V.JPG": {
+      "center_distance": 0.06859690412651268,
+      "nearest_train_image_name": "DJI_20241229172551_0326_V.JPG",
+      "pose_distance": 0.09323635667756922,
+      "rotation_angle_deg": 17.740405836760722,
+      "stratum": "easy"
+    },
+    "DJI_20241229172159_0183_V.JPG": {
+      "center_distance": 0.06618051225361465,
+      "nearest_train_image_name": "DJI_20241229172523_0303_V.JPG",
+      "pose_distance": 0.0883534526051902,
+      "rotation_angle_deg": 15.964517053134388,
+      "stratum": "easy"
+    },
+    "DJI_20241229172314_0228_V.JPG": {
+      "center_distance": 0.643321015162449,
+      "nearest_train_image_name": "DJI_20241229171846_0032_V.JPG",
+      "pose_distance": 0.6643152718920597,
+      "rotation_angle_deg": 15.115864845319752,
+      "stratum": "hard"
+    },
+    "DJI_20241229172317_0231_V.JPG": {
+      "center_distance": 0.6271441217241313,
+      "nearest_train_image_name": "DJI_20241229171848_0034_V.JPG",
+      "pose_distance": 0.648782595685838,
+      "rotation_angle_deg": 15.579701252428857,
+      "stratum": "hard"
+    },
+    "DJI_20241229172319_0233_V.JPG": {
+      "center_distance": 0.6280621688439416,
+      "nearest_train_image_name": "DJI_20241229171818_0004_V.JPG",
+      "pose_distance": 0.6494163423662708,
+      "rotation_angle_deg": 15.375004936077017,
+      "stratum": "hard"
+    },
+    "DJI_20241229172322_0236_V.JPG": {
+      "center_distance": 0.6304020181099339,
+      "nearest_train_image_name": "DJI_20241229171822_0008_V.JPG",
+      "pose_distance": 0.6525414549919605,
+      "rotation_angle_deg": 15.940394555059134,
+      "stratum": "hard"
+    },
+    "DJI_20241229172325_0239_V.JPG": {
+      "center_distance": 0.6463685470558175,
+      "nearest_train_image_name": "DJI_20241229171826_0012_V.JPG",
+      "pose_distance": 0.6722655708267027,
+      "rotation_angle_deg": 18.645857115037334,
+      "stratum": "hard"
+    },
+    "DJI_20241229172327_0241_V.JPG": {
+      "center_distance": 0.6258907695688378,
+      "nearest_train_image_name": "DJI_20241229171826_0012_V.JPG",
+      "pose_distance": 0.6477706633424527,
+      "rotation_angle_deg": 15.753523517002748,
+      "stratum": "hard"
+    },
+    "DJI_20241229172329_0243_V.JPG": {
+      "center_distance": 0.6258445083701798,
+      "nearest_train_image_name": "DJI_20241229171828_0014_V.JPG",
+      "pose_distance": 0.647652761060336,
+      "rotation_angle_deg": 15.701941936912414,
+      "stratum": "medium"
+    },
+    "DJI_20241229172333_0247_V.JPG": {
+      "center_distance": 0.6316853429043864,
+      "nearest_train_image_name": "DJI_20241229171831_0017_V.JPG",
+      "pose_distance": 0.655106748955968,
+      "rotation_angle_deg": 16.86341235713873,
+      "stratum": "hard"
+    },
+    "DJI_20241229172335_0249_V.JPG": {
+      "center_distance": 0.6447178457473972,
+      "nearest_train_image_name": "DJI_20241229171836_0022_V.JPG",
+      "pose_distance": 0.6734352073837997,
+      "rotation_angle_deg": 20.676500378209795,
+      "stratum": "hard"
+    },
+    "DJI_20241229172337_0251_V.JPG": {
+      "center_distance": 0.6260662879177512,
+      "nearest_train_image_name": "DJI_20241229171836_0022_V.JPG",
+      "pose_distance": 0.6470867951494143,
+      "rotation_angle_deg": 15.134765206797368,
+      "stratum": "medium"
+    },
+    "DJI_20241229172340_0254_V.JPG": {
+      "center_distance": 0.6225514300439173,
+      "nearest_train_image_name": "DJI_20241229171839_0025_V.JPG",
+      "pose_distance": 0.643229008600064,
+      "rotation_angle_deg": 14.887856560425657,
+      "stratum": "medium"
+    },
+    "DJI_20241229172343_0257_V.JPG": {
+      "center_distance": 0.6603029727942266,
+      "nearest_train_image_name": "DJI_20241229171844_0030_V.JPG",
+      "pose_distance": 0.6880962309158805,
+      "rotation_angle_deg": 20.011145847590765,
+      "stratum": "hard"
+    },
+    "DJI_20241229172525_0305_V.JPG": {
+      "center_distance": 0.07782663867497662,
+      "nearest_train_image_name": "DJI_20241229172206_0190_V.JPG",
+      "pose_distance": 0.10404193212338345,
+      "rotation_angle_deg": 18.87501128285291,
+      "stratum": "easy"
+    },
+    "DJI_20241229172549_0324_V.JPG": {
+      "center_distance": 0.06558684680639798,
+      "nearest_train_image_name": "DJI_20241229171928_0061_V.JPG",
+      "pose_distance": 0.10991941739876698,
+      "rotation_angle_deg": 31.919450826505688,
+      "stratum": "easy"
+    },
+    "DJI_20241229172554_0329_V.JPG": {
+      "center_distance": 0.08610919293405625,
+      "nearest_train_image_name": "DJI_20241229172532_0312_V.JPG",
+      "pose_distance": 0.09268652218126705,
+      "rotation_angle_deg": 4.735677057991774,
+      "stratum": "easy"
+    }
+  },
+  "scene_id": "HCM0540",
+  "schema_version": 1
+}

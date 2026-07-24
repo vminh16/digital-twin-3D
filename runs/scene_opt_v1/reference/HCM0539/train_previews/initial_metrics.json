@@ -1,0 +1,8 @@
+{
+  "alpha_coverage": 1.0,
+  "psnr_db": 12.301894710275985,
+  "psnr_is_infinite": false,
+  "rgb_std": 0.0841280072927475,
+  "ssim": 0.35828888416290283,
+  "valid_fraction": 0.9897953271865845
+}

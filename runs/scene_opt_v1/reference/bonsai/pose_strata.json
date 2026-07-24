@@ -1,0 +1,178 @@
+{
+  "algorithm": "nearest_train_tertiles_v1",
+  "holdout_algorithm": "pose_fps_guard2_v1",
+  "holdout_manifest_sha256": "6cba31bb686b0073fc4b639425de55933fc9627d2b848d80f1e73053752271b1",
+  "image_count": 24,
+  "images": {
+    "frame_000050.jpg": {
+      "center_distance": 0.12014722871503078,
+      "nearest_train_image_name": "frame_001480.jpg",
+      "pose_distance": 0.1345559939848024,
+      "rotation_angle_deg": 10.374310994235566,
+      "stratum": "medium"
+    },
+    "frame_000100.jpg": {
+      "center_distance": 0.2204727089330116,
+      "nearest_train_image_name": "frame_001450.jpg",
+      "pose_distance": 0.22936620240608543,
+      "rotation_angle_deg": 6.403315300613159,
+      "stratum": "hard"
+    },
+    "frame_000140.jpg": {
+      "center_distance": 0.12004007260524442,
+      "nearest_train_image_name": "frame_000160.jpg",
+      "pose_distance": 0.12803210771497853,
+      "rotation_angle_deg": 5.754265279008553,
+      "stratum": "medium"
+    },
+    "frame_000190.jpg": {
+      "center_distance": 0.05865548431870182,
+      "nearest_train_image_name": "frame_000210.jpg",
+      "pose_distance": 0.06582336198925338,
+      "rotation_angle_deg": 5.160871922797122,
+      "stratum": "easy"
+    },
+    "frame_000260.jpg": {
+      "center_distance": 0.1487889680378256,
+      "nearest_train_image_name": "frame_000240.jpg",
+      "pose_distance": 0.15833657711789423,
+      "rotation_angle_deg": 6.874278537649408,
+      "stratum": "medium"
+    },
+    "frame_000300.jpg": {
+      "center_distance": 0.4188512570701732,
+      "nearest_train_image_name": "frame_000240.jpg",
+      "pose_distance": 0.4455164060356077,
+      "rotation_angle_deg": 19.198907255112807,
+      "stratum": "hard"
+    },
+    "frame_000340.jpg": {
+      "center_distance": 0.22442008690091914,
+      "nearest_train_image_name": "frame_000360.jpg",
+      "pose_distance": 0.23744138375423493,
+      "rotation_angle_deg": 9.375333734387363,
+      "stratum": "hard"
+    },
+    "frame_000390.jpg": {
+      "center_distance": 0.2820904339615916,
+      "nearest_train_image_name": "frame_000360.jpg",
+      "pose_distance": 0.3020145025649814,
+      "rotation_angle_deg": 14.345329394440647,
+      "stratum": "hard"
+    },
+    "frame_000440.jpg": {
+      "center_distance": 0.2178124630722489,
+      "nearest_train_image_name": "frame_000460.jpg",
+      "pose_distance": 0.23328068900184099,
+      "rotation_angle_deg": 11.1371226693063,
+      "stratum": "hard"
+    },
+    "frame_000480.jpg": {
+      "center_distance": 0.1843980357115832,
+      "nearest_train_image_name": "frame_002750.jpg",
+      "pose_distance": 0.2012838658986105,
+      "rotation_angle_deg": 12.157797734659654,
+      "stratum": "hard"
+    },
+    "frame_000520.jpg": {
+      "center_distance": 0.1949492184818174,
+      "nearest_train_image_name": "frame_000500.jpg",
+      "pose_distance": 0.2127327496494898,
+      "rotation_angle_deg": 12.804142440724123,
+      "stratum": "hard"
+    },
+    "frame_000590.jpg": {
+      "center_distance": 0.16666081260433108,
+      "nearest_train_image_name": "frame_000610.jpg",
+      "pose_distance": 0.17953817996235394,
+      "rotation_angle_deg": 9.271704497776462,
+      "stratum": "medium"
+    },
+    "frame_000650.jpg": {
+      "center_distance": 0.1778673411569735,
+      "nearest_train_image_name": "frame_000630.jpg",
+      "pose_distance": 0.19185034726229128,
+      "rotation_angle_deg": 10.067764395828807,
+      "stratum": "hard"
+    },
+    "frame_000690.jpg": {
+      "center_distance": 0.15406374717166266,
+      "nearest_train_image_name": "frame_000670.jpg",
+      "pose_distance": 0.16578087135863392,
+      "rotation_angle_deg": 8.436329414619335,
+      "stratum": "medium"
+    },
+    "frame_000730.jpg": {
+      "center_distance": 0.1461236692425901,
+      "nearest_train_image_name": "frame_000750.jpg",
+      "pose_distance": 0.15804121283459444,
+      "rotation_angle_deg": 8.58063138624312,
+      "stratum": "medium"
+    },
+    "frame_000890.jpg": {
+      "center_distance": 0.05423885069413716,
+      "nearest_train_image_name": "frame_000910.jpg",
+      "pose_distance": 0.06597723267125619,
+      "rotation_angle_deg": 8.451635023525697,
+      "stratum": "easy"
+    },
+    "frame_001040.jpg": {
+      "center_distance": 0.11207153835859741,
+      "nearest_train_image_name": "frame_001020.jpg",
+      "pose_distance": 0.13247486410520296,
+      "rotation_angle_deg": 14.690394537555994,
+      "stratum": "medium"
+    },
+    "frame_001260.jpg": {
+      "center_distance": 0.07687137856619301,
+      "nearest_train_image_name": "frame_001240.jpg",
+      "pose_distance": 0.09489768329524416,
+      "rotation_angle_deg": 12.978939404916822,
+      "stratum": "easy"
+    },
+    "frame_001310.jpg": {
+      "center_distance": 0.09875302655481313,
+      "nearest_train_image_name": "frame_001330.jpg",
+      "pose_distance": 0.11598403716484798,
+      "rotation_angle_deg": 12.406327639225095,
+      "stratum": "medium"
+    },
+    "frame_001390.jpg": {
+      "center_distance": 0.08012304774915031,
+      "nearest_train_image_name": "frame_001370.jpg",
+      "pose_distance": 0.08568356455211402,
+      "rotation_angle_deg": 4.003572098133873,
+      "stratum": "easy"
+    },
+    "frame_001720.jpg": {
+      "center_distance": 0.029373744457284204,
+      "nearest_train_image_name": "frame_001710.jpg",
+      "pose_distance": 0.03159866783266887,
+      "rotation_angle_deg": 1.601944830276958,
+      "stratum": "easy"
+    },
+    "frame_002050.jpg": {
+      "center_distance": 0.02406146048880106,
+      "nearest_train_image_name": "frame_000990.jpg",
+      "pose_distance": 0.03899328676898819,
+      "rotation_angle_deg": 10.750914921734733,
+      "stratum": "easy"
+    },
+    "frame_002240.jpg": {
+      "center_distance": 0.009841452606894488,
+      "nearest_train_image_name": "frame_002220.jpg",
+      "pose_distance": 0.01301281752429047,
+      "rotation_angle_deg": 2.283382740525106,
+      "stratum": "easy"
+    },
+    "frame_002480.jpg": {
+      "center_distance": 0.031861354389367,
+      "nearest_train_image_name": "frame_002510.jpg",
+      "pose_distance": 0.03679473616238126,
+      "rotation_angle_deg": 3.552034876570269,
+      "stratum": "easy"
+    }
+  },
+  "scene_id": "bonsai",
+  "schema_version": 1
+}
