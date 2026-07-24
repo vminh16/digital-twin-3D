@@ -1,0 +1,81 @@
+{
+  "decision_sha256": "2c5e1c1235ed3edb0f4a517c9a1c49a29529930cd6579ba6bba87c5d2daf16e0",
+  "decision_stage": "screen",
+  "evaluations": [
+    {
+      "candidate_id": "E1-density-absgrad-t04-v1",
+      "candidate_lpips": 0.15673787385225296,
+      "candidate_peak_gaussians": 4629254,
+      "candidate_symmetric_edge_distance": 0.000578151196373235,
+      "config_sha256": "607c24b8cd224ebde32720e64ac8d9fc522cdb288246dcb82a6de7a6ac87a007",
+      "deltas": {
+        "hard_score50": -0.37894862035795285,
+        "lpips": -0.015582025051116943,
+        "missing_edge": -0.011565316546521653,
+        "score50": 0.8853473737992203,
+        "spurious_edge": 0.0034156570660981295
+      },
+      "eligible": false,
+      "gates": {
+        "detail_not_jointly_worse": true,
+        "hard_score_not_worse": false,
+        "integrity_passed": true,
+        "lpips_not_worse": true,
+        "primitive_growth_controlled": true,
+        "score50_improved": true,
+        "time_budget": false,
+        "vram_budget": true
+      },
+      "holdout_sha256": "01fa8ef7f3692155d80959e16f1e25c53f6dddd93e34eba97c3082a0d923a303",
+      "manifest_sha256": "fd1d7f1d144e3f1c3399f8eb77aec903cabbb2941a9a5ae80df7361bdbe0d45c",
+      "paired_wall_time_ratio": 1.3613689408764567,
+      "reversed_after_15k": false,
+      "scene_id": "HCM0539",
+      "schema_version": 1,
+      "screen_qualified": false,
+      "status": "rejected",
+      "step": 7000
+    },
+    {
+      "candidate_id": "E1-density-scale005-v1",
+      "candidate_lpips": 0.16735441327095033,
+      "candidate_peak_gaussians": 3600809,
+      "candidate_symmetric_edge_distance": 0.0005954728150870704,
+      "config_sha256": "6d92c5a90d6b7d0ee37da20019af8e2e3722f1648eee416bf64b98962004b329",
+      "deltas": {
+        "hard_score50": -0.2124570281699789,
+        "lpips": -0.004965485632419581,
+        "missing_edge": -0.0031500341382799113,
+        "score50": 0.19148480401020151,
+        "spurious_edge": 0.000671697192596056
+      },
+      "eligible": false,
+      "gates": {
+        "detail_not_jointly_worse": true,
+        "hard_score_not_worse": false,
+        "integrity_passed": true,
+        "lpips_not_worse": true,
+        "primitive_growth_controlled": true,
+        "score50_improved": true,
+        "time_budget": true,
+        "vram_budget": true
+      },
+      "holdout_sha256": "01fa8ef7f3692155d80959e16f1e25c53f6dddd93e34eba97c3082a0d923a303",
+      "manifest_sha256": "fd1d7f1d144e3f1c3399f8eb77aec903cabbb2941a9a5ae80df7361bdbe0d45c",
+      "paired_wall_time_ratio": 0.9860306940796106,
+      "reversed_after_15k": false,
+      "scene_id": "HCM0539",
+      "schema_version": 1,
+      "screen_qualified": false,
+      "status": "rejected",
+      "step": 7000
+    }
+  ],
+  "fallback_to_b0": true,
+  "holdout_sha256": "01fa8ef7f3692155d80959e16f1e25c53f6dddd93e34eba97c3082a0d923a303",
+  "manifest_sha256": "fd1d7f1d144e3f1c3399f8eb77aec903cabbb2941a9a5ae80df7361bdbe0d45c",
+  "scene_id": "HCM0539",
+  "schema_version": 1,
+  "selected_candidate_id": "B0-reference",
+  "step": 7000
+}
