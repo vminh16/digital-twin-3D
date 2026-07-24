@@ -16,6 +16,10 @@ from bts_nvs.experiments.artifacts import (
     validate_run_artifacts,
 )
 from bts_nvs.experiments.commands import build_training_command
+from bts_nvs.experiments.decisions import (
+    save_scene_decision,
+    select_scene_candidate,
+)
 from bts_nvs.experiments.experiment import Experiment, ExperimentStage
 from bts_nvs.experiments.provenance import (
     canonical_json_sha256,
@@ -190,6 +194,25 @@ def validate_existing(
         step=stop_step,
         b0_report=prepared.b0_report,
     )
+
+
+def decide_screen(
+    b0_report_path: str | Path,
+    candidate_report_paths: Sequence[str | Path],
+    output_path: str | Path,
+) -> dict[str, object]:
+    """Select one 7k screen winner from already validated reports."""
+    if isinstance(candidate_report_paths, (str, bytes)) or not candidate_report_paths:
+        raise ValueError("candidate_report_paths must be a non-empty sequence")
+    b0_report = load_json_artifact(Path(b0_report_path))
+    candidate_reports = [
+        load_json_artifact(Path(path)) for path in candidate_report_paths
+    ]
+    decision = select_scene_candidate(b0_report, candidate_reports)
+    if decision.get("decision_stage") != "screen":
+        raise ValueError("decide-screen requires 7000-step reports")
+    save_scene_decision(decision, Path(output_path))
+    return decision
 
 
 def _prepare_run(
@@ -399,9 +422,20 @@ def _parser() -> argparse.ArgumentParser:
     validate = subparsers.add_parser(
         "validate", help="validate one existing scene/candidate/stage"
     )
+    decide = subparsers.add_parser(
+        "decide-screen", help="select a deterministic 7k screen winner"
+    )
     for command in (run, validate):
         _add_common_arguments(command)
     run.add_argument("--resume", action="store_true")
+    decide.add_argument("--b0-report", type=Path, required=True)
+    decide.add_argument(
+        "--candidate-report",
+        type=Path,
+        action="append",
+        required=True,
+    )
+    decide.add_argument("--output", type=Path, required=True)
     return parser
 
 
@@ -429,6 +463,13 @@ def _add_common_arguments(command: argparse.ArgumentParser) -> None:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
+    if args.command == "decide-screen":
+        decide_screen(
+            args.b0_report,
+            tuple(args.candidate_report),
+            args.output,
+        )
+        return 0
     common = dict(
         repo_root=args.repo_root,
         scenes_root=args.scenes_root,

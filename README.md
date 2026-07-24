@@ -22,21 +22,28 @@ HCM0644 HCM0674 HCM0540 HCM0539 HCM0421 chair bonsai
 
 Submission dùng JPEG quality 99, 4:4:4, optimized, non-progressive; ZIP cuối
 335 MB, dưới giới hạn 350 MB. Đây là kết quả từ evaluator chính thức, **không
-phải benchmark local**; cấu hình nội bộ của LPIPS/SSIM và `PSNR_max` chưa được
-xác nhận. Mọi thay đổi training, rendering hoặc codec sau mốc này phải dùng
-baseline/candidate ID mới.
+phải benchmark local**. Từ bốn số evaluator có thể giải ngược
+`PSNR_max = 49.99983` sau sai số làm tròn, vì vậy repo khóa `PSNR_max=50`.
+Backbone LPIPS và chi tiết kernel/aggregation SSIM của evaluator chính thức vẫn
+chưa được xác nhận. Mọi thay đổi training, rendering hoặc codec sau mốc này
+phải dùng baseline/candidate ID mới.
 
 ## Trạng thái tối ưu hóa hiện tại
 
 Chương trình scene-specific đã hoàn thành Module 1–3: validation/detail audit,
 candidate registry và generic stage-first runner. NVIDIA L4 smoke gates đã
-được người dùng xác nhận pass. Stage A đã được phép chạy nhưng chưa có artifact
-`runs/scene_opt_v1` trong workspace này.
+được người dùng xác nhận pass. Stage A đã hoàn tất trên đủ bảy scene với
+`174/174` validation render hợp lệ, không checkpoint, không NaN/Inf, tổng
+runtime khoảng 95,6 phút trên NVIDIA L4. Trung bình scene-balanced của
+`B0-reference` 7k là Score50 `64.654`, PSNR `21.050`, SSIM `0.7267`, LPIPS
+`0.2444`.
 
-Bước tiếp theo duy nhất được duyệt là tạo B0-reference 7k cho đủ bảy submission
-scene. Candidate screening và confirmation 30k chưa được phép chạy. Xem
-[documentation status](docs/README.md) và
-[Stage A execution plan](docs/superpowers/plans/2026-07-23-stage-a-seven-scene-b0-references.md).
+`B0-submission-q99-v1` 30k là production baseline chung đã đạt 70.98330 điểm;
+`B0-reference` 7k là paired internal-holdout authority để chọn candidate. Hai
+artifact có vai trò khác nhau và không thay thế nhau. Bước tiếp theo là Stage
+B1: screen hai density candidate ở 7k trên HCM0539 và HCM0421; chưa chạy 30k
+candidate trong bước này. Xem [documentation status](docs/README.md) và
+[Stage B1 plan](docs/superpowers/plans/2026-07-24-stage-b1-density-screen.md).
 
 ## Cài đặt không dùng Docker
 
@@ -191,7 +198,7 @@ python -m bts_nvs.evaluation.run_benchmark \
   --scenes_root data/bts_scenes \
   --manifests_root runs/manifests \
   --scene_ids HCM0644 HCM0674 HCM0540 HCM0539 HCM0421 \
-  --psnr_max 40 --lpips_backbone alex --device cuda \
+  --psnr_max 50 --lpips_backbone alex --device cuda \
   --report_path runs/phase4/local_benchmark.json
 ```
 

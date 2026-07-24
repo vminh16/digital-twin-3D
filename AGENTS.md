@@ -73,9 +73,9 @@ HCM0644 HCM0674 HCM0540 HCM0539 HCM0421 chair bonsai
   tạo candidate/baseline ID mới.
 - Chương trình tối ưu scene-specific trong
   `docs/superpowers/specs/2026-07-22-scene-specific-optimization-program-design.md`
-  là research authority hiện tại. Modules 1–3 đã hoàn tất; chỉ Stage A
-  `B0-reference` 7k được phép chạy tiếp. Candidate screen, confirmation và
-  production cần gate riêng theo spec.
+  là research authority hiện tại. Modules 1–3 và Stage A `B0-reference` 7k đã
+  hoàn tất. Stage B1 density screen trên HCM0539/HCM0421 là scope tiếp theo;
+  confirmation và production vẫn cần gate riêng theo spec.
 
 ## Evaluation metrics
 Final metric is a weighted composite, matching standard NVS benchmarking (Mip-NeRF / 3DGS-style evaluation):
@@ -92,9 +92,12 @@ PSNR_norm = clamp(PSNR / PSNR_max, 0, 1)
 | PSNR | higher is better | Pixel-level error, normalized by a fixed `PSNR_max` before averaging | Wang et al., IEEE TIP 2004 |
 
 **Implementation details that change the score and must be pinned down before trusting local evaluation numbers:**
+- `PSNR_max=50` đã được xác nhận bằng đại số từ số evaluator chính thức:
+  `PSNR_max=49.99983` sau sai số làm tròn và recomputed Score `70.9832494`
+  khớp Score công bố `70.98330`.
 - LPIPS score depends on the backbone (`alex` vs `vgg` — the `lpips` package defaults to AlexNet, but VGG is also common in NVS papers and gives different absolute values). Confirm which backbone the grading harness uses; mismatched backbones make local LPIPS numbers not comparable to the leaderboard.
 - SSIM depends on window size and kernel (Gaussian vs uniform) and whether it's computed per-channel-then-averaged or on luminance only. Use the same implementation/config as the grading harness if specified, otherwise default to the standard `skimage`/`scikit-image` or `torchmetrics` Gaussian-window SSIM (11×11, σ=1.5) as the closest common default.
-- PSNR is sensitive to color space and value range ([0,255] vs [0,1]) and to `PSNR_max`, which is not fixed by convention — confirm its value (see Open questions).
+- PSNR remains sensitive to color space and value range ([0,255] vs [0,1]); the repository harness uses RGB `[0,1]` and `data_range=1`.
 - Because LPIPS carries the largest weight (0.4) and is a *perceptual* metric, optimizing purely for pixel-space error (PSNR/SSIM) — e.g. via over-smoothing — can hurt LPIPS and lower the total score. Track all three metrics during development, not PSNR alone.
 - Final score is the mean across all scenes in the test set.
 
@@ -114,7 +117,7 @@ PSNR_norm = clamp(PSNR / PSNR_max, 0, 1)
 | Submission deadline | 2026-07-30 |
 
 ## Open questions — confirm before implementing, don't assume
-- Exact value of `PSNR_max` used for normalization, and the LPIPS backbone / SSIM window config used by the grading harness.
+- LPIPS backbone and SSIM window/channel/aggregation details used by the official grading harness.
 - Whether the dev/validation dataset matches the held-out test set in structure and distribution, or only approximately.
-- Actual available compute (GPU type/count, VRAM) — 3DGS/NeRF training is per-scene, so total scene count × per-scene training time is likely the real bottleneck, not model quality alone.
-- Whether any baseline/starter implementation already exists for this project, before building a pipeline from scratch.
+- Whether future compute remains one NVIDIA L4 with 23 GB VRAM; Stage A was
+  measured on that hardware, but later resource availability must not be assumed.

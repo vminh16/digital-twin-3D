@@ -1,6 +1,6 @@
 # Project documentation status
 
-## Current position — 2026-07-23
+## Current position — 2026-07-24
 
 The closed submission baseline remains:
 
@@ -21,16 +21,21 @@ Completed:
 4. Module 2: generic candidate registry and AbsGrad-capable hooks;
 5. Module 3: stage-first runner, artifact validation, recovery contract and
    deterministic decisions;
-6. local unit gates and user-reported NVIDIA L4 smoke gates.
+6. local unit gates and user-reported NVIDIA L4 smoke gates;
+7. Stage A: seven valid `B0-reference` internal-holdout runs at 7,000 steps.
 
 Current execution boundary:
 
-- Stage A is authorized but has not been executed in this workspace;
-- `runs/scene_opt_v1` is absent locally as of this audit;
-- the next permitted GPU work is seven fresh or contract-valid
-  `B0-reference` runs at 7,000 steps;
-- Stage B1 candidate screening, 15k/30k confirmation and production remain
-  unauthorized until Stage A evidence is reviewed.
+- Stage A passed with exactly seven reference directories, 174/174 validation
+  renders, no missing report, no non-finite metric and no model checkpoint;
+- scene-balanced Stage A means are Score50 `64.654`, PSNR `21.050`, SSIM
+  `0.7267` and LPIPS `0.2444`;
+- total measured Stage A runtime was about 95.6 minutes on NVIDIA L4, with
+  peak VRAM between 1.35 GB and 6.16 GB;
+- the existing 30k common-config production baseline remains the closed
+  `B0-submission-q99-v1` official result at Score `70.98330`;
+- Stage B1 is the next planned GPU scope: two candidates on HCM0539 and
+  HCM0421 at 7k. Confirmation and production remain gated.
 
 ## Canonical documents
 
@@ -40,15 +45,17 @@ Read these in order:
    umbrella scientific and engineering contract.
 2. [Generic experiment runner](superpowers/specs/2026-07-22-generic-experiment-runner-design.md) —
    executable stage, artifact, recovery and decision contract.
-3. [Stage A execution plan](superpowers/plans/2026-07-23-stage-a-seven-scene-b0-references.md) —
-   the only active execution plan.
-4. [Repository README](../README.md) — installation, closed baseline and
+3. [Stage B1 density screen](superpowers/plans/2026-07-24-stage-b1-density-screen.md) —
+   the active next-stage plan.
+4. [Completed Stage A execution plan](superpowers/plans/2026-07-23-stage-a-seven-scene-b0-references.md) —
+   historical execution evidence.
+5. [Repository README](../README.md) — installation, closed baseline and
    legacy baseline operations.
-5. [Repository rules](../AGENTS.md) — data, output, metric and reproducibility
+6. [Repository rules](../AGENTS.md) — data, output, metric and reproducibility
    constraints.
 
 If these documents conflict, `AGENTS.md` governs repository constraints, the
-scene-specific program governs experiment policy, and the Stage A plan governs
+scene-specific program governs experiment policy, and the Stage B1 plan governs
 the next execution.
 
 ## Why older documents were removed
@@ -70,14 +77,13 @@ evidence. `docs/research/` is user-owned and was not modified by this cleanup.
 
 ## Next action
 
-Execute Stage A sequentially:
+Review and execute Stage B1 sequentially. For HCM0539, then HCM0421, run:
 
 ```text
-HCM0539 → HCM0421 → HCM0644 → chair → bonsai → HCM0674 → HCM0540
+E1-density-absgrad-t04-v1
+E1-density-scale005-v1
 ```
 
-Begin with the single HCM0539 canary command in the Stage A plan. Review its
-runtime, VRAM, Gaussian growth, finite metrics, complete renders and absence of
-model checkpoints before launching HCM0421. Do not launch candidate screening
-until all seven B0 references pass the locked contract and the Stage A audit is
-approved.
+Each run is a fresh 7k screen paired with the existing scene-specific
+`B0-reference`. Do not run candidates in parallel on one L4 and do not start
+15k/30k confirmation until a deterministic screen decision exists.

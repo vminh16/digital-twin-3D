@@ -3,8 +3,8 @@
 **Date:** 2026-07-22
 
 **Status:** Implemented and locally verified. User-reported NVIDIA L4 smoke
-gates passed on 2026-07-23; Module 3 is closed and Stage A reference execution
-is authorized.
+gates passed on 2026-07-23; Module 3 and Stage A reference execution are
+complete. Stage B1 is governed by the active density-screen plan.
 
 **Parent specification:**
 `docs/superpowers/specs/2026-07-22-scene-specific-optimization-program-design.md`

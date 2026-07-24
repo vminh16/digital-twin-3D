@@ -6,9 +6,14 @@ import pytest
 from bts_nvs.experiments.artifacts import ArtifactValidationResult
 from bts_nvs.experiments.decisions import build_cohort_decision
 from bts_nvs.experiments.experiment import COHORT_SCENE_IDS, ExperimentStage
-from bts_nvs.experiments.provenance import canonical_json_sha256, save_json_artifact
+from bts_nvs.experiments.provenance import (
+    canonical_json_sha256,
+    load_json_artifact,
+    save_json_artifact,
+)
 from bts_nvs.experiments.run_experiment import (
     _validate_backend_config,
+    decide_screen,
     main,
     run_one,
     validate_existing,
@@ -31,6 +36,33 @@ def _scene_decision(
     }
     decision["decision_sha256"] = canonical_json_sha256(decision)
     return decision
+
+
+def _screen_report(candidate_id: str) -> dict[str, object]:
+    is_b0 = candidate_id == "B0-reference"
+    return {
+        "schema_version": 1,
+        "scene_id": "HCM0539",
+        "candidate_id": candidate_id,
+        "step": 7_000,
+        "manifest_sha256": "a" * 64,
+        "config_sha256": ("b" if is_b0 else "c") * 64,
+        "holdout_sha256": "d" * 64,
+        "overall": {
+            "score50": 68.0 if is_b0 else 69.0,
+            "lpips": 0.20 if is_b0 else 0.19,
+            "missing_edge": 0.30 if is_b0 else 0.28,
+            "spurious_edge": 0.04 if is_b0 else 0.05,
+            "symmetric_edge_distance": 0.0010 if is_b0 else 0.0009,
+        },
+        "strata": {"hard": {"score50": 60.0 if is_b0 else 60.5}},
+        "resources": {
+            "total_time_seconds": 100.0 if is_b0 else 110.0,
+            "max_vram_mb": 6_000.0,
+            "peak_gaussians": 100 if is_b0 else 110,
+            "final_num_gaussians": 90 if is_b0 else 100,
+        },
+    }
 
 
 def _paths(tmp_path: Path) -> dict[str, Path]:
@@ -389,3 +421,74 @@ def test_cli_validate_dispatches_without_training(
     ) == 0
     assert captured[0]["stage"] is ExperimentStage.REFERENCE
     assert "resume" not in captured[0]
+
+
+def test_decide_screen_writes_a_deterministic_hash_bearing_decision(
+    tmp_path: Path,
+) -> None:
+    b0_path = tmp_path / "b0.json"
+    first_path = tmp_path / "first.json"
+    second_path = tmp_path / "second.json"
+    output_path = tmp_path / "decision.json"
+    save_json_artifact(_screen_report("B0-reference"), b0_path)
+    save_json_artifact(_screen_report("E1-density-absgrad-t04-v1"), first_path)
+    second = _screen_report("E1-density-scale005-v1")
+    second["overall"]["score50"] = 69.5
+    save_json_artifact(second, second_path)
+
+    decision = decide_screen(
+        b0_path,
+        (first_path, second_path),
+        output_path,
+    )
+
+    assert load_json_artifact(output_path) == decision
+    assert decision["decision_stage"] == "screen"
+    assert decision["selected_candidate_id"] == "E1-density-scale005-v1"
+    unhashed = dict(decision)
+    digest = unhashed.pop("decision_sha256")
+    assert digest == canonical_json_sha256(unhashed)
+
+
+def test_decide_screen_rejects_mismatched_reports_before_writing(
+    tmp_path: Path,
+) -> None:
+    b0_path = tmp_path / "b0.json"
+    candidate_path = tmp_path / "candidate.json"
+    output_path = tmp_path / "decision.json"
+    save_json_artifact(_screen_report("B0-reference"), b0_path)
+    candidate = _screen_report("E1-density-absgrad-t04-v1")
+    candidate["holdout_sha256"] = "e" * 64
+    save_json_artifact(candidate, candidate_path)
+
+    with pytest.raises(ValueError, match="holdout"):
+        decide_screen(b0_path, (candidate_path,), output_path)
+
+    assert not output_path.exists()
+
+
+def test_cli_decide_screen_dispatches_report_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured = []
+    monkeypatch.setattr(
+        "bts_nvs.experiments.run_experiment.decide_screen",
+        lambda *args: captured.append(args),
+    )
+
+    assert main(
+        [
+            "decide-screen",
+            "--b0-report", str(tmp_path / "b0.json"),
+            "--candidate-report", str(tmp_path / "first.json"),
+            "--candidate-report", str(tmp_path / "second.json"),
+            "--output", str(tmp_path / "decision.json"),
+        ]
+    ) == 0
+    assert captured == [
+        (
+            tmp_path / "b0.json",
+            (tmp_path / "first.json", tmp_path / "second.json"),
+            tmp_path / "decision.json",
+        )
+    ]

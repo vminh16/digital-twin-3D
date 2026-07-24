@@ -2,13 +2,15 @@
 
 **Date:** 2026-07-22
 
-**Status:** Current umbrella authority. Modules 1–3 are complete; Stage A
-seven-scene B0-reference execution is authorized but not yet evidenced in this
-workspace.
+**Status:** Current umbrella authority. Modules 1–3 and Stage A are complete.
+Stage B1 density screening on HCM0539 and HCM0421 is the next executable scope;
+no 15k/30k candidate confirmation is authorized by this status.
 
 **Execution branch:** `main`; this program does not create a new experiment branch.
 
 **Baseline authority:** `B0-submission-q99-v1` remains CLOSED and immutable.
+It used one common B0 training configuration at 30,000 steps for all seven
+scene-specific models and achieved official Score `70.98330`.
 
 **Historical evidence:** `origin/ex1/absgrad-revopacity-phase-a@144ade1` remains read-only evidence for C1 implementation and results.
 
@@ -60,9 +62,34 @@ The local training objective remains:
 ```
 
 Candidate decisions track PSNR, SSIM, LPIPS, and the repository-local
-composite. The local composite is diagnostic and must never be described as an
-official score until `PSNR_max`, LPIPS backbone, and SSIM implementation are
-confirmed against the grading harness.
+composite. The official aggregate values identify `PSNR_max=50`: using
+PSNR `24.611499`, SSIM `0.804805`, LPIPS `0.198195` and Score `0.709833`
+gives an inferred denominator of `49.99983` after published-value rounding.
+The repository `Score50` therefore matches the official composite formula and
+PSNR normalization.
+
+This algebra does not identify the official LPIPS backbone, SSIM
+kernel/channel aggregation, color-decoding path, or averaging order. Local
+absolute LPIPS/SSIM/Score50 values remain validation diagnostics rather than
+official-score replicas. Paired candidate decisions are valid because B0 and
+candidate use the same pinned local harness; official results remain reporting
+evidence only and are not a tuning signal.
+
+## 2.1 Evidence layers
+
+The program keeps three baseline evidence layers distinct:
+
+| Evidence | Horizon | Holdout | Purpose |
+|---|---:|---|---|
+| `B0-submission-q99-v1` | 30k | official hidden test | Closed production benchmark: Score `70.98330` |
+| `B0-reference` | 7k | deterministic internal holdout | Cheap paired screen authority |
+| fresh paired B0 confirmation | 30k | same internal holdout as winner | Final candidate-vs-B0 decision |
+
+The existing production 30k baseline proves that the common configuration is a
+valid 71-point submission baseline. It cannot replace a 30k internal-holdout
+reference because it trained on all available train images and has no matching
+held-out RGB evaluation. A 7k winner therefore still requires fresh paired 30k
+confirmation, but no scene without a 7k winner needs an additional 30k B0 run.
 
 ## 3. Selected architecture
 
@@ -356,6 +383,27 @@ references.
 Planning estimate: 2–3 sequential L4 GPU-hours for seven fresh B0 7k runs.
 This is an estimate, not a runtime gate.
 
+### 10.1 Completed evidence
+
+Stage A completed on NVIDIA L4 with exactly the seven required directories and
+174/174 validation renders. Direct audit found no missing required artifact,
+dimension mismatch, NaN/Inf token, or model checkpoint.
+
+| Scene | Score50 | PSNR | SSIM | LPIPS | Hard minus easy | Peak VRAM |
+|---|---:|---:|---:|---:|---:|---:|
+| HCM0644 | 69.155 | 21.955 | 0.7643 | 0.1737 | -9.225 | 6.16 GB |
+| HCM0539 | 68.897 | 21.936 | 0.7543 | 0.1723 | -12.072 | 6.08 GB |
+| HCM0421 | 68.404 | 22.080 | 0.7434 | 0.1787 | -17.407 | 6.04 GB |
+| HCM0540 | 65.804 | 21.139 | 0.7120 | 0.2060 | -14.899 | 6.03 GB |
+| HCM0674 | 62.826 | 18.952 | 0.6907 | 0.2316 | -16.046 | 5.73 GB |
+| chair | 58.961 | 20.952 | 0.6876 | 0.3559 | -3.745 | 2.09 GB |
+| bonsai | 58.529 | 20.333 | 0.7346 | 0.3927 | -19.454 | 1.35 GB |
+
+Scene-balanced means are Score50 `64.654`, PSNR `21.050`, SSIM `0.7267` and
+LPIPS `0.2444`. Total measured runtime was about 95.6 minutes. These values are
+7k internal-holdout diagnostics and must not be compared numerically with the
+official 30k hidden-test score.
+
 ## 11. Stage B1 — density and thin-detail screen
 
 Scenes:
@@ -366,6 +414,11 @@ HCM0539 HCM0421
 
 Run both first executable candidates fresh at 7k against their paired B0
 references.
+
+The locked execution plan is
+`docs/superpowers/plans/2026-07-24-stage-b1-density-screen.md`. In this
+document, B0 names a candidate policy, not a phase. The stage after completed
+Stage A is Stage B1/screen.
 
 A candidate is eligible on a scene only when:
 
