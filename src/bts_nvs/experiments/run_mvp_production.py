@@ -60,9 +60,6 @@ def validate_screen_evidence(
         **common,
         stage=ExperimentStage.SCREEN,
         candidate_id=MVP_CANDIDATE_ID,
-        b0_report_path=(
-            experiment_root / "reference" / scene_id / "experiment_report.json"
-        ),
     )
 
 
