@@ -795,6 +795,15 @@ def merge_resumed_training_summaries(prior: dict, current: dict) -> dict:
     }
 
 
+def read_prior_generic_summary(output_dir: Path) -> dict | None:
+    summary_path = Path(output_dir) / "summary.json"
+    if not summary_path.is_file():
+        return None
+    summary = read_json_record(summary_path)
+    _validated_summary_resources(summary, "prior")
+    return summary
+
+
 def finalize_generic_resume_summary(
     output_dir: Path,
     prior_summary: dict | None,
@@ -1114,10 +1123,7 @@ def main():
 
     prior_generic_summary = None
     if args.candidate_id is not None and args.resume is not None:
-        prior_generic_summary = read_json_record(
-            Path(args.output_dir) / "summary.json"
-        )
-        _validated_summary_resources(prior_generic_summary, "prior")
+        prior_generic_summary = read_prior_generic_summary(Path(args.output_dir))
 
     previews = Path(args.output_dir) / "train_previews"
     initial_metrics_path = previews / "initial_metrics.json"

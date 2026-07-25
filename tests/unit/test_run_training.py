@@ -997,6 +997,20 @@ def test_resumed_training_summary_merge_accumulates_resources_only():
     assert current["total_time_seconds"] == 180.25
 
 
+def test_interrupted_generic_resume_does_not_require_completed_summary(tmp_path):
+    assert run_training.read_prior_generic_summary(tmp_path) is None
+
+
+def test_completed_generic_resume_loads_prior_summary(tmp_path):
+    prior = {
+        "total_time_seconds": 120.5,
+        "max_vram_mb": 4096.0,
+    }
+    run_training.write_json_record(tmp_path / "summary.json", prior)
+
+    assert run_training.read_prior_generic_summary(tmp_path) == prior
+
+
 @pytest.mark.parametrize(
     "source, field, value",
     (
