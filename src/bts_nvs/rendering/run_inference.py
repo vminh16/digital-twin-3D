@@ -7,6 +7,7 @@ import os
 import shutil
 import tempfile
 import time
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Sequence
 
@@ -113,6 +114,7 @@ def run_inference(
     output_root: Path,
     report_path: Path,
     scene_ids: Sequence[str] | None = None,
+    run_dir_overrides: Mapping[str, Path] | None = None,
     jpeg_quality: int = DEFAULT_JPEG_QUALITY,
     allow_noncanonical_scenes: bool = False,
     device: torch.device | None = None,
@@ -135,6 +137,16 @@ def run_inference(
         scene_ids,
         allow_noncanonical_scenes,
     )
+    overrides = {
+        scene_id: Path(run_dir)
+        for scene_id, run_dir in (run_dir_overrides or {}).items()
+    }
+    unknown_overrides = set(overrides).difference(selected)
+    if unknown_overrides:
+        raise ValueError(
+            "run directory override targets an unselected scene: "
+            f"{sorted(unknown_overrides)[0]}"
+        )
     decision = load_or_create_backend_decision(backend_root)
 
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -154,7 +166,10 @@ def run_inference(
             if manifest.scene_id != scene_id:
                 raise ValueError(f"manifest scene identity mismatch: {scene_id}")
             manifests[scene_id] = manifest
-            run_dir = Path(full_root) / "scenes" / scene_id
+            run_dir = overrides.get(
+                scene_id,
+                Path(full_root) / "scenes" / scene_id,
+            )
             trained, checkpoint = load_trained_checkpoint(
                 run_dir, scene_id, manifest_path, decision
             )
@@ -236,6 +251,13 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--report_path", type=Path, required=True)
     parser.add_argument("--scene_ids", nargs="+")
     parser.add_argument(
+        "--run_dir",
+        action="append",
+        default=[],
+        metavar="SCENE_ID=PATH",
+        help="Override the trained run directory for one selected scene.",
+    )
+    parser.add_argument(
         "--jpeg_quality",
         type=int,
         default=DEFAULT_JPEG_QUALITY,
@@ -249,6 +271,23 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def parse_run_dir_overrides(values: Sequence[str]) -> dict[str, Path]:
+    overrides = {}
+    for value in values:
+        scene_id, separator, path = value.partition("=")
+        if (
+            not separator
+            or not scene_id
+            or Path(scene_id).name != scene_id
+            or scene_id in {".", ".."}
+            or not path
+            or scene_id in overrides
+        ):
+            raise ValueError(f"invalid run directory override: {value!r}")
+        overrides[scene_id] = Path(path)
+    return overrides
+
+
 def main(argv: Sequence[str] | None = None) -> None:
     args = parse_args(argv)
     run_inference(
@@ -259,6 +298,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         output_root=args.output_root,
         report_path=args.report_path,
         scene_ids=args.scene_ids,
+        run_dir_overrides=parse_run_dir_overrides(args.run_dir),
         jpeg_quality=args.jpeg_quality,
         allow_noncanonical_scenes=args.allow_noncanonical_scenes,
     )

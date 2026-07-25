@@ -18,7 +18,11 @@ from bts_nvs.rendering.inference import (
     redistort_render,
     render_test_camera,
 )
-from bts_nvs.rendering.run_inference import parse_args, run_inference
+from bts_nvs.rendering.run_inference import (
+    parse_args,
+    parse_run_dir_overrides,
+    run_inference,
+)
 from bts_nvs.training.full_training import TrainedRun
 
 
@@ -337,6 +341,8 @@ def test_inference_cli_parses_paths_and_selected_scenes(tmp_path: Path):
             "--scene_ids",
             "HCM0644",
             "HCM0421",
+            "--run_dir",
+            f"HCM0421={tmp_path / 'mvp' / 'HCM0421'}",
             "--jpeg_quality",
             "97",
             "--allow_noncanonical_scenes",
@@ -344,8 +350,76 @@ def test_inference_cli_parses_paths_and_selected_scenes(tmp_path: Path):
     )
     assert args.output_root == tmp_path / "outputs"
     assert args.scene_ids == ["HCM0644", "HCM0421"]
+    assert parse_run_dir_overrides(args.run_dir) == {
+        "HCM0421": tmp_path / "mvp" / "HCM0421"
+    }
     assert args.jpeg_quality == 97
     assert args.allow_noncanonical_scenes is True
+
+
+def test_inference_uses_selected_scene_run_directory_override(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    selected = ("HCM0644", "HCM0421")
+    scenes, manifests, full = _batch_layout(tmp_path, selected)
+    override = tmp_path / "mvp" / "HCM0421"
+    checkpoint_dir = override / "checkpoints"
+    checkpoint_dir.mkdir(parents=True)
+    (checkpoint_dir / "recovery.pt").write_bytes(b"mvp")
+    loaded = []
+    _patch_batch_dependencies(monkeypatch, selected)
+
+    import bts_nvs.rendering.run_inference as module
+
+    def fake_load(run, scene, manifest, decision):
+        loaded.append((scene, Path(run)))
+        return (
+            TrainedRun(30_000, "c" * 64, "m" * 64),
+            {"scene_id": scene, "active_sh_degree": 3, "gaussians": {}},
+        )
+
+    monkeypatch.setattr(module, "load_trained_checkpoint", fake_load)
+    run_inference(
+        scenes_root=scenes,
+        manifests_root=manifests,
+        backend_root=tmp_path / "backend",
+        full_root=full,
+        output_root=tmp_path / "outputs",
+        report_path=tmp_path / "report.json",
+        scene_ids=selected,
+        run_dir_overrides={"HCM0421": override},
+        device=torch.device("cpu"),
+    )
+
+    assert loaded == [
+        ("HCM0644", full / "scenes" / "HCM0644"),
+        ("HCM0421", override),
+    ]
+
+
+def test_run_directory_override_rejects_unselected_or_duplicate_scene(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    selected = ("HCM0644",)
+    scenes, manifests, full = _batch_layout(tmp_path, selected)
+    _patch_batch_dependencies(monkeypatch, selected)
+
+    with pytest.raises(ValueError, match="unselected"):
+        run_inference(
+            scenes_root=scenes,
+            manifests_root=manifests,
+            backend_root=tmp_path / "backend",
+            full_root=full,
+            output_root=tmp_path / "outputs",
+            report_path=tmp_path / "report.json",
+            scene_ids=selected,
+            run_dir_overrides={"HCM0421": tmp_path / "mvp"},
+            device=torch.device("cpu"),
+        )
+    with pytest.raises(ValueError, match="invalid run directory override"):
+        parse_run_dir_overrides(("HCM0421=first", "HCM0421=second"))
 
 
 def test_noncanonical_inference_requires_explicit_safe_scene_ids(

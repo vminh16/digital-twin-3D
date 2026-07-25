@@ -817,3 +817,35 @@ def test_resume_discards_records_newer_than_checkpoint(
     timing = json.loads((output / "timing.json").read_text())
     assert [record["step"] for record in metrics] == [1, 2]
     assert list(timing) == ["1", "2"]
+
+
+def test_resume_keeps_last_record_for_duplicate_checkpoint_steps(
+    tmp_path: Path,
+    manifest_artifact: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(trainer_module, "render_gaussians", _differentiable_render)
+    output = tmp_path / "run"
+    config = _config(max_steps=4)
+    first = _trainer(output, manifest_artifact, _MockDataset(), config=config)
+    first.train(stop_step=3, checkpoint_every=1)
+
+    metrics_path = output / "metrics.jsonl"
+    records = [
+        json.loads(line) for line in metrics_path.read_text().splitlines()
+    ]
+    replacement = {**records[1], "loss": records[1]["loss"] + 1.0}
+    records.append(replacement)
+    metrics_path.write_text(
+        "".join(json.dumps(record) + "\n" for record in records),
+        encoding="utf-8",
+    )
+
+    resumed = _trainer(output, manifest_artifact, _MockDataset(), config=config)
+    resumed.resume(output / "checkpoints" / "step_000000002.pt")
+
+    retained = [
+        json.loads(line) for line in metrics_path.read_text().splitlines()
+    ]
+    assert [record["step"] for record in retained] == [1, 2]
+    assert retained[1] == replacement

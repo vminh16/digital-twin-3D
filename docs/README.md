@@ -1,6 +1,6 @@
 # Project documentation status
 
-## Current position — 2026-07-24
+## Current position — 2026-07-26
 
 The closed submission baseline remains:
 
@@ -23,6 +23,9 @@ Completed:
    deterministic decisions;
 6. local unit gates and user-reported NVIDIA L4 smoke gates;
 7. Stage A: seven valid `B0-reference` internal-holdout runs at 7,000 steps.
+8. Stage B1: AbsGrad t04 screening on HCM0539 and HCM0421.
+9. Deadline compute-first production: retained 30k AbsGrad checkpoints for
+   HCM0539 and HCM0421.
 
 Current execution boundary:
 
@@ -34,8 +37,10 @@ Current execution boundary:
   peak VRAM between 1.35 GB and 6.16 GB;
 - the existing 30k common-config production baseline remains the closed
   `B0-submission-q99-v1` official result at Score `70.98330`;
-- Stage B1 is the next planned GPU scope: two candidates on HCM0539 and
-  HCM0421 at 7k. Confirmation and production remain gated.
+- Stage C paired 30k confirmation was not executed and must not be inferred
+  from the full-data production checkpoints;
+- the active scope is hybrid inference: B0 for five scenes and AbsGrad for
+  HCM0539/HCM0421, followed by exact output validation and packaging.
 
 ## Canonical documents
 
@@ -46,7 +51,7 @@ Read these in order:
 2. [Generic experiment runner](superpowers/specs/2026-07-22-generic-experiment-runner-design.md) —
    executable stage, artifact, recovery and decision contract.
 3. [Stage B1 density screen](superpowers/plans/2026-07-24-stage-b1-density-screen.md) —
-   the active next-stage plan.
+   completed screening evidence and compute-first exception context.
 4. [Completed Stage A execution plan](superpowers/plans/2026-07-23-stage-a-seven-scene-b0-references.md) —
    historical execution evidence.
 5. [Repository README](../README.md) — installation, closed baseline and
@@ -54,9 +59,8 @@ Read these in order:
 6. [Repository rules](../AGENTS.md) — data, output, metric and reproducibility
    constraints.
 
-If these documents conflict, `AGENTS.md` governs repository constraints, the
-scene-specific program governs experiment policy, and the Stage B1 plan governs
-the next execution.
+If these documents conflict, `AGENTS.md` governs repository constraints and
+the scene-specific program governs experiment policy.
 
 ## Why older documents were removed
 
@@ -77,13 +81,26 @@ evidence. `docs/research/` is user-owned and was not modified by this cleanup.
 
 ## Next action
 
-Review and execute Stage B1 sequentially. For HCM0539, then HCM0421, run:
+Canonicalize the interrupted HCM0539 metric trace through its final recovery
+checkpoint, then run one atomic five-BTS inference with per-scene run-directory
+overrides for HCM0539 and HCM0421. Render chair and bonsai through the unchanged
+auxiliary baseline path, validate all exact filenames/formats/dimensions, and
+package the hybrid candidate separately from `B0-submission-q99-v1`.
 
-```text
-E1-density-absgrad-t04-v1
-E1-density-scale005-v1
+```bash
+test ! -d runs/scene_opt_v1/production_mvp/scenes/HCM0539/validation_renders \
+  || rmdir -- runs/scene_opt_v1/production_mvp/scenes/HCM0539/validation_renders
+bash scripts/run_absgrad_mvp_production.sh HCM0539
+
+BTS_OUTPUT_ROOT="$PWD/outputs_bts_absgrad_mvp_q99" \
+BTS_INFERENCE_REPORT="$PWD/runs/scene_opt_v1/mvp_inference_report.json" \
+bash scripts/run_phase4_inference.sh \
+  --skip_prepare \
+  --jpeg_quality 99 \
+  --scene_ids HCM0644 HCM0674 HCM0540 HCM0539 HCM0421 \
+  --run_dir "HCM0421=$PWD/runs/scene_opt_v1/production_mvp/scenes/HCM0421" \
+  --run_dir "HCM0539=$PWD/runs/scene_opt_v1/production_mvp/scenes/HCM0539"
 ```
 
-Each run is a fresh 7k screen paired with the existing scene-specific
-`B0-reference`. Do not run candidates in parallel on one L4 and do not start
-15k/30k confirmation until a deterministic screen decision exists.
+`rmdir` intentionally succeeds only when the stale holdout directory is empty;
+it does not recursively delete artifacts.

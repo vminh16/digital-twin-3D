@@ -69,8 +69,18 @@ def _truncate_run_records(output_dir: Path, completed_step: int) -> None:
             for line in metrics_path.read_text(encoding="utf-8").splitlines()
             if line.strip()
         ]
+        retained_by_step = {}
+        for record in records:
+            step = record.get("step")
+            if isinstance(step, bool) or not isinstance(step, int) or step <= 0:
+                raise ValueError("metrics contain an invalid step")
+            if step <= completed_step:
+                retained_by_step[step] = record
+        expected_steps = set(range(1, completed_step + 1))
+        if set(retained_by_step) != expected_steps:
+            raise ValueError("metrics do not cover every step through the checkpoint")
         retained = [
-            record for record in records if record.get("step", -1) <= completed_step
+            retained_by_step[step] for step in range(1, completed_step + 1)
         ]
         text = "".join(
             json.dumps(record, allow_nan=False) + "\n" for record in retained

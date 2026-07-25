@@ -2,9 +2,11 @@
 
 **Date:** 2026-07-22
 
-**Status:** Current umbrella authority. Modules 1–3 and Stage A are complete.
-Stage B1 density screening on HCM0539 and HCM0421 is the next executable scope;
-no 15k/30k candidate confirmation is authorized by this status.
+**Status:** Current umbrella authority. Modules 1–3, Stage A, and Stage B1 are
+complete. A deadline exception retained compute-first 30k production
+checkpoints for HCM0539 and HCM0421 without claiming Stage C paired
+confirmation. The next executable scope is MVP inference and hybrid submission
+validation; Stage C remains scientifically unfulfilled.
 
 **Execution branch:** `main`; this program does not create a new experiment branch.
 
@@ -437,6 +439,25 @@ count. If no candidate is eligible, that scene retains B0.
 
 Seven thousand steps are a mechanism screen, not final evidence. Each scene
 winner proceeds to Stage C.
+
+### 11.1 Deadline compute-first MVP exception
+
+The user approved direct full-data 30k production runs for
+`E1-density-absgrad-t04-v1` on HCM0421 and HCM0539 because the submission
+deadline did not permit four fresh paired Stage C runs. This exception:
+
+- retains both 30k rolling recovery checkpoints;
+- does not relabel either candidate as paired-confirmed;
+- does not create `cohort_decision.json`;
+- keeps B0 production checkpoints authoritative for the other five scenes;
+- authorizes a separate hybrid inference candidate for operational evaluation.
+
+Hybrid inference reuses the existing inference runner. Per-scene run-directory
+overrides select the two AbsGrad checkpoints while the default full-training
+root supplies HCM0644, HCM0674, and HCM0540. Chair and bonsai retain the
+existing auxiliary baseline path. Every output subset remains atomically
+rendered and validated against exact test image names, payload formats, and
+dimensions.
 
 ## 12. Stage B2 — input quality, appearance, and bonsai capacity
 
