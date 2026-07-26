@@ -74,9 +74,10 @@ HCM0644 HCM0674 HCM0540 HCM0539 HCM0421 chair bonsai
 - Research authority hiện tại là
   `docs/superpowers/specs/2026-07-26-five-scene-mvp.md`. Modules 1–3, Stage A
   và Stage B1 đã hoàn tất; AbsGrad production của HCM0539/HCM0421 là deadline
-  exception, không phải paired-confirmed winner. Scope tiếp theo giữ HCM0644
-  ở B0 và screen riêng antialiasing, local sharpness weighting, SH4 trên
-  HCM0674/HCM0540/chair/bonsai; confirmation và production vẫn cần gate riêng.
+  exception, không phải paired-confirmed winner. Five-scene screen đã hoàn
+  tất: giữ B0 cho HCM0644/HCM0674/HCM0540, reject antialiasing, và authorize
+  deadline-exception full-data 30k production cho chair local-Laplacian cùng
+  bonsai SH4. Ba scene giữ B0 không được retrain cho MVP này.
 
 ## Evaluation metrics
 Final metric is a weighted composite, matching standard NVS benchmarking (Mip-NeRF / 3DGS-style evaluation):

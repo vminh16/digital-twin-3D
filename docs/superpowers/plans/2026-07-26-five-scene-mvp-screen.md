@@ -79,3 +79,17 @@ scene when any of these occurs:
 
 Do not add a replacement mechanism during this screen. A rejected scene falls
 back to B0.
+
+## Deadline production handoff
+
+The completed screen selected chair local-Laplacian and bonsai SH4. Run both
+fresh full-data 30k jobs sequentially on the L4:
+
+```bash
+bash scripts/run_auxiliary_mvp_production.sh
+```
+
+Outputs use `runs/scene_opt_v2/production_mvp/scenes/<scene_id>/`. The wrapper
+validates the original v1 B0 references, v2 screen artifacts and hashed scene
+decisions before training. A valid partial run resumes only from its rolling
+`checkpoints/recovery.pt`.

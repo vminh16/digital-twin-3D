@@ -1,6 +1,6 @@
 # Five-scene MVP authority
 
-**Status:** Active from 2026-07-26.
+**Status:** 7k screen complete; deadline production active from 2026-07-26.
 
 This document is the concise scientific and execution authority for the next
 MVP. `AGENTS.md` still governs data, output, metric and reproducibility
@@ -94,14 +94,43 @@ baseline until one fresh 30k B0 and one fresh 30k candidate run pass the same
 holdout gates. With the current deadline, confirm at most two winners. Every
 model, loss, renderer or SH change uses a new candidate/baseline ID.
 
-## 6. Completion
+### Deadline production exception
+
+The user authorized compute-first full-data 30k production without fresh
+paired 30k confirmation because of the deadline:
+
+```text
+chair  -> E2-loss-local-laplacian-v1
+bonsai -> E2-appearance-sh4-v1
+```
+
+Both production runs must start fresh, use all train images, retain one rolling
+recovery checkpoint and validate the selected 7k decision before launch. They
+remain deadline-exception artifacts, not paired-confirmed research winners.
+
+`HCM0644`, `HCM0674` and `HCM0540` retain their closed B0 checkpoints and
+renders. They must not be retrained for this MVP. The new hybrid submission ID
+is `MVP-hybrid-4scene-q99-v1`: AbsGrad for HCM0421/HCM0539, the two E2
+auxiliary winners, and B0 for the remaining three BTS scenes.
+
+## 6. Screen result
+
+| Scene | Candidate | ΔScore50 | ΔLPIPS | Decision |
+|---|---|---:|---:|---|
+| chair | local Laplacian | +0.5688 | -0.00683 | production exception |
+| bonsai | local Laplacian | +0.2869 | -0.00213 | not selected |
+| bonsai | SH4 | +0.5963 | -0.00694 | production exception |
+| HCM0674 | antialiased | -4.9568 | +0.04888 | reject; retain B0 |
+| HCM0540 | antialiased | -4.7899 | +0.04347 | reject; retain B0 |
+
+## 7. Completion
 
 This MVP is complete when:
 
 - code and tests support all three locked candidates;
-- HCM0644 has a recorded B0 decision;
-- five authorized candidate runs across four scenes complete or have a durable
-  failure record;
-- bonsai has one deterministic decision across its two candidates;
+- all five 7k runs and five scene decisions remain preserved;
+- chair and bonsai full-data 30k checkpoints validate;
+- the other three scenes remain byte-identical B0 artifacts;
+- all seven scene renders pass the output contract at JPEG Q99;
 - selected winners, fallback decisions, timings and blockers are summarized;
 - no production or submission artifact is silently overwritten.

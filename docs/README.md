@@ -8,15 +8,18 @@
 - Stage B1 completed on `HCM0421/HCM0539`.
 - Their AbsGrad production checkpoints are deadline-exception MVP artifacts,
   not paired-confirmed research winners.
-- Active work is the five-scene MVP screen:
+- The five-scene 7k screen is complete:
 
 ```text
 HCM0644 -> retain B0
-HCM0674 -> antialiased screen
-HCM0540 -> antialiased screen
-chair   -> local sharpness-weighted loss screen
-bonsai  -> local sharpness-weighted loss and SH4 screens
+HCM0674 -> antialiased rejected; retain B0
+HCM0540 -> antialiased rejected; retain B0
+chair   -> local sharpness-weighted loss selected
+bonsai  -> SH4 selected
 ```
+
+- Deadline-exception full-data 30k production is authorized for chair and
+  bonsai. It is operational MVP evidence, not paired 30k confirmation.
 
 ## Read order
 
@@ -40,9 +43,9 @@ Git history; they are not executable authorities.
 ## Execution boundary
 
 - Local workstation: edit code, run unit tests and build the deployment bundle.
-- NVIDIA L4 VM: CUDA smoke and sequential 7k screens.
+- NVIDIA L4 VM: sequential full-data 30k production for chair and bonsai.
 - Existing `runs/scene_opt_v1/reference/` reports remain the paired B0
   authority.
 - New runs and decisions use `runs/scene_opt_v2/`.
-- No 30k confirmation begins until a deterministic 7k decision passes.
+- Only the deterministic chair and bonsai winners may enter production.
 - No hidden-test render is used for tuning.
