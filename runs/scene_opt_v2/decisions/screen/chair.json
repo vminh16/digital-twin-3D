@@ -1,0 +1,47 @@
+{
+  "decision_sha256": "3d211f2ea95f2231c87b153ec38eebfdad623a2dd8140cfe12bc3a7ad897a9fd",
+  "decision_stage": "screen",
+  "evaluations": [
+    {
+      "candidate_id": "E2-loss-local-laplacian-v1",
+      "candidate_lpips": 0.34910532385110854,
+      "candidate_peak_gaussians": 1214503,
+      "candidate_symmetric_edge_distance": 0.00401801106990545,
+      "config_sha256": "bc9cecd98f78851df1a8c3d0c4c468840bc78a699d61ebb0d6e2b6a9193ae783",
+      "deltas": {
+        "hard_score50": 1.3109921980271437,
+        "lpips": -0.0068333178758621105,
+        "missing_edge": -0.0024907365821805194,
+        "score50": 0.568773730425221,
+        "spurious_edge": -0.0003690529441708612
+      },
+      "eligible": false,
+      "gates": {
+        "detail_not_jointly_worse": true,
+        "hard_score_not_worse": true,
+        "integrity_passed": true,
+        "lpips_not_worse": true,
+        "primitive_growth_controlled": true,
+        "score50_improved": true,
+        "time_budget": true,
+        "vram_budget": true
+      },
+      "holdout_sha256": "62348b814d9252f51e1ea4d355530c45d88291fa7a214db0f472a5381e2c7853",
+      "manifest_sha256": "434738976a73e100be0e4d4a04d4f27c37fc982ff4bffe6053e2c6fbb29a75fa",
+      "paired_wall_time_ratio": 1.0179381878427314,
+      "reversed_after_15k": false,
+      "scene_id": "chair",
+      "schema_version": 1,
+      "screen_qualified": true,
+      "status": "screen_passed",
+      "step": 7000
+    }
+  ],
+  "fallback_to_b0": false,
+  "holdout_sha256": "62348b814d9252f51e1ea4d355530c45d88291fa7a214db0f472a5381e2c7853",
+  "manifest_sha256": "434738976a73e100be0e4d4a04d4f27c37fc982ff4bffe6053e2c6fbb29a75fa",
+  "scene_id": "chair",
+  "schema_version": 1,
+  "selected_candidate_id": "E2-loss-local-laplacian-v1",
+  "step": 7000
+}

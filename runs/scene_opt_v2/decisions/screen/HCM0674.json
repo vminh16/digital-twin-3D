@@ -1,0 +1,47 @@
+{
+  "decision_sha256": "cb0ea0bae9fdeb02a2a662c73cd50e30e39a3aad2d745cac9eb4fc9cc2117a5c",
+  "decision_stage": "screen",
+  "evaluations": [
+    {
+      "candidate_id": "E2-raster-aa-v1",
+      "candidate_lpips": 0.2805159624133791,
+      "candidate_peak_gaussians": 3271873,
+      "candidate_symmetric_edge_distance": 0.0011522860510724895,
+      "config_sha256": "beb19e032db2a330ac1520f95e95c9ed07c95b0382198b43169f587334179ca4",
+      "deltas": {
+        "hard_score50": -3.3218907264382977,
+        "lpips": 0.048884897093687735,
+        "missing_edge": 0.02353157798805844,
+        "score50": -4.956805987730121,
+        "spurious_edge": 0.022086532942593287
+      },
+      "eligible": false,
+      "gates": {
+        "detail_not_jointly_worse": false,
+        "hard_score_not_worse": false,
+        "integrity_passed": true,
+        "lpips_not_worse": false,
+        "primitive_growth_controlled": true,
+        "score50_improved": false,
+        "time_budget": true,
+        "vram_budget": true
+      },
+      "holdout_sha256": "17e7fbb5bdacd8cb7c578dc09cbf32f8e91740a5f5d33678fb2549538a3f0a36",
+      "manifest_sha256": "1aa005b44ca0582933c98fa44e33e98d6f59287da02a7ac62f900fa06be76e82",
+      "paired_wall_time_ratio": 0.9595413818438906,
+      "reversed_after_15k": false,
+      "scene_id": "HCM0674",
+      "schema_version": 1,
+      "screen_qualified": false,
+      "status": "rejected",
+      "step": 7000
+    }
+  ],
+  "fallback_to_b0": true,
+  "holdout_sha256": "17e7fbb5bdacd8cb7c578dc09cbf32f8e91740a5f5d33678fb2549538a3f0a36",
+  "manifest_sha256": "1aa005b44ca0582933c98fa44e33e98d6f59287da02a7ac62f900fa06be76e82",
+  "scene_id": "HCM0674",
+  "schema_version": 1,
+  "selected_candidate_id": "B0-reference",
+  "step": 7000
+}

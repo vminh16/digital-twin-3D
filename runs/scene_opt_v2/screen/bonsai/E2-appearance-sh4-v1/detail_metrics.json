@@ -1,0 +1,155 @@
+{
+  "hf_l1_mean": 0.09298032801373508,
+  "image_count": 24,
+  "images": {
+    "frame_000050.jpg": {
+      "hf_l1": 0.13441712169798475,
+      "missing_edge": 0.7400160410309419,
+      "spurious_edge": 0.019076360703970844,
+      "symmetric_edge_distance": 0.004640127133683925
+    },
+    "frame_000100.jpg": {
+      "hf_l1": 0.09769496809943115,
+      "missing_edge": 0.7295238610664657,
+      "spurious_edge": 0.03131351240654312,
+      "symmetric_edge_distance": 0.005825481270997063
+    },
+    "frame_000140.jpg": {
+      "hf_l1": 0.05332548692053981,
+      "missing_edge": 0.6405900977618875,
+      "spurious_edge": 0.09194111194383801,
+      "symmetric_edge_distance": 0.005356966315187201
+    },
+    "frame_000190.jpg": {
+      "hf_l1": 0.18466006503041033,
+      "missing_edge": 0.8488641380770724,
+      "spurious_edge": 0.019530980820806128,
+      "symmetric_edge_distance": 0.019096483098488447
+    },
+    "frame_000260.jpg": {
+      "hf_l1": 0.1628357725391854,
+      "missing_edge": 0.8328516676702448,
+      "spurious_edge": 0.0247262403281242,
+      "symmetric_edge_distance": 0.018082903203458428
+    },
+    "frame_000300.jpg": {
+      "hf_l1": 0.1357714750476579,
+      "missing_edge": 0.8384132345249792,
+      "spurious_edge": 0.031669848329494536,
+      "symmetric_edge_distance": 0.015583885478287676
+    },
+    "frame_000340.jpg": {
+      "hf_l1": 0.11846345768654683,
+      "missing_edge": 0.8727340612186689,
+      "spurious_edge": 0.028545623643034437,
+      "symmetric_edge_distance": 0.022975611861261642
+    },
+    "frame_000390.jpg": {
+      "hf_l1": 0.10577621707818927,
+      "missing_edge": 0.9714804325856222,
+      "spurious_edge": 0.007374146445662449,
+      "symmetric_edge_distance": 0.10381213978777624
+    },
+    "frame_000440.jpg": {
+      "hf_l1": 0.1286555150954672,
+      "missing_edge": 0.8437763744108203,
+      "spurious_edge": 0.019774814704690283,
+      "symmetric_edge_distance": 0.023862413097615588
+    },
+    "frame_000480.jpg": {
+      "hf_l1": 0.08458135962085442,
+      "missing_edge": 0.6993631049448515,
+      "spurious_edge": 0.026503130088385403,
+      "symmetric_edge_distance": 0.007206783694126046
+    },
+    "frame_000520.jpg": {
+      "hf_l1": 0.06602875140326193,
+      "missing_edge": 0.7915009319100871,
+      "spurious_edge": 0.03519860871724943,
+      "symmetric_edge_distance": 0.01581515626696746
+    },
+    "frame_000590.jpg": {
+      "hf_l1": 0.14945827119265923,
+      "missing_edge": 0.8002454897008074,
+      "spurious_edge": 0.03010946311206615,
+      "symmetric_edge_distance": 0.012281928455675918
+    },
+    "frame_000650.jpg": {
+      "hf_l1": 0.12421090693839267,
+      "missing_edge": 0.7885698757902847,
+      "spurious_edge": 0.0246363682547805,
+      "symmetric_edge_distance": 0.00938485722393217
+    },
+    "frame_000690.jpg": {
+      "hf_l1": 0.12826208272815304,
+      "missing_edge": 0.7993295938958251,
+      "spurious_edge": 0.025158335421225624,
+      "symmetric_edge_distance": 0.008281461925686523
+    },
+    "frame_000730.jpg": {
+      "hf_l1": 0.11192047610672354,
+      "missing_edge": 0.7855017568200754,
+      "spurious_edge": 0.02306650229408664,
+      "symmetric_edge_distance": 0.006386395707132991
+    },
+    "frame_000890.jpg": {
+      "hf_l1": 0.05074091590640886,
+      "missing_edge": 0.5145937493972662,
+      "spurious_edge": 0.01507227305625007,
+      "symmetric_edge_distance": 0.0019438143202361818
+    },
+    "frame_001040.jpg": {
+      "hf_l1": 0.04121688782225852,
+      "missing_edge": 0.6192666439933583,
+      "spurious_edge": 0.033388835368637154,
+      "symmetric_edge_distance": 0.0013569669018341204
+    },
+    "frame_001260.jpg": {
+      "hf_l1": 0.07010834724869888,
+      "missing_edge": 0.6990025955733408,
+      "spurious_edge": 0.023782238966999353,
+      "symmetric_edge_distance": 0.0021409500953322976
+    },
+    "frame_001310.jpg": {
+      "hf_l1": 0.05023939766778627,
+      "missing_edge": 0.5578026266860653,
+      "spurious_edge": 0.02433929350976217,
+      "symmetric_edge_distance": 0.0013177596249794796
+    },
+    "frame_001390.jpg": {
+      "hf_l1": 0.057546605596405245,
+      "missing_edge": 0.46641853225623553,
+      "spurious_edge": 0.014542254623038972,
+      "symmetric_edge_distance": 0.0010865421932278023
+    },
+    "frame_001720.jpg": {
+      "hf_l1": 0.035948305241618246,
+      "missing_edge": 0.3902653331652444,
+      "spurious_edge": 0.009387759282092376,
+      "symmetric_edge_distance": 0.000934596164677924
+    },
+    "frame_002050.jpg": {
+      "hf_l1": 0.05602610573635317,
+      "missing_edge": 0.5349951794958637,
+      "spurious_edge": 0.014555104230616019,
+      "symmetric_edge_distance": 0.0010414762607297446
+    },
+    "frame_002240.jpg": {
+      "hf_l1": 0.037996917347494545,
+      "missing_edge": 0.3297010057791959,
+      "spurious_edge": 0.008414614114073493,
+      "symmetric_edge_distance": 0.00040950500728087025
+    },
+    "frame_002480.jpg": {
+      "hf_l1": 0.0456424625771605,
+      "missing_edge": 0.5120982289821872,
+      "spurious_edge": 0.017387083340829154,
+      "symmetric_edge_distance": 0.0013376032072396798
+    }
+  },
+  "missing_edge_mean": 0.6919543565307246,
+  "scene_id": "bonsai",
+  "schema_version": 1,
+  "spurious_edge_mean": 0.024978937654427352,
+  "symmetric_edge_distance_mean": 0.012090075345658974
+}

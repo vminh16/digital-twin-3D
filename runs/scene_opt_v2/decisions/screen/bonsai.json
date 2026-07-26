@@ -1,0 +1,81 @@
+{
+  "decision_sha256": "c85995d7f1c8c81e7271e2f413b0e67a0ae8f5cf5abf1c73b157e65f6af601a3",
+  "decision_stage": "screen",
+  "evaluations": [
+    {
+      "candidate_id": "E2-appearance-sh4-v1",
+      "candidate_lpips": 0.38573348925759393,
+      "candidate_peak_gaussians": 582041,
+      "candidate_symmetric_edge_distance": 0.012090075345658978,
+      "config_sha256": "ab35b9013658bb0389fc5a3e72f147bf5d55e0364b9aa85088168ca50c1cb1a3",
+      "deltas": {
+        "hard_score50": 0.8569865482731345,
+        "lpips": -0.006937947434683678,
+        "missing_edge": -0.007871458086689098,
+        "score50": 0.5962658037601898,
+        "spurious_edge": 0.00026073517298110666
+      },
+      "eligible": false,
+      "gates": {
+        "detail_not_jointly_worse": true,
+        "hard_score_not_worse": true,
+        "integrity_passed": true,
+        "lpips_not_worse": true,
+        "primitive_growth_controlled": true,
+        "score50_improved": true,
+        "time_budget": true,
+        "vram_budget": true
+      },
+      "holdout_sha256": "6cba31bb686b0073fc4b639425de55933fc9627d2b848d80f1e73053752271b1",
+      "manifest_sha256": "048be868760dc833ea0b299145aded9b1b13708542213bce88e0fdb064542e97",
+      "paired_wall_time_ratio": 1.0939804717510018,
+      "reversed_after_15k": false,
+      "scene_id": "bonsai",
+      "schema_version": 1,
+      "screen_qualified": true,
+      "status": "screen_passed",
+      "step": 7000
+    },
+    {
+      "candidate_id": "E2-loss-local-laplacian-v1",
+      "candidate_lpips": 0.3905428225795428,
+      "candidate_peak_gaussians": 653543,
+      "candidate_symmetric_edge_distance": 0.013000322397275528,
+      "config_sha256": "92f9c6be3c19516a95af660b2d0f84b56590153db6d206210d7bb79a7fa6aa6c",
+      "deltas": {
+        "hard_score50": 0.22806695331290427,
+        "lpips": -0.0021286141127347946,
+        "missing_edge": -0.0038736903586645832,
+        "score50": 0.28689501103751525,
+        "spurious_edge": 0.0005049413968080604
+      },
+      "eligible": false,
+      "gates": {
+        "detail_not_jointly_worse": true,
+        "hard_score_not_worse": true,
+        "integrity_passed": true,
+        "lpips_not_worse": true,
+        "primitive_growth_controlled": true,
+        "score50_improved": true,
+        "time_budget": true,
+        "vram_budget": true
+      },
+      "holdout_sha256": "6cba31bb686b0073fc4b639425de55933fc9627d2b848d80f1e73053752271b1",
+      "manifest_sha256": "048be868760dc833ea0b299145aded9b1b13708542213bce88e0fdb064542e97",
+      "paired_wall_time_ratio": 1.0451479471352367,
+      "reversed_after_15k": false,
+      "scene_id": "bonsai",
+      "schema_version": 1,
+      "screen_qualified": true,
+      "status": "screen_passed",
+      "step": 7000
+    }
+  ],
+  "fallback_to_b0": false,
+  "holdout_sha256": "6cba31bb686b0073fc4b639425de55933fc9627d2b848d80f1e73053752271b1",
+  "manifest_sha256": "048be868760dc833ea0b299145aded9b1b13708542213bce88e0fdb064542e97",
+  "scene_id": "bonsai",
+  "schema_version": 1,
+  "selected_candidate_id": "E2-appearance-sh4-v1",
+  "step": 7000
+}
