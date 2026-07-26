@@ -298,3 +298,22 @@ def test_existing_mvp_config_rejects_internal_holdout(
 
     with pytest.raises(ValueError, match="MVP production identity"):
         run_mvp_production._validate_mvp_config(path, experiment)
+
+
+def test_completed_production_removes_only_empty_validation_workspace(
+    tmp_path: Path,
+) -> None:
+    empty_run = tmp_path / "empty"
+    empty_validation = empty_run / "validation_renders"
+    empty_validation.mkdir(parents=True)
+
+    populated_run = tmp_path / "populated"
+    populated_validation = populated_run / "validation_renders"
+    populated_validation.mkdir(parents=True)
+    (populated_validation / "held_out.png").write_bytes(b"artifact")
+
+    run_mvp_production._remove_empty_validation_workspace(empty_run)
+    run_mvp_production._remove_empty_validation_workspace(populated_run)
+
+    assert not empty_validation.exists()
+    assert (populated_validation / "held_out.png").is_file()

@@ -218,6 +218,7 @@ def _validate_completed_production(
 ) -> None:
     config_path = run_dir / "config.yaml"
     config = _validate_mvp_config(config_path, experiment)
+    _remove_empty_validation_workspace(run_dir)
     validate_run_artifacts(
         run_dir,
         experiment,
@@ -226,6 +227,12 @@ def _validate_completed_production(
         expected_image_names=(),
         step=30_000,
     )
+
+
+def _remove_empty_validation_workspace(run_dir: Path) -> None:
+    path = run_dir / "validation_renders"
+    if path.is_dir() and not any(path.iterdir()):
+        path.rmdir()
 
 
 def _parser() -> argparse.ArgumentParser:

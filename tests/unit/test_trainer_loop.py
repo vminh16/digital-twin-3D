@@ -218,6 +218,34 @@ def _trainer(
     )
 
 
+def test_trainer_only_creates_validation_workspace_for_internal_holdout(
+    tmp_path: Path,
+    manifest_artifact: Path,
+) -> None:
+    production_config = _config()
+    production_config["internal_holdout"] = False
+    production_run = tmp_path / "production"
+    _trainer(
+        production_run,
+        manifest_artifact,
+        _MockDataset(),
+        config=production_config,
+    )
+
+    holdout_config = _config()
+    holdout_config["internal_holdout"] = True
+    holdout_run = tmp_path / "holdout"
+    _trainer(
+        holdout_run,
+        manifest_artifact,
+        _MockDataset(),
+        config=holdout_config,
+    )
+
+    assert not (production_run / "validation_renders").exists()
+    assert (holdout_run / "validation_renders").is_dir()
+
+
 def test_trainer_normalizes_raw_camera_pose_before_render(
     tmp_path: Path,
     manifest_artifact: Path,

@@ -301,7 +301,10 @@ class Trainer:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         (self.output_dir / "checkpoints").mkdir(parents=True, exist_ok=True)
         (self.output_dir / "train_previews").mkdir(parents=True, exist_ok=True)
-        (self.output_dir / "validation_renders").mkdir(parents=True, exist_ok=True)
+        if self.config.get("internal_holdout", False):
+            (self.output_dir / "validation_renders").mkdir(
+                parents=True, exist_ok=True
+            )
 
         # Output files
         # 1. config.yaml
