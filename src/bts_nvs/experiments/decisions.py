@@ -231,6 +231,31 @@ def select_scene_candidate(
     return body
 
 
+def build_b0_retention_decision(
+    b0_report: Mapping[str, object],
+) -> dict[str, object]:
+    """Record an explicit no-screen B0 policy from a validated 7k reference."""
+    b0 = _report(b0_report, "b0_report")
+    if b0.get("candidate_id") != "B0-reference":
+        raise ValueError("b0_report candidate_id must be B0-reference")
+    if b0.get("step") != 7_000:
+        raise ValueError("B0 retention requires a 7000-step reference")
+    body: dict[str, object] = {
+        "schema_version": 1,
+        "scene_id": b0["scene_id"],
+        "step": 7_000,
+        "decision_stage": "screen",
+        "manifest_sha256": b0["manifest_sha256"],
+        "holdout_sha256": b0["holdout_sha256"],
+        "selected_candidate_id": "B0-reference",
+        "fallback_to_b0": True,
+        "evaluations": [],
+        "reason": "no_candidate_authorized",
+    }
+    body["decision_sha256"] = canonical_json_sha256(body)
+    return body
+
+
 def build_cohort_decision(
     scene_decisions: Sequence[Mapping[str, object]],
 ) -> dict[str, object]:

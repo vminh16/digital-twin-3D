@@ -58,7 +58,7 @@ class GaussianParameters(nn.Module):
             quats (torch.Tensor): Initial quaternions (WXYZ) of shape (N, 4).
             opacities (torch.Tensor): Initial opacity logits of shape (N,).
             sh0 (torch.Tensor): Degree-zero SH coefficients of shape (N, 1, 3).
-            shN (torch.Tensor): Higher-order SH coefficients of shape (N, 15, 3).
+            shN (torch.Tensor): Higher-order SH coefficients for degree 3 or 4.
         """
         super().__init__()
 
@@ -74,8 +74,16 @@ class GaussianParameters(nn.Module):
             raise ValueError(f"opacities must have shape ({N},), got {opacities.shape}")
         if sh0.shape != (N, 1, 3):
             raise ValueError(f"sh0 must have shape ({N}, 1, 3), got {sh0.shape}")
-        if shN.shape != (N, 15, 3):
-            raise ValueError(f"shN must have shape ({N}, 15, 3), got {shN.shape}")
+        if (
+            shN.ndim != 3
+            or shN.shape[0] != N
+            or shN.shape[1] not in {15, 24}
+            or shN.shape[2] != 3
+        ):
+            raise ValueError(
+                f"shN must have shape ({N}, 15, 3) or ({N}, 24, 3), "
+                f"got {shN.shape}"
+            )
 
         tensors = {
             "means": means,
@@ -125,8 +133,12 @@ class GaussianParameters(nn.Module):
         return torch.sigmoid(self.opacities)
 
     def get_shs(self) -> torch.Tensor:
-        """Exposes raw Spherical Harmonics coefficients of shape (N, 16, 3)."""
+        """Exposes raw degree-3 or degree-4 Spherical Harmonics coefficients."""
         return torch.cat((self.sh0, self.shN), dim=1)
+
+    @property
+    def max_sh_degree(self) -> int:
+        return 3 if self.shN.shape[1] == 15 else 4
 
     def get_covariance(self) -> torch.Tensor:
         """Computes the 3D covariance matrix Sigma = R S S^T R^T of shape (N, 3, 3)."""

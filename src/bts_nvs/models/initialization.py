@@ -10,6 +10,8 @@ from bts_nvs.models.normalization import normalize_points_torch
 def initialize_from_manifest(
     manifest: SceneManifest,
     device: torch.device = torch.device("cpu"),
+    *,
+    max_sh_degree: int = 3,
 ) -> GaussianParameters:
     """Initializes 3D Gaussian Splatting parameters from a SceneManifest.
     
@@ -20,6 +22,13 @@ def initialize_from_manifest(
     Returns:
         GaussianParameters: Initialized parameters container on the target device.
     """
+    if (
+        isinstance(max_sh_degree, bool)
+        or not isinstance(max_sh_degree, int)
+        or max_sh_degree not in {3, 4}
+    ):
+        raise ValueError("max_sh_degree must be 3 or 4")
+
     xyz_raw = torch.from_numpy(manifest.sparse_points.copy())
     rgb_raw = torch.from_numpy(manifest.sparse_colors.copy())
     
@@ -58,7 +67,10 @@ def initialize_from_manifest(
     # 5. Initialize Spherical Harmonics coefficients: DC term (degree 0) mapped from RGB [0,1]
     rgb = rgb_raw.float() / 255.0
     sh0 = ((rgb - 0.5) / 0.28209479177387814).unsqueeze(1)
-    shN = torch.zeros((N, 15, 3), dtype=torch.float32)
+    shN = torch.zeros(
+        (N, (max_sh_degree + 1) ** 2 - 1, 3),
+        dtype=torch.float32,
+    )
     
     # 6. Transfer to target device and create the parameters container
     return GaussianParameters(

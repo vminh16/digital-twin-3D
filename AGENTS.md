@@ -71,11 +71,12 @@ HCM0644 HCM0674 HCM0540 HCM0539 HCM0421 chair bonsai
   được nhập vào pool đó hoặc dùng để suy luận cross-scene generalization.
 - Mọi thay đổi model, loss, optimizer, densification, renderer hoặc codec phải
   tạo candidate/baseline ID mới.
-- Chương trình tối ưu scene-specific trong
-  `docs/superpowers/specs/2026-07-22-scene-specific-optimization-program-design.md`
-  là research authority hiện tại. Modules 1–3 và Stage A `B0-reference` 7k đã
-  hoàn tất. Stage B1 density screen trên HCM0539/HCM0421 là scope tiếp theo;
-  confirmation và production vẫn cần gate riêng theo spec.
+- Research authority hiện tại là
+  `docs/superpowers/specs/2026-07-26-five-scene-mvp.md`. Modules 1–3, Stage A
+  và Stage B1 đã hoàn tất; AbsGrad production của HCM0539/HCM0421 là deadline
+  exception, không phải paired-confirmed winner. Scope tiếp theo giữ HCM0644
+  ở B0 và screen riêng antialiasing, local sharpness weighting, SH4 trên
+  HCM0674/HCM0540/chair/bonsai; confirmation và production vẫn cần gate riêng.
 
 ## Evaluation metrics
 Final metric is a weighted composite, matching standard NVS benchmarking (Mip-NeRF / 3DGS-style evaluation):

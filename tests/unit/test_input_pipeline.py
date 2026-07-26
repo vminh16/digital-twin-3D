@@ -8,7 +8,7 @@ from bts_nvs.data.dataset import CameraSample
 from bts_nvs.training.input_pipeline import TrainingInputPipeline
 
 
-def _sample(value: int = 128) -> CameraSample:
+def _sample(value: int = 128, *, weighted: bool = False) -> CameraSample:
     return CameraSample(
         image=np.full((4, 5, 3), value, dtype=np.uint8),
         world_to_camera=np.eye(4, dtype=np.float64),
@@ -16,6 +16,9 @@ def _sample(value: int = 128) -> CameraSample:
         distortion=CameraDistortion("PINHOLE", ()),
         valid_mask=np.ones((4, 5), dtype=bool),
         image_name="a.png",
+        loss_weight=(
+            np.full((4, 5), 128, dtype=np.uint8) if weighted else None
+        ),
     )
 
 
@@ -32,6 +35,19 @@ def test_cpu_pipeline_preserves_values_and_converts_rgb_to_unit_float():
     )
     assert output.mask.dtype == torch.bool
     assert output.world_to_camera.dtype == torch.float64
+    assert output.loss_weight is None
+
+
+def test_cpu_pipeline_transfers_optional_loss_weight():
+    output = TrainingInputPipeline(torch.device("cpu")).transfer(
+        _sample(weighted=True)
+    )
+
+    assert output.loss_weight is not None
+    torch.testing.assert_close(
+        output.loss_weight,
+        torch.full((4, 5), 128.0 / 255.0),
+    )
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is unavailable")

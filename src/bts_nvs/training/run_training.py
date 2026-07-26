@@ -41,7 +41,7 @@ from bts_nvs.experiments.experiment import (
 from bts_nvs.rendering.density_strategy import GsplatStrategy
 from bts_nvs.rendering.gsplat_renderer import render_gaussians
 from bts_nvs.training.checkpoint import load_checkpoint
-from bts_nvs.training.trainer import Trainer
+from bts_nvs.training.trainer import Trainer, active_sh_degree_for_step
 from bts_nvs.training.qualification import (
     CALIBRATION_SCENES,
     build_full_length_report,
@@ -1042,6 +1042,16 @@ def main():
     h = ref_camera.height // args.resize_factor
     resize = (w, h)
     print(f"Downscaling images by factor {args.resize_factor} to resolution: {resize}")
+    candidate_overrides = (
+        candidate_training_overrides(args.candidate_id)
+        if args.candidate_id is not None
+        else {
+            "max_sh_degree": 3,
+            "pixel_weight_mode": "uniform",
+            "pixel_weight_floor": 0.5,
+            "pixel_weight_patch_size": 31,
+        }
+    )
     validate_host_resources(
         cache_bytes=(
             estimate_image_cache_bytes(
@@ -1054,6 +1064,9 @@ def main():
                     )
                     if split is not None
                     else None
+                ),
+                include_loss_weight=(
+                    candidate_overrides["pixel_weight_mode"] != "uniform"
                 ),
             )
             if args.cache_images
@@ -1070,6 +1083,11 @@ def main():
         undistort=True,
         resize=resize,
         cache_images=args.cache_images,
+        loss_weight_mode=str(candidate_overrides["pixel_weight_mode"]),
+        loss_weight_floor=float(candidate_overrides["pixel_weight_floor"]),
+        loss_weight_patch_size=int(
+            candidate_overrides["pixel_weight_patch_size"]
+        ),
     )
     validation_dataset = (
         SceneDataset(
@@ -1096,7 +1114,10 @@ def main():
         scene_root,
         split,
     )
-    gaussians = initialize_from_manifest(initialization_manifest)
+    gaussians = initialize_from_manifest(
+        initialization_manifest,
+        max_sh_degree=int(candidate_overrides["max_sh_degree"]),
+    )
     print(f"Initialized {gaussians.num_gaussians} 3D Gaussian primitives.")
 
     # 5. Build Config baseline B0, including preprocessing identity.

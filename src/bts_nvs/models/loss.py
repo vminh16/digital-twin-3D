@@ -47,6 +47,34 @@ def _masked_l1(x: torch.Tensor, y: torch.Tensor, mask: torch.Tensor) -> torch.Te
     return (torch.abs(x - y) * mask.unsqueeze(-1)).sum() / (3 * mask.sum())
 
 
+def _weighted_masked_l1(
+    x: torch.Tensor,
+    y: torch.Tensor,
+    mask: torch.Tensor,
+    pixel_weights: torch.Tensor,
+) -> torch.Tensor:
+    expected = x.shape[:-1]
+    weights = pixel_weights
+    if weights.shape == expected[1:] and x.shape[0] == 1:
+        weights = weights.unsqueeze(0)
+    if weights.shape != expected:
+        raise ValueError("pixel_weights must match image dimensions")
+    if not weights.is_floating_point():
+        raise ValueError("pixel_weights must be floating point")
+    weights = weights.to(device=x.device, dtype=torch.float32)
+    if weights.device.type == "cpu":
+        if not torch.isfinite(weights).all() or torch.any(weights < 0.0):
+            raise ValueError("pixel_weights must be finite and non-negative")
+    valid_weights = weights * mask
+    denominator = valid_weights.sum()
+    if denominator.device.type == "cpu" and denominator <= 0.0:
+        raise ValueError("pixel_weights contain no positive valid supervision")
+    denominator = denominator.clamp_min(torch.finfo(denominator.dtype).tiny)
+    return (
+        torch.abs(x - y) * valid_weights.unsqueeze(-1)
+    ).sum() / (3 * denominator)
+
+
 class MaskedL1Loss(nn.Module):
     def forward(
         self,
@@ -176,8 +204,14 @@ class JointLoss(nn.Module):
         rgb_pred: torch.Tensor,
         rgb_gt: torch.Tensor,
         mask: torch.Tensor,
+        *,
+        pixel_weights: torch.Tensor | None = None,
     ) -> torch.Tensor:
         x, y, m = _prepare_inputs(rgb_pred, rgb_gt, mask)
-        l1 = _masked_l1(x, y, m)
+        l1 = (
+            _masked_l1(x, y, m)
+            if pixel_weights is None
+            else _weighted_masked_l1(x, y, m, pixel_weights)
+        )
         dssim = self.ssim_loss._forward_prepared(x, y, m)
         return (1.0 - self.lambda_dssim) * l1 + self.lambda_dssim * dssim

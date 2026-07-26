@@ -11,14 +11,19 @@ from bts_nvs.rendering import gsplat_renderer
 from bts_nvs.rendering.render_result import RenderResult
 
 
-def _gaussians(device: torch.device | str = "cpu") -> GaussianParameters:
+def _gaussians(
+    device: torch.device | str = "cpu", *, max_sh_degree: int = 3
+) -> GaussianParameters:
     return GaussianParameters(
         means=torch.tensor([[0.0, 0.0, 5.0]], device=device),
         scales=torch.full((1, 3), -4.0, device=device),
         quats=torch.tensor([[1.0, 0.0, 0.0, 0.0]], device=device),
         opacities=torch.tensor([1.0], device=device),
         sh0=torch.zeros((1, 1, 3), device=device),
-        shN=torch.zeros((1, 15, 3), device=device),
+        shN=torch.zeros(
+            (1, (max_sh_degree + 1) ** 2 - 1, 3),
+            device=device,
+        ),
     )
 
 
@@ -150,7 +155,30 @@ def test_renderer_rejects_invalid_single_camera_pose(monkeypatch, viewmat) -> No
         )
 
 
-@pytest.mark.parametrize("degree", [-1, 4, True])
+def test_renderer_accepts_degree_four_when_coefficients_exist(monkeypatch) -> None:
+    captured = {}
+
+    def fake_rasterization(**kwargs):
+        captured.update(kwargs)
+        return (
+            torch.zeros((1, 16, 16, 3)),
+            torch.zeros((1, 16, 16, 1)),
+            {"means2d": torch.zeros((1, 1, 2))},
+        )
+
+    monkeypatch.setattr(gsplat_renderer, "rasterization", fake_rasterization)
+    gsplat_renderer.render_gaussians(
+        _gaussians(max_sh_degree=4),
+        torch.eye(4),
+        _intrinsics(),
+        active_sh_degree=4,
+    )
+
+    assert captured["colors"].shape == (1, 25, 3)
+    assert captured["sh_degree"] == 4
+
+
+@pytest.mark.parametrize("degree", [-1, 4, 5, True])
 def test_renderer_rejects_invalid_sh_degree(monkeypatch, degree) -> None:
     monkeypatch.setattr(gsplat_renderer, "rasterization", lambda **_: None)
     with pytest.raises(ValueError, match="active_sh_degree"):

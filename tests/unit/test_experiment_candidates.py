@@ -23,6 +23,10 @@ def _settings(**overrides) -> CandidateSettings:
         "rasterize_mode": "classic",
         "appearance_mode": "baseline",
         "sampling_mode": "uniform",
+        "max_sh_degree": 3,
+        "pixel_weight_mode": "uniform",
+        "pixel_weight_floor": 0.5,
+        "pixel_weight_patch_size": 31,
     }
     values.update(overrides)
     return CandidateSettings(**values)
@@ -33,10 +37,16 @@ def test_registry_locks_first_executable_candidates() -> None:
         "B0-reference",
         "E1-density-absgrad-t04-v1",
         "E1-density-scale005-v1",
+        "E2-raster-aa-v1",
+        "E2-loss-local-laplacian-v1",
+        "E2-appearance-sh4-v1",
     )
     baseline = candidate_settings("B0-reference")
     absgrad = candidate_settings("E1-density-absgrad-t04-v1")
     scale = candidate_settings("E1-density-scale005-v1")
+    antialiased = candidate_settings("E2-raster-aa-v1")
+    weighted = candidate_settings("E2-loss-local-laplacian-v1")
+    sh4 = candidate_settings("E2-appearance-sh4-v1")
 
     assert absgrad == replace(
         baseline,
@@ -48,6 +58,22 @@ def test_registry_locks_first_executable_candidates() -> None:
         baseline,
         candidate_id="E1-density-scale005-v1",
         grow_scale3d=0.005,
+    )
+    assert antialiased == replace(
+        baseline,
+        candidate_id="E2-raster-aa-v1",
+        rasterize_mode="antialiased",
+    )
+    assert weighted == replace(
+        baseline,
+        candidate_id="E2-loss-local-laplacian-v1",
+        pixel_weight_mode="local-laplacian",
+    )
+    assert sh4 == replace(
+        baseline,
+        candidate_id="E2-appearance-sh4-v1",
+        appearance_mode="sh4",
+        max_sh_degree=4,
     )
 
 
@@ -77,6 +103,10 @@ def test_training_overrides_are_complete_fresh_plain_values() -> None:
         "rasterize_mode": "classic",
         "appearance_mode": "baseline",
         "sampling_mode": "uniform",
+        "max_sh_degree": 3,
+        "pixel_weight_mode": "uniform",
+        "pixel_weight_floor": 0.5,
+        "pixel_weight_patch_size": 31,
     }
 
     overrides["grow_grad2d"] = 1.0
@@ -100,6 +130,13 @@ def test_training_overrides_are_complete_fresh_plain_values() -> None:
         ("prune_opa", 1.0),
         ("refine_stop_step", 0),
         ("refine_stop_step", 1.5),
+        ("max_sh_degree", True),
+        ("max_sh_degree", 2),
+        ("max_sh_degree", 5),
+        ("pixel_weight_floor", 0.0),
+        ("pixel_weight_floor", 1.1),
+        ("pixel_weight_patch_size", 2),
+        ("pixel_weight_patch_size", 32),
     ],
 )
 def test_candidate_contract_rejects_invalid_numeric_fields(field, value) -> None:
@@ -116,6 +153,7 @@ def test_candidate_contract_rejects_invalid_numeric_fields(field, value) -> None
         ("rasterize_mode", "ewa"),
         ("appearance_mode", "affine"),
         ("sampling_mode", "quality"),
+        ("pixel_weight_mode", "gradient"),
     ],
 )
 def test_candidate_contract_rejects_invalid_identity_and_modes(field, value) -> None:
@@ -126,3 +164,13 @@ def test_candidate_contract_rejects_invalid_identity_and_modes(field, value) -> 
 @pytest.mark.parametrize("rasterize_mode", ["classic", "antialiased"])
 def test_candidate_contract_accepts_known_rasterize_modes(rasterize_mode) -> None:
     assert _settings(rasterize_mode=rasterize_mode).rasterize_mode == rasterize_mode
+
+
+def test_candidate_contract_requires_consistent_sh_mode() -> None:
+    with pytest.raises(ValueError, match="appearance_mode"):
+        _settings(appearance_mode="sh4")
+    with pytest.raises(ValueError, match="max_sh_degree"):
+        _settings(max_sh_degree=4)
+
+    settings = _settings(appearance_mode="sh4", max_sh_degree=4)
+    assert settings.max_sh_degree == 4

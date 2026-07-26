@@ -28,9 +28,11 @@ def render_gaussians(
     normalized Gaussian means. Phase 3 uses one camera per optimization step.
     """
     if isinstance(active_sh_degree, bool) or not isinstance(active_sh_degree, int):
-        raise ValueError("active_sh_degree must be an integer from 0 to 3")
-    if not 0 <= active_sh_degree <= 3:
-        raise ValueError("active_sh_degree must be an integer from 0 to 3")
+        raise ValueError("active_sh_degree must be an integer")
+    if not 0 <= active_sh_degree <= gaussians.max_sh_degree:
+        raise ValueError(
+            "active_sh_degree exceeds the available SH coefficients"
+        )
     if render_mode not in {"RGB", "RGB+D"}:
         raise ValueError("render_mode must be 'RGB' or 'RGB+D'")
     if not isinstance(absgrad, bool):

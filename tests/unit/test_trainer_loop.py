@@ -46,7 +46,12 @@ class _FakeDefaultStrategy:
 
 
 class _MockDataset:
-    def __init__(self, *, distortion: CameraDistortion | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        distortion: CameraDistortion | None = None,
+        weighted: bool = False,
+    ) -> None:
         scale = 0.1
         center = np.array([10.0, 0.0, 0.0], dtype=np.float64)
         transform = np.eye(4, dtype=np.float64)
@@ -64,6 +69,7 @@ class _MockDataset:
             ),
         )
         self.distortion = distortion or CameraDistortion("PINHOLE", ())
+        self.weighted = weighted
         self.sampled_indices: list[int] = []
 
     @staticmethod
@@ -85,6 +91,11 @@ class _MockDataset:
             distortion=self.distortion,
             valid_mask=np.ones((16, 16), dtype=bool),
             image_name=f"img_{index}.png",
+            loss_weight=(
+                np.full((16, 16), 128, dtype=np.uint8)
+                if self.weighted
+                else None
+            ),
         )
 
 
@@ -137,14 +148,14 @@ def manifest_artifact(tmp_path: Path) -> Path:
     return manifest_path
 
 
-def _gaussians() -> GaussianParameters:
+def _gaussians(max_sh_degree: int = 3) -> GaussianParameters:
     return GaussianParameters(
         means=torch.zeros((5, 3)),
         scales=torch.zeros((5, 3)),
         quats=torch.tensor([[1.0, 0.0, 0.0, 0.0]] * 5),
         opacities=torch.zeros(5),
         sh0=torch.zeros((5, 1, 3)),
-        shN=torch.zeros((5, 15, 3)),
+        shN=torch.zeros((5, (max_sh_degree + 1) ** 2 - 1, 3)),
     )
 
 
@@ -198,7 +209,7 @@ def _trainer(
     config: dict | None = None,
 ) -> Trainer:
     return Trainer(
-        gaussians=_gaussians(),
+        gaussians=_gaussians((config or {}).get("max_sh_degree", 3)),
         dataset=dataset,
         output_dir=tmp_path,
         config=config or _config(),
@@ -229,10 +240,11 @@ def test_trainer_normalizes_raw_camera_pose_before_render(
 
 
 @pytest.mark.parametrize(
-    "candidate_id,expected_absgrad,expected_grow_grad2d",
+    "candidate_id,expected_absgrad,expected_grow_grad2d,expected_rasterize_mode",
     [
-        ("B0-reference", False, 0.0002),
-        ("E1-density-absgrad-t04-v1", True, 0.0004),
+        ("B0-reference", False, 0.0002, "classic"),
+        ("E1-density-absgrad-t04-v1", True, 0.0004, "classic"),
+        ("E2-raster-aa-v1", False, 0.0002, "antialiased"),
     ],
 )
 def test_trainer_forwards_candidate_density_settings(
@@ -242,6 +254,7 @@ def test_trainer_forwards_candidate_density_settings(
     candidate_id: str,
     expected_absgrad: bool,
     expected_grow_grad2d: float,
+    expected_rasterize_mode: str,
 ) -> None:
     captured: dict[str, object] = {}
 
@@ -264,11 +277,64 @@ def test_trainer_forwards_candidate_density_settings(
     trainer.train(stop_step=1, checkpoint_every=1)
 
     assert captured["render_absgrad"] is expected_absgrad
-    assert captured["rasterize_mode"] == "classic"
+    assert captured["rasterize_mode"] == expected_rasterize_mode
     assert trainer.strategy.backend.config["absgrad"] is expected_absgrad
     assert trainer.strategy.backend.config["grow_grad2d"] == pytest.approx(
         expected_grow_grad2d
     )
+
+
+def test_trainer_forwards_local_loss_weights(
+    tmp_path: Path,
+    manifest_artifact: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(trainer_module, "render_gaussians", _differentiable_render)
+    config = _config(max_steps=1)
+    config.update(
+        candidate_training_overrides("E2-loss-local-laplacian-v1")
+    )
+    trainer = _trainer(
+        tmp_path / "weighted",
+        manifest_artifact,
+        _MockDataset(weighted=True),
+        config=config,
+    )
+    captured = {}
+    original = trainer.loss_fn.forward
+
+    def capture_loss(*args, **kwargs):
+        captured["pixel_weights"] = kwargs.get("pixel_weights")
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(trainer.loss_fn, "forward", capture_loss)
+    trainer.train(stop_step=1, checkpoint_every=1)
+
+    assert captured["pixel_weights"] is not None
+    torch.testing.assert_close(
+        captured["pixel_weights"],
+        torch.full((16, 16), 128.0 / 255.0),
+    )
+
+
+def test_trainer_accepts_sh4_candidate_model(
+    tmp_path: Path,
+    manifest_artifact: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(trainer_module, "render_gaussians", _differentiable_render)
+    config = _config(max_steps=1)
+    config.update(candidate_training_overrides("E2-appearance-sh4-v1"))
+    trainer = _trainer(
+        tmp_path / "sh4",
+        manifest_artifact,
+        _MockDataset(),
+        config=config,
+    )
+
+    trainer.train(stop_step=1, checkpoint_every=1)
+
+    assert trainer.gaussians.get_shs().shape == (5, 25, 3)
 
 
 def test_trainer_rejects_distorted_training_sample(

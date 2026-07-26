@@ -1,5 +1,9 @@
 # Generic Experiment Runner and Decision Engine Design
 
+> **Historical implementation reference.** The implemented runner invariants
+> needed by the active MVP are consolidated in
+> `2026-07-26-five-scene-mvp.md`.
+
 **Date:** 2026-07-22
 
 **Status:** Implemented and locally verified. User-reported NVIDIA L4 smoke

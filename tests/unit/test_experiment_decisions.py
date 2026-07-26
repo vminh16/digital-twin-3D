@@ -3,6 +3,7 @@ import copy
 import pytest
 
 from bts_nvs.experiments.decisions import (
+    build_b0_retention_decision,
     build_cohort_decision,
     evaluate_candidate,
     select_scene_candidate,
@@ -108,6 +109,20 @@ def test_7k_can_select_a_screen_winner_but_cannot_accept_for_production() -> Non
     assert evaluated["status"] == "screen_passed"
     assert selected["decision_stage"] == "screen"
     assert selected["selected_candidate_id"] == "E1-density-absgrad-t04-v1"
+
+
+def test_b0_retention_records_no_authorized_candidate() -> None:
+    decision = build_b0_retention_decision(
+        _report("B0-reference", step=7_000)
+    )
+
+    assert decision["selected_candidate_id"] == "B0-reference"
+    assert decision["fallback_to_b0"] is True
+    assert decision["evaluations"] == []
+    assert decision["reason"] == "no_candidate_authorized"
+    unhashed = dict(decision)
+    del unhashed["decision_sha256"]
+    assert decision["decision_sha256"] == canonical_json_sha256(unhashed)
 
 
 def test_pair_identity_and_nonfinite_values_are_rejected() -> None:

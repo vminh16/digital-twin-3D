@@ -130,6 +130,27 @@ def test_joint_loss_validates_weight_and_identity() -> None:
     )
 
 
+def test_joint_loss_applies_pixel_weights_only_to_l1() -> None:
+    target = torch.zeros((16, 16, 3))
+    prediction = target.clone()
+    prediction[:, :8] = 1.0
+    mask = torch.ones((16, 16), dtype=torch.bool)
+    weights = torch.ones((16, 16))
+    weights[:, :8] = 0.5
+
+    unweighted = JointLoss(lambda_dssim=0.0)(prediction, target, mask)
+    weighted = JointLoss(lambda_dssim=0.0)(
+        prediction,
+        target,
+        mask,
+        pixel_weights=weights,
+    )
+
+    assert weighted < unweighted
+    with pytest.raises(ValueError, match="pixel_weights"):
+        JointLoss()(prediction, target, mask, pixel_weights=torch.ones(16))
+
+
 def test_ssim_validates_configuration_and_resolution() -> None:
     with pytest.raises(ValueError, match="kernel_size"):
         MaskedSSIMLoss(kernel_size=10)

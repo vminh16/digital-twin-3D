@@ -1,5 +1,8 @@
 # Stage B1 — HCM0539/HCM0421 Density and Thin-Detail Screen
 
+> **Historical completed plan.** Current work is governed by
+> `../specs/2026-07-26-five-scene-mvp.md`.
+
 **Date:** 2026-07-24
 
 **Status:** Active next-stage plan. This plan authorizes only four fresh 7k

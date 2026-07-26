@@ -1,5 +1,9 @@
 # Scene-Specific Seven-Scene Optimization Program Design
 
+> **Historical provenance.** The active five-scene MVP authority is
+> `2026-07-26-five-scene-mvp.md`. This document preserves the completed
+> program design and earlier gates; it is no longer required default context.
+
 **Date:** 2026-07-22
 
 **Status:** Current umbrella authority. Modules 1–3, Stage A, and Stage B1 are

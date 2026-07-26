@@ -17,6 +17,7 @@ from bts_nvs.experiments.artifacts import (
 )
 from bts_nvs.experiments.commands import build_training_command
 from bts_nvs.experiments.decisions import (
+    build_b0_retention_decision,
     save_scene_decision,
     select_scene_candidate,
 )
@@ -211,6 +212,18 @@ def decide_screen(
     decision = select_scene_candidate(b0_report, candidate_reports)
     if decision.get("decision_stage") != "screen":
         raise ValueError("decide-screen requires 7000-step reports")
+    save_scene_decision(decision, Path(output_path))
+    return decision
+
+
+def retain_b0(
+    b0_report_path: str | Path,
+    output_path: str | Path,
+) -> dict[str, object]:
+    """Persist an explicit B0 decision when the active spec authorizes no screen."""
+    decision = build_b0_retention_decision(
+        load_json_artifact(Path(b0_report_path))
+    )
     save_scene_decision(decision, Path(output_path))
     return decision
 
@@ -425,6 +438,9 @@ def _parser() -> argparse.ArgumentParser:
     decide = subparsers.add_parser(
         "decide-screen", help="select a deterministic 7k screen winner"
     )
+    retain = subparsers.add_parser(
+        "retain-b0", help="record an explicit no-screen B0 decision"
+    )
     for command in (run, validate):
         _add_common_arguments(command)
     run.add_argument("--resume", action="store_true")
@@ -436,6 +452,8 @@ def _parser() -> argparse.ArgumentParser:
         required=True,
     )
     decide.add_argument("--output", type=Path, required=True)
+    retain.add_argument("--b0-report", type=Path, required=True)
+    retain.add_argument("--output", type=Path, required=True)
     return parser
 
 
@@ -469,6 +487,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             tuple(args.candidate_report),
             args.output,
         )
+        return 0
+    if args.command == "retain-b0":
+        retain_b0(args.b0_report, args.output)
         return 0
     common = dict(
         repo_root=args.repo_root,

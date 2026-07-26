@@ -274,6 +274,13 @@ def test_initialization_from_manifest():
     torch.testing.assert_close(gp.shN, gp2.shN)
 
 
+def test_initialization_supports_degree_four_sh():
+    model = initialize_from_manifest(_mock_manifest(), max_sh_degree=4)
+
+    assert model.shN.shape == (5, 24, 3)
+    assert model.get_shs().shape == (5, 25, 3)
+
+
 def test_initial_scale_uses_normalized_world_distances():
     manifest = _mock_manifest()
     points = np.asarray(

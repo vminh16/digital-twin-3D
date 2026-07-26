@@ -19,6 +19,7 @@ class DeviceCameraSample:
     intrinsics: CameraIntrinsics
     distortion: CameraDistortion
     image_name: str
+    loss_weight: torch.Tensor | None
 
 
 @dataclass
@@ -26,6 +27,7 @@ class _PinnedSlot:
     image: torch.Tensor
     mask: torch.Tensor
     world_to_camera: torch.Tensor
+    loss_weight: torch.Tensor | None
     transfer_done: torch.cuda.Event | None = None
 
 
@@ -47,6 +49,15 @@ class TrainingInputPipeline:
             image=torch.empty(sample.image.shape, dtype=torch.uint8, pin_memory=True),
             mask=torch.empty(sample.valid_mask.shape, dtype=torch.bool, pin_memory=True),
             world_to_camera=torch.empty((4, 4), dtype=torch.float64, pin_memory=True),
+            loss_weight=(
+                torch.empty(
+                    sample.loss_weight.shape,
+                    dtype=torch.uint8,
+                    pin_memory=True,
+                )
+                if sample.loss_weight is not None
+                else None
+            ),
         )
 
     def transfer(
@@ -66,13 +77,21 @@ class TrainingInputPipeline:
             image = torch.from_numpy(sample.image).to(self.device)
             mask = torch.from_numpy(sample.valid_mask).to(self.device)
             pose = torch.from_numpy(pose_array).to(self.device)
+            loss_weight = (
+                torch.from_numpy(sample.loss_weight).to(self.device)
+                if sample.loss_weight is not None
+                else None
+            )
         else:
             slot_index = self._next_slot
             self._next_slot = (self._next_slot + 1) % 2
             if len(self.slots) <= slot_index:
                 self.slots.append(self._new_slot(sample))
             slot = self.slots[slot_index]
-            if slot.image.shape != sample.image.shape:
+            if (
+                slot.image.shape != sample.image.shape
+                or (slot.loss_weight is None) != (sample.loss_weight is None)
+            ):
                 if slot.transfer_done is not None:
                     slot.transfer_done.synchronize()
                 slot = self._new_slot(sample)
@@ -83,9 +102,16 @@ class TrainingInputPipeline:
             slot.image.copy_(torch.from_numpy(sample.image))
             slot.mask.copy_(torch.from_numpy(sample.valid_mask))
             slot.world_to_camera.copy_(torch.from_numpy(pose_array))
+            if slot.loss_weight is not None and sample.loss_weight is not None:
+                slot.loss_weight.copy_(torch.from_numpy(sample.loss_weight))
             image = slot.image.to(self.device, non_blocking=True)
             mask = slot.mask.to(self.device, non_blocking=True)
             pose = slot.world_to_camera.to(self.device, non_blocking=True)
+            loss_weight = (
+                slot.loss_weight.to(self.device, non_blocking=True)
+                if slot.loss_weight is not None
+                else None
+            )
             slot.transfer_done = torch.cuda.Event()
             slot.transfer_done.record(torch.cuda.current_stream(self.device))
 
@@ -96,4 +122,9 @@ class TrainingInputPipeline:
             intrinsics=sample.intrinsics,
             distortion=sample.distortion,
             image_name=sample.image_name,
+            loss_weight=(
+                loss_weight.to(dtype=torch.float32).div_(255.0)
+                if loss_weight is not None
+                else None
+            ),
         )

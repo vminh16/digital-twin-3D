@@ -1,5 +1,8 @@
 # Stage A — Seven-scene B0 7k Reference Execution Plan
 
+> **Historical completed plan.** Current work is governed by
+> `../specs/2026-07-26-five-scene-mvp.md`.
+
 **Status:** Completed on 2026-07-24. All seven references passed the locked
 artifact contract. This file is retained as execution evidence and is no longer
 the active plan.

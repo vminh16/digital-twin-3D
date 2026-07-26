@@ -84,6 +84,13 @@ def test_training_config_binds_preprocessing_identity():
     assert config["rolling_checkpoint"] is False
 
 
+def test_sh_degree_schedule_reaches_candidate_maximum():
+    assert run_training.active_sh_degree_for_step(0, 4) == 0
+    assert run_training.active_sh_degree_for_step(3_999, 4) == 3
+    assert run_training.active_sh_degree_for_step(4_000, 4) == 4
+    assert run_training.active_sh_degree_for_step(9_000, 3) == 3
+
+
 @pytest.mark.parametrize(
     "backend,precision",
     [

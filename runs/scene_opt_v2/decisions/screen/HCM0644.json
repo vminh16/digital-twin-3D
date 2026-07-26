@@ -1,0 +1,13 @@
+{
+  "decision_sha256": "1eecd31bcb887b5df9abc0a2bc42a86b1a2bfefe2d2ff1479c1b3cd84f9db79d",
+  "decision_stage": "screen",
+  "evaluations": [],
+  "fallback_to_b0": true,
+  "holdout_sha256": "d578c44172ea3bf5617a5c15b76a8aa972ea99cc4d63f863a895845388620659",
+  "manifest_sha256": "abfe7fb50c7dfcbb99e97dccabf559cde3bb940d223b76d849558a5140f8c87b",
+  "reason": "no_candidate_authorized",
+  "scene_id": "HCM0644",
+  "schema_version": 1,
+  "selected_candidate_id": "B0-reference",
+  "step": 7000
+}

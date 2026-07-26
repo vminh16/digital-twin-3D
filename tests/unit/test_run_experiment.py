@@ -15,6 +15,7 @@ from bts_nvs.experiments.run_experiment import (
     _validate_backend_config,
     decide_screen,
     main,
+    retain_b0,
     run_one,
     validate_existing,
 )
@@ -467,6 +468,18 @@ def test_decide_screen_rejects_mismatched_reports_before_writing(
     assert not output_path.exists()
 
 
+def test_retain_b0_writes_a_hash_bearing_policy_decision(tmp_path: Path) -> None:
+    b0_path = tmp_path / "b0.json"
+    output_path = tmp_path / "decision.json"
+    save_json_artifact(_screen_report("B0-reference"), b0_path)
+
+    decision = retain_b0(b0_path, output_path)
+
+    assert load_json_artifact(output_path) == decision
+    assert decision["selected_candidate_id"] == "B0-reference"
+    assert decision["reason"] == "no_candidate_authorized"
+
+
 def test_cli_decide_screen_dispatches_report_paths(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -491,4 +504,27 @@ def test_cli_decide_screen_dispatches_report_paths(
             (tmp_path / "first.json", tmp_path / "second.json"),
             tmp_path / "decision.json",
         )
+    ]
+
+
+def test_cli_retain_b0_dispatches_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured = []
+    monkeypatch.setattr(
+        "bts_nvs.experiments.run_experiment.retain_b0",
+        lambda *args: captured.append(args),
+    )
+
+    assert main(
+        [
+            "retain-b0",
+            "--b0-report",
+            str(tmp_path / "b0.json"),
+            "--output",
+            str(tmp_path / "decision.json"),
+        ]
+    ) == 0
+    assert captured == [
+        (tmp_path / "b0.json", tmp_path / "decision.json")
     ]

@@ -178,9 +178,9 @@ def run_inference(
             if (
                 isinstance(active_sh_degree, bool)
                 or not isinstance(active_sh_degree, int)
-                or not 0 <= active_sh_degree <= 3
+                or not 0 <= active_sh_degree <= 4
             ):
-                raise ValueError("checkpoint active_sh_degree must be from 0 to 3")
+                raise ValueError("checkpoint active_sh_degree must be from 0 to 4")
             gaussians = gaussians_from_checkpoint(checkpoint, device)
             del checkpoint
             scene_output = staging / scene_id

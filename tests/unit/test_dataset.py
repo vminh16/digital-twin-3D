@@ -117,6 +117,7 @@ def test_cached_and_uncached_samples_are_bit_identical(tmp_path, monkeypatch):
     assert actual.image.dtype == np.uint8
     assert actual.valid_mask.flags.c_contiguous
     assert actual.valid_mask.dtype == np.bool_
+    assert actual.loss_weight is None
 
 
 def test_cache_decodes_once_and_returned_samples_are_isolated(tmp_path, monkeypatch):
@@ -214,3 +215,40 @@ def test_dataset_subset_rejects_duplicate_unknown_and_test_names(tmp_path):
         SceneDataset(manifest, tmp_path / "scene", image_names=("missing.png",))
     with pytest.raises(ValueError, match="unknown"):
         SceneDataset(manifest, tmp_path / "scene", image_names=("target.JPG",))
+
+
+def test_local_laplacian_weights_are_bounded_and_favor_sharp_patches(tmp_path):
+    dataset, _ = _dataset(tmp_path)
+    image_path = tmp_path / "scene" / "train" / "images" / "a.png"
+    image = np.full((6, 8, 3), 128, dtype=np.uint8)
+    checker = (np.indices((6, 4)).sum(axis=0) % 2 * 255).astype(np.uint8)
+    image[:, 4:, :] = checker[..., None]
+    Image.fromarray(image).save(image_path)
+
+    weighted = SceneDataset(
+        dataset.manifest,
+        tmp_path / "scene",
+        loss_weight_mode="local-laplacian",
+        loss_weight_floor=0.5,
+        loss_weight_patch_size=3,
+    )[0].loss_weight
+
+    assert weighted is not None
+    assert weighted.shape == (6, 8)
+    assert weighted.dtype == np.uint8
+    assert int(weighted.min()) >= 128
+    assert int(weighted.max()) <= 255
+    assert weighted[:, 5:].mean() > weighted[:, :2].mean()
+
+
+def test_camera_sample_rejects_misaligned_loss_weight():
+    with pytest.raises(ValueError, match="loss weight"):
+        CameraSample(
+            image=np.zeros((4, 5, 3), dtype=np.uint8),
+            world_to_camera=np.eye(4),
+            intrinsics=CameraIntrinsics(5, 4, 3.0, 3.0, 2.5, 2.0),
+            distortion=CameraDistortion("PINHOLE", ()),
+            valid_mask=np.ones((4, 5), dtype=bool),
+            image_name="a.png",
+            loss_weight=np.ones((3, 5), dtype=np.uint8),
+        )

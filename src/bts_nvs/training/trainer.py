@@ -48,6 +48,22 @@ from bts_nvs.training.resources import (
 )
 
 
+def active_sh_degree_for_step(step_index: int, max_sh_degree: int) -> int:
+    if (
+        isinstance(step_index, bool)
+        or not isinstance(step_index, int)
+        or step_index < 0
+    ):
+        raise ValueError("step_index must be a non-negative integer")
+    if (
+        isinstance(max_sh_degree, bool)
+        or not isinstance(max_sh_degree, int)
+        or max_sh_degree not in {3, 4}
+    ):
+        raise ValueError("max_sh_degree must be 3 or 4")
+    return min(step_index // 1000, max_sh_degree)
+
+
 def _atomic_write_text(path: Path, text: str) -> None:
     temporary = path.with_name(f".{path.name}.tmp")
     temporary.write_text(text, encoding="utf-8")
@@ -228,6 +244,17 @@ class Trainer:
             or self.max_steps <= 0
         ):
             raise ValueError("config max_steps must be a positive integer")
+        self.max_sh_degree = self.config.get("max_sh_degree", 3)
+        if (
+            isinstance(self.max_sh_degree, bool)
+            or not isinstance(self.max_sh_degree, int)
+            or self.max_sh_degree not in {3, 4}
+        ):
+            raise ValueError("config max_sh_degree must be 3 or 4")
+        if self.gaussians.max_sh_degree != self.max_sh_degree:
+            raise ValueError(
+                "Gaussian SH coefficients do not match config max_sh_degree"
+            )
         seed = self.config.get("seed", 0)
         if isinstance(seed, bool) or not isinstance(seed, int) or seed < 0:
             raise ValueError("config seed must be a non-negative integer")
@@ -584,7 +611,10 @@ class Trainer:
             step_start_time = time.perf_counter()
 
             # Spherical harmonics degree scheduling
-            active_sh_degree = min(step_index // 1000, 3)
+            active_sh_degree = active_sh_degree_for_step(
+                step_index,
+                self.max_sh_degree,
+            )
             self.active_sh_degree = active_sh_degree
 
             # Select uniform random camera sample
@@ -644,7 +674,12 @@ class Trainer:
 
             # 3. Compute loss
             with self.precision.autocast():
-                loss = self.loss_fn(result.rgb, rgb_gt, mask)
+                loss = self.loss_fn(
+                    result.rgb,
+                    rgb_gt,
+                    mask,
+                    pixel_weights=device_sample.loss_weight,
+                )
             if not torch.isfinite(loss):
                 raise FloatingPointError(
                     f"non-finite loss at completed step {completed_step}"
