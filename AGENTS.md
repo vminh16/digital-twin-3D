@@ -77,7 +77,28 @@ HCM0644 HCM0674 HCM0540 HCM0539 HCM0421 chair bonsai
   exception, không phải paired-confirmed winner. Five-scene screen đã hoàn
   tất: giữ B0 cho HCM0644/HCM0674/HCM0540, reject antialiasing, và authorize
   deadline-exception full-data 30k production cho chair local-Laplacian cùng
-  bonsai SH4. Ba scene giữ B0 không được retrain cho MVP này.
+  bonsai SH4. Cả bốn production checkpoint override đã hoàn tất. Ba scene giữ
+  B0 không được retrain cho MVP này.
+
+## Current hybrid inference authority
+
+Candidate submission ID là `MVP-hybrid-4scene-q99-v1`. Đúng bốn checkpoint
+override và ba fallback scene là:
+
+| Scene | Render source |
+|---|---|
+| HCM0421, HCM0539 | `runs/scene_opt_v1/production_mvp/scenes/<scene>` |
+| chair, bonsai | `runs/scene_opt_v2/production_mvp/scenes/<scene>` |
+| HCM0644, HCM0674, HCM0540 | byte-identical folders từ `B0-submission-q99-v1` |
+
+Rerender bốn scene thay đổi bằng bốn invocation độc lập của script hiện có
+`scripts/run_phase4_inference.sh`, theo đúng lệnh đã khóa trong README và
+Section 8 của spec. Mỗi invocation khóa JPEG Q99, chỉ chọn một scene và một
+production `run_dir`, rồi đọc pose, intrinsics, dimensions, extension cùng
+case-sensitive filename từ `test/test_poses.csv` thông qua manifest tương ứng.
+Mỗi output root dưới `outputs/` và mỗi inference report phải chưa tồn tại.
+Không rerender ba fallback scene, không re-encode ảnh khi ghép, và không dùng
+`test_output_names` legacy.
 
 ## Evaluation metrics
 Final metric is a weighted composite, matching standard NVS benchmarking (Mip-NeRF / 3DGS-style evaluation):

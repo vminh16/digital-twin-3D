@@ -40,10 +40,19 @@ runtime khoảng 95,6 phút trên NVIDIA L4. Trung bình scene-balanced của
 
 `B0-submission-q99-v1` 30k là production baseline chung đã đạt 70.98330 điểm;
 `B0-reference` 7k là paired internal-holdout authority để chọn candidate. Hai
-artifact có vai trò khác nhau và không thay thế nhau. Bước tiếp theo là Stage
-B1: screen hai density candidate ở 7k trên HCM0539 và HCM0421; chưa chạy 30k
-candidate trong bước này. Xem [documentation status](docs/README.md) và
-[Stage B1 plan](docs/superpowers/plans/2026-07-24-stage-b1-density-screen.md).
+artifact có vai trò khác nhau và không thay thế nhau. Stage B1 đã hoàn tất:
+AbsGrad t04 cải thiện local Score50 trên HCM0539 và HCM0421 nhưng vượt time
+gate 1.25x. Do deadline, hai scene này được duyệt theo hướng compute-first MVP:
+train production 30k trực tiếp, không mô tả là paired-confirmed winner. Xem
+[documentation status](docs/README.md) và
+[five-scene MVP authority](docs/superpowers/specs/2026-07-26-five-scene-mvp.md).
+Vòng hiện tại giữ HCM0644 ở B0; screen antialiasing cho HCM0674/HCM0540,
+local sharpness weighting cho chair/bonsai và SH4 riêng cho bonsai.
+
+Production 30k hiện đã hoàn tất cho bốn scene override. Candidate submission
+được khóa là `MVP-hybrid-4scene-q99-v1`: HCM0421/HCM0539 dùng AbsGrad,
+chair dùng local-Laplacian, bonsai dùng SH4; HCM0644/HCM0674/HCM0540 giữ
+nguyên folder Q99 từ baseline đã đóng.
 
 ## Cài đặt không dùng Docker
 
@@ -129,6 +138,33 @@ Script auxiliary dùng cùng baseline full-resolution, 30k steps, seed 0,
 backend qualification và rolling `recovery.pt`. Nếu checkpoint recovery hợp lệ
 đã tồn tại, script resume; một run hoàn chỉnh sẽ không train lại 30k steps.
 
+### Train AbsGrad compute-first MVP
+
+Script sau chỉ hỗ trợ `HCM0421` và `HCM0539`. Trước mỗi production run, nó
+validate lại B0-reference và AbsGrad screen 7k, gồm config
+`internal_holdout=true`, manifest/holdout hash, validation renders và reports.
+Production 30k luôn dùng `internal_holdout=false` để học toàn bộ train images:
+
+```bash
+bash scripts/run_absgrad_mvp_production.sh
+```
+
+Có thể chạy hoặc resume riêng một scene:
+
+```bash
+bash scripts/run_absgrad_mvp_production.sh HCM0421
+bash scripts/run_absgrad_mvp_production.sh HCM0539
+```
+
+Output mặc định:
+
+```text
+runs/scene_opt_v1/production_mvp/scenes/<scene_id>/
+```
+
+Script tự bỏ qua run hoàn chỉnh, resume duy nhất từ rolling
+`checkpoints/recovery.pt`, và từ chối thư mục partial không có recovery hợp lệ.
+
 ## 4. Inference đúng định dạng CSV
 
 Inference dùng `test_image_names` làm nguồn sự thật và giữ nguyên extension/case:
@@ -141,6 +177,96 @@ Inference dùng `test_image_names` làm nguồn sự thật và giữ nguyên ex
 
 Mặc định JPEG là quality 98, 4:4:4, optimize và non-progressive. Có thể đổi bằng
 `--jpeg_quality 1..100`; không khuyến nghị Q100 vì 7 scene sẽ vượt 350 MB.
+
+### Rerender chính xác bốn scene MVP
+
+Tái sử dụng `scripts/run_phase4_inference.sh` cho từng scene. Mỗi output root
+phải mới vì inference chỉ publish bằng atomic rename và không ghi nối vào một
+root đã tồn tại.
+
+HCM0421:
+
+```bash
+BTS_SCENES_ROOT="$PWD/data/bts_scenes" \
+BTS_MANIFESTS_ROOT="$PWD/runs/manifests" \
+BTS_OUTPUT_ROOT="$PWD/outputs/HCM0421_mvp_q99" \
+BTS_INFERENCE_REPORT="$PWD/runs/scene_opt_v1/inference_HCM0421_mvp_q99.json" \
+bash scripts/run_phase4_inference.sh \
+  --skip_prepare \
+  --jpeg_quality 99 \
+  --scene_ids HCM0421 \
+  --run_dir "HCM0421=$PWD/runs/scene_opt_v1/production_mvp/scenes/HCM0421"
+```
+
+HCM0539:
+
+```bash
+BTS_SCENES_ROOT="$PWD/data/bts_scenes" \
+BTS_MANIFESTS_ROOT="$PWD/runs/manifests" \
+BTS_OUTPUT_ROOT="$PWD/outputs/HCM0539_mvp_q99" \
+BTS_INFERENCE_REPORT="$PWD/runs/scene_opt_v1/inference_HCM0539_mvp_q99.json" \
+bash scripts/run_phase4_inference.sh \
+  --skip_prepare \
+  --jpeg_quality 99 \
+  --scene_ids HCM0539 \
+  --run_dir "HCM0539=$PWD/runs/scene_opt_v1/production_mvp/scenes/HCM0539"
+```
+
+chair:
+
+```bash
+BTS_SCENES_ROOT="$PWD/data/auxiliary" \
+BTS_MANIFESTS_ROOT="$PWD/runs/manifests_auxiliary" \
+BTS_FULL_ROOT="$PWD/runs/phase4/auxiliary_training" \
+BTS_OUTPUT_ROOT="$PWD/outputs/chair_mvp_q99" \
+BTS_INFERENCE_REPORT="$PWD/runs/scene_opt_v2/inference_chair_mvp_q99.json" \
+bash scripts/run_phase4_inference.sh \
+  --skip_prepare \
+  --allow_noncanonical_scenes \
+  --jpeg_quality 99 \
+  --scene_ids chair \
+  --run_dir "chair=$PWD/runs/scene_opt_v2/production_mvp/scenes/chair"
+```
+
+bonsai:
+
+```bash
+BTS_SCENES_ROOT="$PWD/data/auxiliary" \
+BTS_MANIFESTS_ROOT="$PWD/runs/manifests_auxiliary" \
+BTS_FULL_ROOT="$PWD/runs/phase4/auxiliary_training" \
+BTS_OUTPUT_ROOT="$PWD/outputs/bonsai_mvp_q99" \
+BTS_INFERENCE_REPORT="$PWD/runs/scene_opt_v2/inference_bonsai_mvp_q99.json" \
+bash scripts/run_phase4_inference.sh \
+  --skip_prepare \
+  --allow_noncanonical_scenes \
+  --jpeg_quality 99 \
+  --scene_ids bonsai \
+  --run_dir "bonsai=$PWD/runs/scene_opt_v2/production_mvp/scenes/bonsai"
+```
+
+Ánh xạ checkpoint:
+
+| Nhóm | Scene | Candidate | Run directory |
+|---|---|---|---|
+| scene-opt v1 | HCM0421, HCM0539 | `E1-density-absgrad-t04-v1` | `runs/scene_opt_v1/production_mvp/scenes/<scene>` |
+| scene-opt v2 | chair | `E2-loss-local-laplacian-v1` | `runs/scene_opt_v2/production_mvp/scenes/chair` |
+| scene-opt v2 | bonsai | `E2-appearance-sh4-v1` | `runs/scene_opt_v2/production_mvp/scenes/bonsai` |
+
+Output scene folders:
+
+```text
+outputs/HCM0421_mvp_q99/HCM0421/
+outputs/HCM0539_mvp_q99/HCM0539/
+outputs/chair_mvp_q99/chair/
+outputs/bonsai_mvp_q99/bonsai/
+```
+
+Mỗi output root và report tương ứng phải chưa tồn tại. Mỗi invocation load đúng
+rolling checkpoint 30k, đọc world-to-camera pose, intrinsics, width, height và
+case-sensitive `image_name` từ manifest được tạo từ
+`<scene>/test/test_poses.csv`, rồi tự validate toàn bộ subset trước atomic
+rename. Không dùng internal holdout, train camera hay `test_output_names` để
+render test.
 
 Render 5 BTS scene vào một output root mới:
 
@@ -171,21 +297,34 @@ bash scripts/run_phase4_inference.sh \
 Mỗi inference run tự validate toàn bộ output subset trước khi atomic rename.
 Output root và report phải chưa tồn tại để tránh trộn artifact cũ.
 
-## 5. Ghép và nén submission
+## 5. Ghép và nén hybrid submission
 
-Việc ghép chỉ di chuyển các folder scene, không encode ảnh lần hai:
+Đặt `B0_SUBMISSION_ROOT` tới thư mục giải nén của
+`B0-submission-q99-v1`. Tạo staging mới từ đúng ba B0 fallback và bốn output
+MVP; không encode ảnh lần hai:
 
 ```bash
-mkdir -p submission_final
-cp -a outputs_bts/. submission_final/
-cp -a outputs_auxiliary/. submission_final/
-test "$(find submission_final -mindepth 1 -maxdepth 1 -type d | wc -l)" -eq 7
-(cd submission_final && zip -r -9 ../submission_final.zip .)
-du -h submission_final.zip
+B0_SUBMISSION_ROOT="/path/to/extracted/B0-submission-q99-v1"
+FINAL_ROOT="$PWD/submission_mvp_hybrid_4scene_q99_v1"
+
+test ! -e "$FINAL_ROOT"
+mkdir "$FINAL_ROOT"
+cp -a "$B0_SUBMISSION_ROOT/HCM0644" "$FINAL_ROOT/"
+cp -a "$B0_SUBMISSION_ROOT/HCM0674" "$FINAL_ROOT/"
+cp -a "$B0_SUBMISSION_ROOT/HCM0540" "$FINAL_ROOT/"
+cp -a outputs/HCM0421_mvp_q99/HCM0421 "$FINAL_ROOT/"
+cp -a outputs/HCM0539_mvp_q99/HCM0539 "$FINAL_ROOT/"
+cp -a outputs/chair_mvp_q99/chair "$FINAL_ROOT/"
+cp -a outputs/bonsai_mvp_q99/bonsai "$FINAL_ROOT/"
+
+test "$(find "$FINAL_ROOT" -mindepth 1 -maxdepth 1 -type d | wc -l)" -eq 7
+(cd "$FINAL_ROOT" && zip -r -9 ../MVP-hybrid-4scene-q99-v1.zip .)
+du -h MVP-hybrid-4scene-q99-v1.zip
 ```
 
-ZIP phải chứa trực tiếp 7 folder scene, không có tầng `submission_final/` bên
-ngoài. Mục tiêu an toàn là khoảng 310–330 MB; giới hạn cứng là 350 MB.
+ZIP phải chứa trực tiếp đúng 7 folder scene, không có tầng staging bên ngoài.
+Kiểm tra kích thước cuối không vượt giới hạn cứng 350 MB. Không suy ra rằng
+hybrid vẫn đúng 335 MB; bốn render mới có thể làm kích thước thay đổi.
 
 ## 6. Local benchmark
 

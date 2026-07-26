@@ -1,6 +1,7 @@
 # Five-scene MVP authority
 
-**Status:** 7k screen complete; deadline production active from 2026-07-26.
+**Status:** 7k screen and four-scene deadline production complete; rerender
+pending from 2026-07-26.
 
 This document is the concise scientific and execution authority for the next
 MVP. `AGENTS.md` still governs data, output, metric and reproducibility
@@ -134,3 +135,99 @@ This MVP is complete when:
 - all seven scene renders pass the output contract at JPEG Q99;
 - selected winners, fallback decisions, timings and blockers are summarized;
 - no production or submission artifact is silently overwritten.
+
+## 8. Locked rerender and hybrid assembly
+
+The operational candidate ID is `MVP-hybrid-4scene-q99-v1`. Only four scenes
+are rerendered:
+
+| Scene | Production run |
+|---|---|
+| HCM0421 | `runs/scene_opt_v1/production_mvp/scenes/HCM0421` |
+| HCM0539 | `runs/scene_opt_v1/production_mvp/scenes/HCM0539` |
+| chair | `runs/scene_opt_v2/production_mvp/scenes/chair` |
+| bonsai | `runs/scene_opt_v2/production_mvp/scenes/bonsai` |
+
+Reuse the existing inference script once per scene. Each output root and report
+must be absent before its invocation.
+
+HCM0421:
+
+```bash
+BTS_SCENES_ROOT="$PWD/data/bts_scenes" \
+BTS_MANIFESTS_ROOT="$PWD/runs/manifests" \
+BTS_OUTPUT_ROOT="$PWD/outputs/HCM0421_mvp_q99" \
+BTS_INFERENCE_REPORT="$PWD/runs/scene_opt_v1/inference_HCM0421_mvp_q99.json" \
+bash scripts/run_phase4_inference.sh \
+  --skip_prepare \
+  --jpeg_quality 99 \
+  --scene_ids HCM0421 \
+  --run_dir "HCM0421=$PWD/runs/scene_opt_v1/production_mvp/scenes/HCM0421"
+```
+
+HCM0539:
+
+```bash
+BTS_SCENES_ROOT="$PWD/data/bts_scenes" \
+BTS_MANIFESTS_ROOT="$PWD/runs/manifests" \
+BTS_OUTPUT_ROOT="$PWD/outputs/HCM0539_mvp_q99" \
+BTS_INFERENCE_REPORT="$PWD/runs/scene_opt_v1/inference_HCM0539_mvp_q99.json" \
+bash scripts/run_phase4_inference.sh \
+  --skip_prepare \
+  --jpeg_quality 99 \
+  --scene_ids HCM0539 \
+  --run_dir "HCM0539=$PWD/runs/scene_opt_v1/production_mvp/scenes/HCM0539"
+```
+
+chair:
+
+```bash
+BTS_SCENES_ROOT="$PWD/data/auxiliary" \
+BTS_MANIFESTS_ROOT="$PWD/runs/manifests_auxiliary" \
+BTS_FULL_ROOT="$PWD/runs/phase4/auxiliary_training" \
+BTS_OUTPUT_ROOT="$PWD/outputs/chair_mvp_q99" \
+BTS_INFERENCE_REPORT="$PWD/runs/scene_opt_v2/inference_chair_mvp_q99.json" \
+bash scripts/run_phase4_inference.sh \
+  --skip_prepare \
+  --allow_noncanonical_scenes \
+  --jpeg_quality 99 \
+  --scene_ids chair \
+  --run_dir "chair=$PWD/runs/scene_opt_v2/production_mvp/scenes/chair"
+```
+
+bonsai:
+
+```bash
+BTS_SCENES_ROOT="$PWD/data/auxiliary" \
+BTS_MANIFESTS_ROOT="$PWD/runs/manifests_auxiliary" \
+BTS_FULL_ROOT="$PWD/runs/phase4/auxiliary_training" \
+BTS_OUTPUT_ROOT="$PWD/outputs/bonsai_mvp_q99" \
+BTS_INFERENCE_REPORT="$PWD/runs/scene_opt_v2/inference_bonsai_mvp_q99.json" \
+bash scripts/run_phase4_inference.sh \
+  --skip_prepare \
+  --allow_noncanonical_scenes \
+  --jpeg_quality 99 \
+  --scene_ids bonsai \
+  --run_dir "bonsai=$PWD/runs/scene_opt_v2/production_mvp/scenes/bonsai"
+```
+
+All four invocations use JPEG quality 99, 4:4:4, optimized, non-progressive
+encoding. For every scene, the manifest derived from `test/test_poses.csv` is
+authoritative for COLMAP world-to-camera pose, intrinsics, exact dimensions
+and case-sensitive output filename. The legacy `test_output_names` field is
+not an authority.
+
+Expected outputs and reports are:
+
+```text
+outputs/HCM0421_mvp_q99/HCM0421/
+outputs/HCM0539_mvp_q99/HCM0539/
+outputs/chair_mvp_q99/chair/
+outputs/bonsai_mvp_q99/bonsai/
+```
+
+The renderer validates each scene before atomically publishing its output
+root. Final assembly copies the byte-identical Q99 folders for HCM0644,
+HCM0674 and HCM0540 from the closed B0 submission, adds the four newly rendered
+folders, and never re-encodes any image. The final ZIP must contain exactly
+seven top-level scene folders and remain at or below 350 MB.
