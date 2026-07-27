@@ -18,6 +18,7 @@ COHORT_SCENE_IDS = (
     "chair",
     "bonsai",
 )
+ACTIVE_RESEARCH_SCENE_IDS = ("chair", "bonsai")
 MAX_PEAK_VRAM_MB = 23 * 1024
 MAX_PAIRED_WALL_TIME_RATIO = 1.25
 
@@ -25,6 +26,7 @@ MAX_PAIRED_WALL_TIME_RATIO = 1.25
 class ExperimentStage(str, Enum):
     REFERENCE = "reference"
     SCREEN = "screen"
+    RESEARCH = "research"
     CONFIRM = "confirm"
     PRODUCTION = "production"
 
@@ -33,6 +35,7 @@ STAGE_HORIZONS = MappingProxyType(
     {
         ExperimentStage.REFERENCE: 7_000,
         ExperimentStage.SCREEN: 7_000,
+        ExperimentStage.RESEARCH: 30_000,
         ExperimentStage.CONFIRM: 30_000,
         ExperimentStage.PRODUCTION: 30_000,
     }
@@ -79,6 +82,11 @@ class Experiment:
             raise ValueError("stage must be an ExperimentStage")
         if self.scene_id not in COHORT_SCENE_IDS:
             raise ValueError("scene_id must be in the locked cohort")
+        if (
+            self.stage is ExperimentStage.RESEARCH
+            and self.scene_id not in ACTIVE_RESEARCH_SCENE_IDS
+        ):
+            raise ValueError("research stage is limited to chair and bonsai")
 
         candidate_settings(self.candidate_id)
         self._validate_authorization(
@@ -94,6 +102,12 @@ class Experiment:
         elif self.stage is ExperimentStage.SCREEN:
             if self.candidate_id == "B0-reference":
                 raise ValueError("screen requires a non-B0 candidate")
+        elif self.stage is ExperimentStage.RESEARCH:
+            if (
+                self.authorized_scene_winner is not None
+                or self.authorized_cohort_candidate is not None
+            ):
+                raise ValueError("research does not accept candidate authorization")
         elif self.stage is ExperimentStage.CONFIRM:
             if (
                 self.candidate_id != "B0-reference"

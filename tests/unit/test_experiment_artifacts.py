@@ -22,6 +22,8 @@ IMAGE_NAMES = ("a.JPG", "b.JPG", "c.JPG")
 def _experiment(stage: ExperimentStage) -> Experiment:
     if stage is ExperimentStage.REFERENCE:
         return Experiment(stage, "HCM0644", "B0-reference")
+    if stage is ExperimentStage.RESEARCH:
+        return Experiment(stage, "chair", "B0-reference")
     if stage is ExperimentStage.CONFIRM:
         return Experiment(
             stage,
@@ -164,6 +166,20 @@ def _write_run(
             "peak_gaussians": 10,
             "final_num_gaussians": 10,
         }
+        diagnostics = (
+            {
+                "schema_version": 1,
+                "scene_id": experiment.scene_id,
+                "image_count": len(IMAGE_NAMES),
+                "diagnostic_only": True,
+                "scale_opacity": {},
+                "projected_radius": {},
+                "density_control": {},
+                "images": {name: {} for name in IMAGE_NAMES},
+            }
+            if experiment.stage is ExperimentStage.RESEARCH
+            else None
+        )
         experiment_report = build_experiment_report(
             scene_id=experiment.scene_id,
             candidate_id=experiment.candidate_id,
@@ -178,18 +194,31 @@ def _write_run(
             detail_report=detail,
             pose_strata_report=pose,
             resource_summary=resources,
+            gaussian_diagnostics=diagnostics,
         )
         for name, record in (
             ("qualification_report.json", qualification),
             ("detail_metrics.json", detail),
             ("pose_strata.json", pose),
             ("experiment_report.json", experiment_report),
+            *(
+                (("gaussian_diagnostics.json", diagnostics),)
+                if diagnostics is not None
+                else ()
+            ),
         ):
             _write_json(report_root / name, record)
         renders = report_root / "validation_renders"
         renders.mkdir(parents=True)
         for name in IMAGE_NAMES:
             (renders / Path(name).with_suffix(".png").name).write_bytes(b"")
+        if diagnostics is not None:
+            diagnostic_renders = report_root / "diagnostic_filtered_renders"
+            diagnostic_renders.mkdir()
+            for name in IMAGE_NAMES:
+                (
+                    diagnostic_renders / Path(name).with_suffix(".png").name
+                ).write_bytes(b"")
 
     if experiment.stage in (ExperimentStage.CONFIRM, ExperimentStage.PRODUCTION):
         save_checkpoint(
@@ -242,6 +271,19 @@ def test_internal_holdout_validation_uses_reports_and_exact_render_names(
     result = _validate(run, experiment, config_sha256)
 
     assert result.experiment_report is not None
+
+
+def test_research_validation_accepts_15k_evidence_without_model_checkpoint(
+    tmp_path: Path,
+) -> None:
+    experiment = _experiment(ExperimentStage.RESEARCH)
+    run, config_sha256 = _write_run(tmp_path, experiment, step=15_000)
+
+    result = _validate(run, experiment, config_sha256, step=15_000)
+
+    assert result.experiment_report is not None
+    assert result.experiment_report["step"] == 15_000
+    assert not list(run.rglob("*.pt"))
     assert result.experiment_report["image_count"] == 3
     assert result.integrity_passed is True
     assert result.primitive_growth_controlled is True

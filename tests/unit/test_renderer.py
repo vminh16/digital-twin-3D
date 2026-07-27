@@ -124,6 +124,38 @@ def test_renderer_forwards_absgrad_and_rasterize_mode(monkeypatch) -> None:
     assert captured["rasterize_mode"] == "classic"
 
 
+def test_renderer_applies_explicit_gaussian_mask(monkeypatch) -> None:
+    captured = {}
+
+    def fake_rasterization(**kwargs):
+        captured.update(kwargs)
+        return (
+            torch.zeros((1, 16, 16, 3)),
+            torch.zeros((1, 16, 16, 1)),
+            {"means2d": torch.zeros((1, 1, 2))},
+        )
+
+    gaussians = _gaussians()
+    monkeypatch.setattr(gsplat_renderer, "rasterization", fake_rasterization)
+    gsplat_renderer.render_gaussians(
+        gaussians,
+        torch.eye(4),
+        _intrinsics(),
+        active_sh_degree=0,
+        gaussian_mask=torch.tensor([True]),
+    )
+    assert captured["means"].shape == (1, 3)
+
+    with pytest.raises(ValueError, match="gaussian_mask"):
+        gsplat_renderer.render_gaussians(
+            gaussians,
+            torch.eye(4),
+            _intrinsics(),
+            active_sh_degree=0,
+            gaussian_mask=torch.tensor([False]),
+        )
+
+
 @pytest.mark.parametrize(
     "overrides,match",
     [

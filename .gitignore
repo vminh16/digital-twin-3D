@@ -46,6 +46,8 @@ env/
 /runs/**/*.pth
 runs/manifests/
 /outputs/
+submission_round1/
+/outputs_auxiliary/
 /submission_outputs/
 /runs/submission/
 __MACOSX/

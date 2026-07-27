@@ -11,6 +11,7 @@ JPEG_SUBMISSION_CMD = REPO_ROOT / "scripts" / "prepare_jpeg_submission.cmd"
 FULL_TRAINING_SCRIPT = REPO_ROOT / "scripts" / "run_phase4_full_training.sh"
 INFERENCE_SCRIPT = REPO_ROOT / "scripts" / "run_phase4_inference.sh"
 SCENE_OPT_REFERENCE_SCRIPT = REPO_ROOT / "scripts" / "run_scene_opt_references.sh"
+MVP_PRODUCTION_SCRIPT = REPO_ROOT / "scripts" / "run_absgrad_mvp_production.sh"
 
 
 def _read_script(path: Path) -> str:
@@ -226,6 +227,33 @@ def test_scene_opt_reference_script_is_a_thin_reusable_deployment_record():
         "run_training.py",
         "--qualification_candidate",
         "B0-compact",
+        "rm ",
+    ):
+        assert forbidden not in script
+
+
+def test_absgrad_mvp_script_is_a_thin_production_wrapper():
+    script = _read_script(MVP_PRODUCTION_SCRIPT)
+
+    assert script.startswith("#!/usr/bin/env bash\nset -euo pipefail\n")
+    assert "-m bts_nvs.experiments.run_mvp_production" in script
+    assert "BTS_MVP_PRODUCTION_ROOT" in script
+    assert 'PYTHONPATH="${REPO_ROOT}/src' in script
+    assert '"$@"' in script
+    for flag in (
+        "--repo_root",
+        "--scenes_root",
+        "--manifests_root",
+        "--backend_root",
+        "--experiment_root",
+        "--output_root",
+        "--python_bin",
+    ):
+        assert flag in script
+    for forbidden in (
+        "run_training.py",
+        "--internal_holdout",
+        "--max_steps",
         "rm ",
     ):
         assert forbidden not in script

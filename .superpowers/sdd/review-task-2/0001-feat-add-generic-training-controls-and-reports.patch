@@ -1,0 +1,760 @@
+From 4b50b1b8e9b63a99d540482db9a5c01e52653542 Mon Sep 17 00:00:00 2001
+From: vminh16 <minhscntn1608@gmail.com>
+Date: Wed, 22 Jul 2026 15:47:55 +0700
+Subject: [PATCH] feat: add generic training controls and reports
+
+---
+ src/bts_nvs/training/run_training.py | 306 ++++++++++++++++++++++---
+ tests/unit/test_run_training.py      | 325 +++++++++++++++++++++++++++
+ 2 files changed, 601 insertions(+), 30 deletions(-)
+
+diff --git a/src/bts_nvs/training/run_training.py b/src/bts_nvs/training/run_training.py
+index 9706636..9b64eaa 100644
+--- a/src/bts_nvs/training/run_training.py
++++ b/src/bts_nvs/training/run_training.py
+@@ -20,9 +20,21 @@ from bts_nvs.data.manifest import (
+ )
+ from bts_nvs.data.sparse_subset import build_split_sparse_initialization
+ from bts_nvs.cameras.intrinsics import CameraIntrinsics
++from bts_nvs.evaluation.detail_metrics import evaluate_detail_directory
++from bts_nvs.evaluation.experiment_report import (
++    build_experiment_report,
++    save_experiment_report,
++)
+ from bts_nvs.models.gaussian_parameters import GaussianParameters
+ from bts_nvs.models.initialization import initialize_from_manifest
+ from bts_nvs.models.optimizer import setup_optimizers
++from bts_nvs.evaluation.pose_strata import build_pose_strata, save_pose_strata
++from bts_nvs.experiments.candidates import candidate_training_overrides
++from bts_nvs.experiments.experiment import (
++    COHORT_SCENE_IDS,
++    Experiment,
++    ExperimentStage,
++)
+ from bts_nvs.rendering.density_strategy import GsplatStrategy
+ from bts_nvs.rendering.gsplat_renderer import render_gaussians
+ from bts_nvs.training.checkpoint import load_checkpoint
+@@ -83,6 +95,24 @@ def parse_args():
+         default=500,
+         help="Maximum training/optimization steps.",
+     )
++    parser.add_argument(
++        "--stop_step",
++        type=int,
++        default=None,
++        help="Optional execution stop distinct from the configured schedule horizon.",
++    )
++    parser.add_argument(
++        "--candidate_id",
++        type=str,
++        default=None,
++        help="Registered generic experiment candidate identity.",
++    )
++    parser.add_argument(
++        "--experiment_stage",
++        choices=tuple(stage.value for stage in ExperimentStage),
++        default=None,
++        help="Generic experiment stage.",
++    )
+     parser.add_argument(
+         "--checkpoint_every",
+         type=int,
+@@ -258,6 +288,105 @@ def validate_full_length_args(args) -> None:
+             raise ValueError("full-length resume must use output checkpoints/recovery.pt")
+ 
+ 
++def _generic_experiment(args, scene_id: str) -> Experiment:
++    stage = ExperimentStage(args.experiment_stage)
++    authorization = {}
++    if stage is ExperimentStage.CONFIRM:
++        authorization["authorized_scene_winner"] = args.candidate_id
++    elif stage is ExperimentStage.PRODUCTION:
++        authorization["authorized_cohort_candidate"] = args.candidate_id
++    return Experiment(
++        stage=stage,
++        scene_id=scene_id,
++        candidate_id=args.candidate_id,
++        **authorization,
++    )
++
++
++def validate_generic_experiment_args(args) -> None:
++    candidate_id = args.candidate_id
++    stage_name = args.experiment_stage
++    if candidate_id is None and stage_name is None:
++        if args.stop_step is not None:
++            raise ValueError("stop_step is only supported for a generic experiment")
++        return
++    if candidate_id is None or stage_name is None:
++        raise ValueError("candidate_id and experiment_stage must be supplied together")
++    if (
++        args.profile_input
++        or args.qualification_candidate is not None
++        or args.full_length_qualification
++        or args.backend_qualification
++    ):
++        raise ValueError("generic experiment identity cannot be combined with legacy modes")
++
++    experiment = _generic_experiment(args, COHORT_SCENE_IDS[0])
++    common_runtime = (
++        args.resize_factor == 1
++        and args.seed == 0
++        and args.cache_images
++        and args.pinned_transfer
++    )
++    if experiment.stage in (ExperimentStage.REFERENCE, ExperimentStage.SCREEN):
++        if (
++            not common_runtime
++            or args.max_steps != 7_000
++            or args.stop_step not in (None, 7_000)
++            or not args.internal_holdout
++            or args.resume is not None
++            or args.rolling_checkpoint
++        ):
++            raise ValueError(
++                f"{experiment.stage.value} requires a fresh factor-1, seed-0, "
++                "7000-step internal-holdout run with cached images, pinned "
++                "transfer, and no checkpoints"
++            )
++        return
++
++    expected_recovery = Path(args.output_dir) / "checkpoints" / "recovery.pt"
++    recovery_is_valid = args.resume is None or (
++        Path(args.resume).resolve() == expected_recovery.resolve()
++    )
++    rolling_runtime = (
++        common_runtime
++        and args.max_steps == 30_000
++        and args.checkpoint_every == 3_000
++        and args.rolling_checkpoint
++        and recovery_is_valid
++    )
++    if experiment.stage is ExperimentStage.CONFIRM:
++        if (
++            not rolling_runtime
++            or args.stop_step not in (15_000, 30_000)
++            or not args.internal_holdout
++        ):
++            raise ValueError(
++                "confirm requires a factor-1, seed-0, 30000-step schedule "
++                "stopped at 15000 or 30000 with internal holdout, cached "
++                "images, pinned transfer, and 3000-step rolling recovery"
++            )
++        return
++    if (
++        not rolling_runtime
++        or args.stop_step != 30_000
++        or args.internal_holdout
++    ):
++        raise ValueError(
++            "production requires a factor-1, seed-0, 30000-step run without "
++            "internal holdout, with cached images, pinned transfer, and "
++            "3000-step rolling recovery"
++        )
++
++
++def validate_generic_experiment_scene(scene_id: str, args) -> None:
++    if args.candidate_id is not None:
++        _generic_experiment(args, scene_id)
++
++
++def training_target_step(args) -> int:
++    return args.stop_step if args.stop_step is not None else args.max_steps
++
++
+ def validate_full_length_scene(scene_id: str, args) -> None:
+     if args.full_length_qualification and scene_id != "HCM0181":
+         raise ValueError("full-length qualification requires HCM0181")
+@@ -328,6 +457,11 @@ def internal_holdout_enabled(args) -> bool:
+ 
+ 
+ def should_save_checkpoints(args) -> bool:
++    if args.candidate_id is not None:
++        return args.experiment_stage in (
++            ExperimentStage.CONFIRM.value,
++            ExperimentStage.PRODUCTION.value,
++        )
+     return (
+         not args.profile_input
+         and args.qualification_candidate is None
+@@ -481,6 +615,9 @@ def build_training_config(
+     }
+     if args.qualification_candidate is not None:
+         config["qualification_candidate"] = args.qualification_candidate
++    if args.candidate_id is not None:
++        config["experiment_stage"] = args.experiment_stage
++        config.update(candidate_training_overrides(args.candidate_id))
+     if split is not None:
+         config.update(
+             {
+@@ -548,6 +685,111 @@ def read_json_record(path: Path) -> dict:
+     return record
+ 
+ 
++def _read_metric_records(path: Path) -> list[dict]:
++    source = Path(path)
++    if not source.is_file():
++        raise FileNotFoundError(f"required metric record does not exist: {source}")
++    records = [
++        json.loads(line)
++        for line in source.read_text(encoding="utf-8").splitlines()
++        if line
++    ]
++    if not records or any(not isinstance(record, dict) for record in records):
++        raise ValueError(f"metric record must contain JSON objects: {source}")
++    return records
++
++
++def build_experiment_resource_summary(output_dir: Path) -> dict[str, float | int]:
++    output = Path(output_dir)
++    summary = read_json_record(output / "summary.json")
++    metric_records = _read_metric_records(output / "metrics.jsonl")
++    return {
++        "total_time_seconds": summary["total_time_seconds"],
++        "max_vram_mb": summary["max_vram_mb"],
++        "peak_gaussians": max(
++            int(record["num_gaussians"]) for record in metric_records
++        ),
++        "final_num_gaussians": int(summary["final_num_gaussians"]),
++    }
++
++
++def _qualification_report(
++    *,
++    scene_id: str,
++    candidate_id: str,
++    step: int,
++    validation: dict,
++    resources: dict[str, float | int],
++    config_sha256: str,
++    holdout_sha256: str,
++) -> dict[str, object]:
++    return {
++        "schema_version": 1,
++        "scene_id": scene_id,
++        "candidate_id": candidate_id,
++        "step": step,
++        "image_count": validation["image_count"],
++        "psnr_db_mean": validation["psnr_db_mean"],
++        "ssim_mean": validation["ssim_mean"],
++        "lpips_mean": validation["lpips_mean"],
++        "valid_fraction_mean": validation["valid_fraction_mean"],
++        "peak_gaussians": resources["peak_gaussians"],
++        "max_vram_mb": resources["max_vram_mb"],
++        "total_time_seconds": resources["total_time_seconds"],
++        "config_sha256": config_sha256,
++        "holdout_sha256": holdout_sha256,
++        "images": validation["images"],
++    }
++
++
++def generate_generic_experiment_reports(
++    *,
++    args,
++    trainer,
++    manifest,
++    split: HoldoutSplit,
++    validation_dataset,
++) -> dict[str, object]:
++    output = Path(args.output_dir)
++    render_dir = output / "validation_renders"
++    validation = evaluate_internal_validation(
++        trainer,
++        validation_dataset,
++        LpipsBackend(backbone="alex", device=str(trainer.device)),
++        render_dir,
++    )
++    resources = build_experiment_resource_summary(output)
++    qualification = _qualification_report(
++        scene_id=manifest.scene_id,
++        candidate_id=args.candidate_id,
++        step=training_target_step(args),
++        validation=validation,
++        resources=resources,
++        config_sha256=trainer.config_hash,
++        holdout_sha256=split.manifest_sha256,
++    )
++    write_json_record(output / "qualification_report.json", qualification)
++
++    detail = evaluate_detail_directory(validation_dataset, render_dir)
++    write_json_record(output / "detail_metrics.json", detail)
++    pose_strata = build_pose_strata(manifest, split)
++    save_pose_strata(pose_strata, output / "pose_strata.json")
++    experiment = build_experiment_report(
++        scene_id=manifest.scene_id,
++        candidate_id=args.candidate_id,
++        step=training_target_step(args),
++        config_sha256=trainer.config_hash,
++        manifest_sha256=trainer.manifest_hash,
++        holdout_sha256=split.manifest_sha256,
++        full_frame_report=validation,
++        detail_report=detail,
++        pose_strata_report=pose_strata,
++        resource_summary=resources,
++    )
++    save_experiment_report(experiment, output / "experiment_report.json")
++    return experiment
++
++
+ def main():
+     args = parse_args()
+     validate_resize_factor(args.resize_factor)
+@@ -557,6 +799,7 @@ def main():
+     validate_profile_args(args)
+     validate_qualification_args(args)
+     validate_full_length_args(args)
++    validate_generic_experiment_args(args)
+     validate_output_directory(Path(args.output_dir), args.resume)
+     source_commit = (
+         read_clean_git_commit(Path(__file__).resolve().parents[3])
+@@ -586,6 +829,7 @@ def main():
+         raise ValueError("qualification scene is not in the locked calibration set")
+     validate_full_length_scene(manifest.scene_id, args)
+     validate_backend_qualification_scene(manifest.scene_id, args)
++    validate_generic_experiment_scene(manifest.scene_id, args)
+     split = load_internal_holdout(
+         manifest_dir,
+         manifest,
+@@ -639,6 +883,7 @@ def main():
+         if (
+             args.qualification_candidate is not None
+             or args.full_length_qualification
++            or args.candidate_id is not None
+         )
+         and split is not None
+         else None
+@@ -698,10 +943,11 @@ def main():
+             write_json_record(initial_validation_path, initial_validation)
+ 
+     # 8. Start optimization run
+-    if optimization_required(trainer.start_step, args.max_steps):
+-        print(f"Starting optimization through step {args.max_steps}...")
++    target_step = training_target_step(args)
++    if optimization_required(trainer.start_step, target_step):
++        print(f"Starting optimization through step {target_step}...")
+         trainer.train(
+-            stop_step=args.max_steps,
++            stop_step=target_step,
+             checkpoint_every=args.checkpoint_every,
+             save_checkpoints=should_save_checkpoints(args),
+             rolling_checkpoint=(
+@@ -709,10 +955,10 @@ def main():
+             ),
+         )
+     else:
+-        print(f"Checkpoint is already at step {args.max_steps}; finalizing artifacts...")
++        print(f"Checkpoint is already at step {target_step}; finalizing artifacts...")
+     final_metrics = trainer.evaluate_train_view(
+         0,
+-        render_path=previews / f"step_{args.max_steps:09d}.png",
++        render_path=previews / f"step_{target_step:09d}.png",
+     )
+     report = write_convergence_report(
+         Path(args.output_dir) / "convergence.json",
+@@ -777,6 +1023,20 @@ def main():
+             f"LPIPS={final_validation['lpips_mean']:.6f}, "
+             f"automated_gates={full_length_report['automated_gates_passed']}"
+         )
++    elif args.candidate_id is not None and validation_dataset is not None:
++        assert split is not None
++        experiment_report = generate_generic_experiment_reports(
++            args=args,
++            trainer=trainer,
++            manifest=manifest,
++            split=split,
++            validation_dataset=validation_dataset,
++        )
++        print(
++            "Validation: "
++            f"score50={experiment_report['overall']['score50']:.6f}, "
++            f"step={target_step}"
++        )
+     elif validation_dataset is not None:
+         validation = evaluate_internal_validation(
+             trainer,
+@@ -784,31 +1044,17 @@ def main():
+             LpipsBackend(backbone="alex", device=str(trainer.device)),
+             Path(args.output_dir) / "validation_renders",
+         )
+-        summary = read_json_record(Path(args.output_dir) / "summary.json")
+-        metric_records = [
+-            json.loads(line)
+-            for line in (Path(args.output_dir) / "metrics.jsonl")
+-            .read_text(encoding="utf-8")
+-            .splitlines()
+-            if line
+-        ]
+-        qualification_report = {
+-            "schema_version": 1,
+-            "scene_id": manifest.scene_id,
+-            "candidate_id": args.qualification_candidate,
+-            "step": args.max_steps,
+-            "image_count": validation["image_count"],
+-            "psnr_db_mean": validation["psnr_db_mean"],
+-            "ssim_mean": validation["ssim_mean"],
+-            "lpips_mean": validation["lpips_mean"],
+-            "valid_fraction_mean": validation["valid_fraction_mean"],
+-            "peak_gaussians": max(item["num_gaussians"] for item in metric_records),
+-            "max_vram_mb": summary["max_vram_mb"],
+-            "total_time_seconds": summary["total_time_seconds"],
+-            "config_sha256": trainer.config_hash,
+-            "holdout_sha256": split.manifest_sha256,
+-            "images": validation["images"],
+-        }
++        assert split is not None
++        resources = build_experiment_resource_summary(Path(args.output_dir))
++        qualification_report = _qualification_report(
++            scene_id=manifest.scene_id,
++            candidate_id=args.qualification_candidate,
++            step=args.max_steps,
++            validation=validation,
++            resources=resources,
++            config_sha256=trainer.config_hash,
++            holdout_sha256=split.manifest_sha256,
++        )
+         save_qualification_report(
+             qualification_report,
+             Path(args.output_dir) / "qualification_report.json",
+diff --git a/tests/unit/test_run_training.py b/tests/unit/test_run_training.py
+index add86da..3b27495 100644
+--- a/tests/unit/test_run_training.py
++++ b/tests/unit/test_run_training.py
+@@ -31,6 +31,9 @@ def _args(**changes):
+         "optimizer_backend": "adam",
+         "precision": "fp32",
+         "rolling_checkpoint": False,
++        "candidate_id": None,
++        "experiment_stage": None,
++        "stop_step": None,
+     }
+     values.update(changes)
+     return Namespace(**values)
+@@ -456,3 +459,325 @@ def test_initial_metrics_round_trip_for_resume(tmp_path: Path):
+     run_training.write_json_record(path, metrics)
+ 
+     assert run_training.read_json_record(path) == metrics
++
++
++def _generic_args(stage: str, candidate_id: str, **changes):
++    values = {
++        "experiment_stage": stage,
++        "candidate_id": candidate_id,
++        "resize_factor": 1,
++        "max_steps": 7_000,
++        "seed": 0,
++        "cache_images": True,
++        "pinned_transfer": True,
++        "internal_holdout": True,
++    }
++    values.update(changes)
++    return _args(**values)
++
++
++def test_parse_args_accepts_generic_identity_and_stop_step(monkeypatch):
++    monkeypatch.setattr(
++        run_training.sys,
++        "argv",
++        [
++            "run_training.py",
++            "--scene_dir",
++            "scene",
++            "--output_dir",
++            "run",
++            "--candidate_id",
++            "B0-reference",
++            "--experiment_stage",
++            "reference",
++            "--stop_step",
++            "7000",
++        ],
++    )
++
++    args = run_training.parse_args()
++
++    assert args.candidate_id == "B0-reference"
++    assert args.experiment_stage == "reference"
++    assert args.stop_step == 7_000
++
++
++def test_generic_identity_is_all_or_none_and_uses_stage_candidate_contract():
++    assert run_training.validate_generic_experiment_args(_args()) is None
++
++    with pytest.raises(ValueError, match="generic experiment"):
++        run_training.validate_generic_experiment_args(_args(stop_step=100))
++    with pytest.raises(ValueError, match="together"):
++        run_training.validate_generic_experiment_args(
++            _args(candidate_id="B0-reference")
++        )
++    with pytest.raises(ValueError, match="legacy"):
++        run_training.validate_generic_experiment_args(
++            _generic_args(
++                "reference", "B0-reference", qualification_candidate="B0-reference"
++            )
++        )
++    with pytest.raises(ValueError, match="reference"):
++        run_training.validate_generic_experiment_args(
++            _generic_args("reference", "E1-density-absgrad-t04-v1")
++        )
++    with pytest.raises(ValueError, match="screen"):
++        run_training.validate_generic_experiment_args(
++            _generic_args("screen", "B0-reference")
++        )
++
++
++def test_generic_reference_and_screen_lock_fresh_7k_holdout_contract():
++    reference = _generic_args("reference", "B0-reference")
++    screen = _generic_args("screen", "E1-density-absgrad-t04-v1")
++
++    run_training.validate_generic_experiment_args(reference)
++    run_training.validate_generic_experiment_args(screen)
++    assert run_training.training_target_step(reference) == 7_000
++    assert run_training.should_save_checkpoints(reference) is False
++    assert run_training.should_save_checkpoints(screen) is False
++
++    for change in (
++        {"max_steps": 6_999},
++        {"stop_step": 6_999},
++        {"resize_factor": 2},
++        {"seed": 1},
++        {"cache_images": False},
++        {"pinned_transfer": False},
++        {"internal_holdout": False},
++        {"resume": "recovery.pt"},
++        {"rolling_checkpoint": True},
++    ):
++        with pytest.raises(ValueError, match="reference"):
++            run_training.validate_generic_experiment_args(
++                _args(**(vars(reference) | change))
++            )
++
++
++def test_generic_confirmation_locks_30k_schedule_and_rolling_recovery(tmp_path):
++    output = tmp_path / "confirm"
++    valid = _generic_args(
++        "confirm",
++        "E1-density-absgrad-t04-v1",
++        output_dir=str(output),
++        max_steps=30_000,
++        stop_step=15_000,
++        checkpoint_every=3_000,
++        rolling_checkpoint=True,
++    )
++
++    run_training.validate_generic_experiment_args(valid)
++    assert run_training.training_target_step(valid) == 15_000
++    assert run_training.should_save_checkpoints(valid) is True
++
++    recovery = output / "checkpoints" / "recovery.pt"
++    resumed = _args(**(vars(valid) | {"stop_step": 30_000, "resume": str(recovery)}))
++    run_training.validate_generic_experiment_args(resumed)
++
++    for change in (
++        {"max_steps": 15_000},
++        {"stop_step": None},
++        {"stop_step": 20_000},
++        {"checkpoint_every": 6_000},
++        {"rolling_checkpoint": False},
++        {"internal_holdout": False},
++        {"resume": str(output / "checkpoints" / "other.pt")},
++    ):
++        with pytest.raises(ValueError, match="confirm"):
++            run_training.validate_generic_experiment_args(
++                _args(**(vars(valid) | change))
++            )
++
++
++def test_generic_production_locks_full_30k_without_holdout():
++    valid = _generic_args(
++        "production",
++        "E1-density-scale005-v1",
++        max_steps=30_000,
++        stop_step=30_000,
++        checkpoint_every=3_000,
++        rolling_checkpoint=True,
++        internal_holdout=False,
++    )
++
++    run_training.validate_generic_experiment_args(valid)
++    assert run_training.training_target_step(valid) == 30_000
++    assert run_training.internal_holdout_enabled(valid) is False
++    assert run_training.should_save_checkpoints(valid) is True
++
++    for change in (
++        {"stop_step": None},
++        {"stop_step": 15_000},
++        {"internal_holdout": True},
++    ):
++        with pytest.raises(ValueError, match="production"):
++            run_training.validate_generic_experiment_args(
++                _args(**(vars(valid) | change))
++            )
++
++
++def test_generic_candidate_overrides_do_not_include_stop_step():
++    manifest = SimpleNamespace(scene_id="HCM0539")
++    first = _generic_args(
++        "confirm",
++        "E1-density-absgrad-t04-v1",
++        max_steps=30_000,
++        stop_step=15_000,
++        checkpoint_every=3_000,
++        rolling_checkpoint=True,
++    )
++    second = _args(**(vars(first) | {"stop_step": 30_000}))
++
++    config_15k = run_training.build_training_config(
++        first, manifest, resize=(1320, 989)
++    )
++    config_30k = run_training.build_training_config(
++        second, manifest, resize=(1320, 989)
++    )
++
++    assert config_15k == config_30k
++    assert config_15k["candidate_id"] == "E1-density-absgrad-t04-v1"
++    assert config_15k["experiment_stage"] == "confirm"
++    assert config_15k["absgrad"] is True
++    assert config_15k["grow_grad2d"] == pytest.approx(0.0004)
++    assert "stop_step" not in config_15k
++
++
++def test_experiment_resource_summary_uses_summary_and_metric_records(tmp_path):
++    output = tmp_path / "run"
++    run_training.write_json_record(
++        output / "summary.json",
++        {
++            "total_time_seconds": 123.5,
++            "max_vram_mb": 4096.0,
++            "final_num_gaussians": 11,
++        },
++    )
++    (output / "metrics.jsonl").write_text(
++        "\n".join(
++            json.dumps({"step": step, "num_gaussians": count})
++            for step, count in ((1, 5), (2, 13), (3, 11))
++        )
++        + "\n",
++        encoding="utf-8",
++    )
++
++    assert run_training.build_experiment_resource_summary(output) == {
++        "total_time_seconds": 123.5,
++        "max_vram_mb": 4096.0,
++        "peak_gaussians": 13,
++        "final_num_gaussians": 11,
++    }
++
++
++def test_generic_internal_holdout_writes_all_module_one_reports(
++    monkeypatch, tmp_path
++):
++    output = tmp_path / "screen"
++    args = _generic_args(
++        "screen",
++        "E1-density-absgrad-t04-v1",
++        output_dir=str(output),
++    )
++    manifest = SimpleNamespace(scene_id="HCM0539")
++    split = SimpleNamespace(manifest_sha256="a" * 64)
++    validation_dataset = object()
++    trainer = SimpleNamespace(
++        device=torch.device("cpu"),
++        config_hash="b" * 64,
++        manifest_hash="c" * 64,
++    )
++    full_frame = {
++        "image_count": 3,
++        "psnr_db_mean": 24.0,
++        "ssim_mean": 0.8,
++        "lpips_mean": 0.2,
++        "valid_fraction_mean": 0.95,
++        "images": {name: {} for name in ("a.JPG", "b.JPG", "c.JPG")},
++    }
++    detail = {"schema_version": 1, "scene_id": "HCM0539", "image_count": 3}
++    pose = {
++        "schema_version": 1,
++        "scene_id": "HCM0539",
++        "holdout_manifest_sha256": "a" * 64,
++        "image_count": 3,
++    }
++    backend = object()
++    observed = {}
++
++    def evaluate(trainer_arg, dataset_arg, backend_arg, render_dir):
++        observed["evaluation"] = (
++            trainer_arg,
++            dataset_arg,
++            backend_arg,
++            render_dir,
++        )
++        return full_frame
++
++    def build_report(**arguments):
++        observed["experiment"] = arguments
++        return {"schema_version": 1, "candidate_id": arguments["candidate_id"]}
++
++    monkeypatch.setattr(run_training, "LpipsBackend", lambda **kwargs: backend)
++    monkeypatch.setattr(run_training, "evaluate_internal_validation", evaluate)
++    monkeypatch.setattr(
++        run_training, "evaluate_detail_directory", lambda dataset, path: detail
++    )
++    monkeypatch.setattr(run_training, "build_pose_strata", lambda *_: pose)
++    monkeypatch.setattr(run_training, "build_experiment_report", build_report)
++
++    run_training.write_json_record(
++        output / "summary.json",
++        {
++            "total_time_seconds": 20.0,
++            "max_vram_mb": 1024.0,
++            "final_num_gaussians": 9,
++        },
++    )
++    (output / "metrics.jsonl").write_text(
++        json.dumps({"step": 7_000, "num_gaussians": 12}) + "\n",
++        encoding="utf-8",
++    )
++
++    run_training.generate_generic_experiment_reports(
++        args=args,
++        trainer=trainer,
++        manifest=manifest,
++        split=split,
++        validation_dataset=validation_dataset,
++    )
++
++    assert observed["evaluation"] == (
++        trainer,
++        validation_dataset,
++        backend,
++        output / "validation_renders",
++    )
++    assert observed["experiment"] == {
++        "scene_id": "HCM0539",
++        "candidate_id": "E1-density-absgrad-t04-v1",
++        "step": 7_000,
++        "config_sha256": "b" * 64,
++        "manifest_sha256": "c" * 64,
++        "holdout_sha256": "a" * 64,
++        "full_frame_report": full_frame,
++        "detail_report": detail,
++        "pose_strata_report": pose,
++        "resource_summary": {
++            "total_time_seconds": 20.0,
++            "max_vram_mb": 1024.0,
++            "peak_gaussians": 12,
++            "final_num_gaussians": 9,
++        },
++    }
++    qualification = json.loads(
++        (output / "qualification_report.json").read_text(encoding="utf-8")
++    )
++    assert qualification["candidate_id"] == "E1-density-absgrad-t04-v1"
++    assert qualification["step"] == 7_000
++    assert json.loads((output / "detail_metrics.json").read_text()) == detail
++    assert json.loads((output / "pose_strata.json").read_text()) == pose
++    assert json.loads((output / "experiment_report.json").read_text()) == {
++        "schema_version": 1,
++        "candidate_id": "E1-density-absgrad-t04-v1",
++    }
+-- 
+2.49.0.windows.1
+

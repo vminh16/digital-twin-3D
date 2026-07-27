@@ -1,0 +1,241 @@
+From ba13b21b9bca6a89d967a1c180345b1b7ee3e2ef Mon Sep 17 00:00:00 2001
+From: vminh16 <minhscntn1608@gmail.com>
+Date: Wed, 22 Jul 2026 14:46:28 +0700
+Subject: [PATCH 2/2] fix: enforce experiment resource gates
+
+---
+ .superpowers/sdd/task-1-report.md     | 103 --------------------------
+ src/bts_nvs/experiments/experiment.py |  28 +++++++
+ tests/unit/test_experiment_schema.py  |  53 +++++++++++++
+ 3 files changed, 81 insertions(+), 103 deletions(-)
+ delete mode 100644 .superpowers/sdd/task-1-report.md
+
+diff --git a/.superpowers/sdd/task-1-report.md b/.superpowers/sdd/task-1-report.md
+deleted file mode 100644
+index 2c59627..0000000
+--- a/.superpowers/sdd/task-1-report.md
++++ /dev/null
+@@ -1,103 +0,0 @@
+-# Task 1 Report: Experiment schema and stage-first paths
+-
+-## Scope
+-
+-Implemented the pure schema/path foundation for Module 3. The change is
+-limited to the Task 1 schema module, its unit tests, and this requested report.
+-It does not modify the candidate registry, training code, runtime imports, or
+-filesystem state.
+-
+-## Files
+-
+-- Added `src/bts_nvs/experiments/experiment.py`
+-  - Frozen `Experiment` schema object.
+-  - Locked seven-scene cohort, stages, horizons, and resource limits.
+-  - Explicit caller-supplied winner/cohort authorization for confirm and
+-    production stages.
+-  - Deterministic stage-first paths without filesystem writes.
+-- Added `tests/unit/test_experiment_schema.py`
+-  - Covers fixed values, legal and illegal stage/candidate combinations,
+-    identity validation, immutability, and non-colliding screen/confirm paths.
+-
+-## TDD evidence
+-
+-### RED
+-
+-Command:
+-
+-```powershell
+-pytest tests/unit/test_experiment_schema.py -q
+-```
+-
+-Output:
+-
+-```text
+-ERROR collecting tests/unit/test_experiment_schema.py
+-ModuleNotFoundError: No module named 'bts_nvs.experiments.experiment'
+-1 error in 0.12s
+-```
+-
+-The failure was expected: the test defined the desired public schema module
+-before that module existed.
+-
+-### GREEN
+-
+-Command:
+-
+-```powershell
+-pytest tests/unit/test_experiment_schema.py -q
+-```
+-
+-Output:
+-
+-```text
+-..................                                                       [100%]
+-18 passed in 0.03s
+-```
+-
+-### Focused plus adjacent registry validation
+-
+-Command:
+-
+-```powershell
+-pytest tests/unit/test_experiment_schema.py tests/unit/test_experiment_candidates.py -q
+-```
+-
+-Output:
+-
+-```text
+-.............................................                            [100%]
+-45 passed in 0.06s
+-```
+-
+-### Diff validation
+-
+-Command:
+-
+-```powershell
+-git diff --check
+-```
+-
+-Output: exit code 0; no whitespace errors.
+-
+-## Commit
+-
+-Commit subject: `feat: add experiment schema and stage-first paths`
+-
+-Only the Task 1 schema, test, and this requested Task 1 report are staged for
+-the commit. Existing `.gitignore`, `docs/research/`, and other
+-`.superpowers/` scratch changes remain unstaged.
+-
+-## Self-review
+-
+-- `Experiment` is a frozen dataclass and `STAGE_HORIZONS` is read-only.
+-- The schema validates cohort, enum type, registered candidate identities, and
+-  every legal stage/candidate authorization rule before a caller can use a
+-  horizon or path.
+-- Confirm and production authorization are explicit constructor values; the
+-  module does not read mutable decision/global state.
+-- `run_path()` constructs `pathlib.Path` values only. No code writes files or
+-  imports GPU/training runtime modules.
+-- `reference`, `screen`, `confirm`, and `production` use stage-first layout;
+-  the tests prove that identical scene/candidate values produce distinct
+-  screen and confirm paths.
+diff --git a/src/bts_nvs/experiments/experiment.py b/src/bts_nvs/experiments/experiment.py
+index b5b4d16..3516372 100644
+--- a/src/bts_nvs/experiments/experiment.py
++++ b/src/bts_nvs/experiments/experiment.py
+@@ -2,6 +2,7 @@ from __future__ import annotations
+ 
+ from dataclasses import dataclass
+ from enum import Enum
++import math
+ from pathlib import Path
+ from types import MappingProxyType
+ 
+@@ -38,6 +39,33 @@ STAGE_HORIZONS = MappingProxyType(
+ )
+ 
+ 
++def validate_paired_wall_time_ratio(paired_wall_time_ratio: float) -> None:
++    _validate_finite_nonnegative(
++        paired_wall_time_ratio, "paired_wall_time_ratio"
++    )
++    if paired_wall_time_ratio > MAX_PAIRED_WALL_TIME_RATIO:
++        raise ValueError(
++            "paired_wall_time_ratio must be at most "
++            f"{MAX_PAIRED_WALL_TIME_RATIO}"
++        )
++
++
++def validate_peak_vram_mb(peak_vram_mb: float) -> None:
++    _validate_finite_nonnegative(peak_vram_mb, "peak_vram_mb")
++    if peak_vram_mb >= MAX_PEAK_VRAM_MB:
++        raise ValueError(f"peak_vram_mb must be below {MAX_PEAK_VRAM_MB}")
++
++
++def _validate_finite_nonnegative(value: float, name: str) -> None:
++    if (
++        isinstance(value, bool)
++        or not isinstance(value, (int, float))
++        or not math.isfinite(value)
++        or value < 0.0
++    ):
++        raise ValueError(f"{name} must be a finite nonnegative number")
++
++
+ @dataclass(frozen=True)
+ class Experiment:
+     stage: ExperimentStage
+diff --git a/tests/unit/test_experiment_schema.py b/tests/unit/test_experiment_schema.py
+index 5c03f6e..89e65c4 100644
+--- a/tests/unit/test_experiment_schema.py
++++ b/tests/unit/test_experiment_schema.py
+@@ -12,6 +12,8 @@ from bts_nvs.experiments.experiment import (
+     STAGE_HORIZONS,
+     Experiment,
+     ExperimentStage,
++    validate_paired_wall_time_ratio,
++    validate_peak_vram_mb,
+ )
+ 
+ 
+@@ -41,6 +43,57 @@ def test_schema_locks_cohort_stages_horizons_and_resource_limits() -> None:
+     assert MAX_PAIRED_WALL_TIME_RATIO == 1.25
+ 
+ 
++@pytest.mark.parametrize("ratio", [0.0, 0.5, MAX_PAIRED_WALL_TIME_RATIO])
++def test_paired_wall_time_ratio_accepts_finite_values_within_limit(
++    ratio: float,
++) -> None:
++    assert validate_paired_wall_time_ratio(ratio) is None
++
++
++@pytest.mark.parametrize(
++    "ratio",
++    [
++        True,
++        False,
++        -0.01,
++        MAX_PAIRED_WALL_TIME_RATIO + 0.01,
++        float("nan"),
++        float("inf"),
++        float("-inf"),
++    ],
++)
++def test_paired_wall_time_ratio_rejects_invalid_or_over_budget_values(
++    ratio: float,
++) -> None:
++    with pytest.raises(ValueError, match="paired_wall_time_ratio"):
++        validate_paired_wall_time_ratio(ratio)
++
++
++@pytest.mark.parametrize("peak_vram_mb", [0.0, MAX_PEAK_VRAM_MB - 0.5])
++def test_peak_vram_accepts_finite_values_strictly_below_limit(
++    peak_vram_mb: float,
++) -> None:
++    assert validate_peak_vram_mb(peak_vram_mb) is None
++
++
++@pytest.mark.parametrize(
++    "peak_vram_mb",
++    [
++        True,
++        False,
++        -0.01,
++        MAX_PEAK_VRAM_MB,
++        MAX_PEAK_VRAM_MB + 0.5,
++        float("nan"),
++        float("inf"),
++        float("-inf"),
++    ],
++)
++def test_peak_vram_rejects_invalid_or_at_limit_values(peak_vram_mb: float) -> None:
++    with pytest.raises(ValueError, match="peak_vram_mb"):
++        validate_peak_vram_mb(peak_vram_mb)
++
++
+ @pytest.mark.parametrize(
+     ("stage", "candidate_id", "authorization"),
+     [
+-- 
+2.49.0.windows.1
+

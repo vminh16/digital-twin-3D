@@ -186,3 +186,20 @@ def test_experiment_report_save_is_canonical(tmp_path) -> None:
     assert b"\r\n" not in first
     assert b"NaN" not in first and b"Infinity" not in first
     assert json.loads(first)["candidate_id"] == "B0-reference"
+
+
+def test_v3_report_adds_worst_tail_flags_and_diagnostics() -> None:
+    diagnostics = {
+        "schema_version": 1,
+        "scene_id": "HCM0539",
+        "diagnostic_only": True,
+        "images": {name: {} for name in NAMES},
+    }
+    report = _build(gaussian_diagnostics=diagnostics)
+
+    assert report["schema_version"] == 2
+    assert report["tails"]["worst_decile_image_names"] == ["hard.JPG"]
+    assert report["tails"]["worst_decile_lpips"] == pytest.approx(0.2)
+    assert report["failure_flags"]["veil_count"] == 0
+    assert report["failure_flags"]["collapse_count"] == 0
+    assert report["gaussian_diagnostics"]["diagnostic_only"] is True

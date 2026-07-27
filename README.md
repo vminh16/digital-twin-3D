@@ -30,29 +30,38 @@ phải dùng baseline/candidate ID mới.
 
 ## Trạng thái tối ưu hóa hiện tại
 
-Chương trình scene-specific đã hoàn thành Module 1–3: validation/detail audit,
-candidate registry và generic stage-first runner. NVIDIA L4 smoke gates đã
-được người dùng xác nhận pass. Stage A đã hoàn tất trên đủ bảy scene với
-`174/174` validation render hợp lệ, không checkpoint, không NaN/Inf, tổng
-runtime khoảng 95,6 phút trên NVIDIA L4. Trung bình scene-balanced của
-`B0-reference` 7k là Score50 `64.654`, PSNR `21.050`, SSIM `0.7267`, LPIPS
-`0.2444`.
+Submission `MVP-hybrid-4scene-q99-v1` đã nộp và **CLOSED**:
 
-`B0-submission-q99-v1` 30k là production baseline chung đã đạt 70.98330 điểm;
-`B0-reference` 7k là paired internal-holdout authority để chọn candidate. Hai
-artifact có vai trò khác nhau và không thay thế nhau. Stage B1 đã hoàn tất:
-AbsGrad t04 cải thiện local Score50 trên HCM0539 và HCM0421 nhưng vượt time
-gate 1.25x. Do deadline, hai scene này được duyệt theo hướng compute-first MVP:
-train production 30k trực tiếp, không mô tả là paired-confirmed winner. Xem
-[documentation status](docs/README.md) và
-[five-scene MVP authority](docs/superpowers/specs/2026-07-26-five-scene-mvp.md).
-Vòng hiện tại giữ HCM0644 ở B0; screen antialiasing cho HCM0674/HCM0540,
-local sharpness weighting cho chair/bonsai và SH4 riêng cho bonsai.
+| Kết quả evaluator chính thức | Giá trị |
+|---|---:|
+| Score | 71.2124 |
+| PSNR | 24.629191 |
+| SSIM | 80.7208 |
+| LPIPS | 19.4533 |
+| Matched scenes | 7/7 |
 
-Production 30k hiện đã hoàn tất cho bốn scene override. Candidate submission
-được khóa là `MVP-hybrid-4scene-q99-v1`: HCM0421/HCM0539 dùng AbsGrad,
-chair dùng local-Laplacian, bonsai dùng SH4; HCM0644/HCM0674/HCM0540 giữ
-nguyên folder Q99 từ baseline đã đóng.
+Nó dùng AbsGrad cho HCM0421/HCM0539, local-Laplacian cho chair, SH4 cho
+bonsai và giữ B0 cho HCM0644/HCM0674/HCM0540. Đây là aggregate hidden-test;
+không có per-scene metric để dùng làm tín hiệu tuning.
+
+Plan active hiện chỉ tối ưu sâu `chair` và `bonsai`. Năm scene còn lại bị
+freeze. Authority và execution plan:
+
+- [chair/bonsai deep-optimization authority](docs/superpowers/specs/2026-07-27-chair-bonsai-deep-optimization.md)
+- [active execution plan](docs/superpowers/plans/2026-07-27-chair-bonsai-deep-optimization.md)
+- [closed-phase summary](docs/superpowers/history/2026-07-27-optimization-phase-closure.md)
+
+Harness mới giữ lịch optimizer 30k nhưng dừng research ở 15k, dùng internal
+holdout và không lưu checkpoint:
+
+```bash
+bash scripts/run_chair_bonsai_research.sh <chair|bonsai> <candidate-id>
+```
+
+Các candidate E3 trong spec chưa executable cho tới khi implementation và test
+được thêm vào registry. Phase 1 targeted-holdout/diagnostic đã implement và
+qua CPU contract; cần bounded CUDA smoke trên L4 trước khi authorize GPU
+screen.
 
 ## Cài đặt không dùng Docker
 

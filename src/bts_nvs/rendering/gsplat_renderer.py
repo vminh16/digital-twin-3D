@@ -21,6 +21,7 @@ def render_gaussians(
     render_mode: str = "RGB",
     absgrad: bool = False,
     rasterize_mode: str = "classic",
+    gaussian_mask: torch.Tensor | None = None,
 ) -> RenderResult:
     """Render one pinhole camera in normalized world coordinates.
 
@@ -39,6 +40,23 @@ def render_gaussians(
         raise ValueError("absgrad must be boolean")
     if rasterize_mode not in {"classic", "antialiased"}:
         raise ValueError("rasterize_mode must be 'classic' or 'antialiased'")
+    if gaussian_mask is None:
+        means = gaussians.get_means()
+        quats = gaussians.quats
+        scales = gaussians.get_scales()
+        opacities = gaussians.get_opacities()
+        colors = gaussians.get_shs()
+    else:
+        mask = torch.as_tensor(gaussian_mask, device=gaussians.means.device)
+        if mask.dtype != torch.bool or mask.shape != (gaussians.num_gaussians,):
+            raise ValueError("gaussian_mask must be boolean with shape (N,)")
+        if not bool(mask.any()):
+            raise ValueError("gaussian_mask must retain at least one Gaussian")
+        means = gaussians.get_means()[mask]
+        quats = gaussians.quats[mask]
+        scales = gaussians.get_scales()[mask]
+        opacities = gaussians.get_opacities()[mask]
+        colors = gaussians.get_shs()[mask]
 
     device = gaussians.means.device
     dtype = gaussians.means.dtype
@@ -68,11 +86,11 @@ def render_gaussians(
         raise ImportError("gsplat==1.4.0 is required to render Gaussians")
 
     rendered, alpha, info = rasterization(
-        means=gaussians.get_means(),
-        quats=gaussians.quats,
-        scales=gaussians.get_scales(),
-        opacities=gaussians.get_opacities(),
-        colors=gaussians.get_shs(),
+        means=means,
+        quats=quats,
+        scales=scales,
+        opacities=opacities,
+        colors=colors,
         viewmats=viewmats,
         Ks=K,
         width=intrinsics.width,

@@ -71,19 +71,28 @@ HCM0644 HCM0674 HCM0540 HCM0539 HCM0421 chair bonsai
   được nhập vào pool đó hoặc dùng để suy luận cross-scene generalization.
 - Mọi thay đổi model, loss, optimizer, densification, renderer hoặc codec phải
   tạo candidate/baseline ID mới.
+- Modules 1–3, Stage A, Stage B1, five-scene screen, bốn production override,
+  rerender và submission v2 đã hoàn tất. Durable history nằm tại
+  `docs/superpowers/history/2026-07-27-optimization-phase-closure.md`.
 - Research authority hiện tại là
-  `docs/superpowers/specs/2026-07-26-five-scene-mvp.md`. Modules 1–3, Stage A
-  và Stage B1 đã hoàn tất; AbsGrad production của HCM0539/HCM0421 là deadline
-  exception, không phải paired-confirmed winner. Five-scene screen đã hoàn
-  tất: giữ B0 cho HCM0644/HCM0674/HCM0540, reject antialiasing, và authorize
-  deadline-exception full-data 30k production cho chair local-Laplacian cùng
-  bonsai SH4. Cả bốn production checkpoint override đã hoàn tất. Ba scene giữ
-  B0 không được retrain cho MVP này.
+  `docs/superpowers/specs/2026-07-27-chair-bonsai-deep-optimization.md`.
+  Chỉ `chair` và `bonsai` được mở cho `scene_opt_v3`; năm scene còn lại bị
+  freeze trong plan này.
+- Stage `research` dùng optimizer horizon 30k, dừng ở 15k, internal holdout,
+  không checkpoint và chỉ chấp nhận `chair/bonsai`. Production vẫn là fresh
+  full-data 30k không holdout.
+- Phase 1 dùng artifact riêng `holdout_research_v3.json`; không được thay hoặc
+  ghi đè `holdout.json`. CPU contract đã pass nhưng bounded diagnostics CUDA
+  smoke trên L4 vẫn là exit gate trước khi mở Phase 2.
+- Các candidate E3 ghi trong spec là reserved cho tới khi code, contract và
+  test tương ứng được merge vào registry. Không được dùng tên trong docs để
+  bypass preflight.
 
-## Current hybrid inference authority
+## Closed hybrid submission
 
-Candidate submission ID là `MVP-hybrid-4scene-q99-v1`. Đúng bốn checkpoint
-override và ba fallback scene là:
+Submission ID `MVP-hybrid-4scene-q99-v1` đã nộp và **CLOSED**. Evaluator chính
+thức: Score `71.2124`, PSNR `24.629191`, SSIM `80.7208`, LPIPS `19.4533`,
+`matched_scenes=7/7`. Bốn checkpoint override và ba fallback scene là:
 
 | Scene | Render source |
 |---|---|
@@ -91,14 +100,9 @@ override và ba fallback scene là:
 | chair, bonsai | `runs/scene_opt_v2/production_mvp/scenes/<scene>` |
 | HCM0644, HCM0674, HCM0540 | byte-identical folders từ `B0-submission-q99-v1` |
 
-Rerender bốn scene thay đổi bằng bốn invocation độc lập của script hiện có
-`scripts/run_phase4_inference.sh`, theo đúng lệnh đã khóa trong README và
-Section 8 của spec. Mỗi invocation khóa JPEG Q99, chỉ chọn một scene và một
-production `run_dir`, rồi đọc pose, intrinsics, dimensions, extension cùng
-case-sensitive filename từ `test/test_poses.csv` thông qua manifest tương ứng.
-Mỗi output root dưới `outputs/` và mỗi inference report phải chưa tồn tại.
-Không rerender ba fallback scene, không re-encode ảnh khi ghép, và không dùng
-`test_output_names` legacy.
+Không dùng kết quả aggregate này để suy ra per-scene winner. Mọi submission
+sau nó phải có ID mới. Các lệnh rerender lịch sử vẫn nằm trong README nhưng
+không còn là research authority.
 
 ## Evaluation metrics
 Final metric is a weighted composite, matching standard NVS benchmarking (Mip-NeRF / 3DGS-style evaluation):

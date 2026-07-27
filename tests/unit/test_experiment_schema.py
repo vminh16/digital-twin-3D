@@ -30,12 +30,14 @@ def test_schema_locks_cohort_stages_horizons_and_resource_limits() -> None:
     assert tuple(ExperimentStage) == (
         ExperimentStage.REFERENCE,
         ExperimentStage.SCREEN,
+        ExperimentStage.RESEARCH,
         ExperimentStage.CONFIRM,
         ExperimentStage.PRODUCTION,
     )
     assert STAGE_HORIZONS == {
         ExperimentStage.REFERENCE: 7_000,
         ExperimentStage.SCREEN: 7_000,
+        ExperimentStage.RESEARCH: 30_000,
         ExperimentStage.CONFIRM: 30_000,
         ExperimentStage.PRODUCTION: 30_000,
     }
@@ -99,6 +101,8 @@ def test_peak_vram_rejects_invalid_or_at_limit_values(peak_vram_mb: float) -> No
     [
         (ExperimentStage.REFERENCE, "B0-reference", {}),
         (ExperimentStage.SCREEN, "E1-density-absgrad-t04-v1", {}),
+        (ExperimentStage.RESEARCH, "B0-reference", {}),
+        (ExperimentStage.RESEARCH, "E2-appearance-sh4-v1", {}),
         (ExperimentStage.CONFIRM, "B0-reference", {}),
         (
             ExperimentStage.CONFIRM,
@@ -117,7 +121,7 @@ def test_experiment_accepts_only_legal_stage_candidate_pairs(
 ) -> None:
     experiment = Experiment(
         stage=stage,
-        scene_id="HCM0644",
+        scene_id="chair" if stage is ExperimentStage.RESEARCH else "HCM0644",
         candidate_id=candidate_id,
         **authorization,
     )
@@ -212,6 +216,11 @@ def test_experiment_is_immutable_and_paths_are_stage_first() -> None:
         scene_id="HCM0644",
         candidate_id="B0-reference",
     )
+    research = Experiment(
+        stage=ExperimentStage.RESEARCH,
+        scene_id="chair",
+        candidate_id="B0-reference",
+    )
 
     with pytest.raises(FrozenInstanceError):
         screen.scene_id = "chair"
@@ -224,4 +233,21 @@ def test_experiment_is_immutable_and_paths_are_stage_first() -> None:
     assert confirm.run_path(root) == (
         root / "confirm" / "HCM0644" / "E1-density-absgrad-t04-v1"
     )
+    assert research.run_path(root) == root / "research" / "chair" / "B0-reference"
     assert screen.run_path(root) != confirm.run_path(root)
+
+
+def test_research_stage_is_locked_to_the_active_auxiliary_scenes() -> None:
+    for scene_id in ("chair", "bonsai"):
+        assert Experiment(
+            ExperimentStage.RESEARCH,
+            scene_id,
+            "B0-reference",
+        ).horizon == 30_000
+
+    with pytest.raises(ValueError, match="research.*chair.*bonsai"):
+        Experiment(
+            ExperimentStage.RESEARCH,
+            "HCM0644",
+            "B0-reference",
+        )

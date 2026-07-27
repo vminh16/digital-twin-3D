@@ -203,6 +203,9 @@ def _validate_target_step(experiment: Experiment, step: int) -> None:
     if experiment.stage is ExperimentStage.CONFIRM:
         if step not in (15_000, 30_000):
             raise ValueError("confirm step must be 15000 or 30000")
+    elif experiment.stage is ExperimentStage.RESEARCH:
+        if step != 15_000:
+            raise ValueError("research step must be 15000")
     elif step != experiment.horizon:
         raise ValueError(f"{experiment.stage.value} step must be {experiment.horizon}")
 
@@ -333,7 +336,11 @@ def _validate_checkpoint_policy(
         for path in run.rglob("*")
         if path.is_file() and path.suffix.lower() in _MODEL_SUFFIXES
     }
-    if stage in (ExperimentStage.REFERENCE, ExperimentStage.SCREEN):
+    if stage in (
+        ExperimentStage.REFERENCE,
+        ExperimentStage.SCREEN,
+        ExperimentStage.RESEARCH,
+    ):
         if model_paths:
             raise ValueError(f"{stage.value} must not contain model checkpoints")
         return
@@ -371,7 +378,12 @@ def _validate_holdout_artifacts(
     if not root.is_dir():
         raise FileNotFoundError(f"required report directory does not exist: {root}")
     records: dict[str, dict[str, object]] = {}
-    for name in _HOLDOUT_REPORT_NAMES:
+    required_reports = _HOLDOUT_REPORT_NAMES + (
+        ("gaussian_diagnostics.json",)
+        if experiment.stage is ExperimentStage.RESEARCH
+        else ()
+    )
+    for name in required_reports:
         path = root / name
         if not path.is_file():
             raise FileNotFoundError(f"required {name} does not exist: {path}")
@@ -381,6 +393,7 @@ def _validate_holdout_artifacts(
     detail = records["detail_metrics.json"]
     pose = records["pose_strata.json"]
     report = records["experiment_report.json"]
+    gaussian_diagnostics = records.get("gaussian_diagnostics.json")
     expected_resources = {
         "total_time_seconds": float(summary["total_time_seconds"]),
         "max_vram_mb": float(summary["max_vram_mb"]),
@@ -397,6 +410,10 @@ def _validate_holdout_artifacts(
         expected_resources,
     )
     _validate_render_names(root / "validation_renders", expected_names)
+    if experiment.stage is ExperimentStage.RESEARCH:
+        _validate_render_names(
+            root / "diagnostic_filtered_renders", expected_names
+        )
     _validate_report_identity(
         report,
         experiment,
@@ -435,6 +452,7 @@ def _validate_holdout_artifacts(
         detail_report=detail,
         pose_strata_report=pose,
         resource_summary=expected_resources,
+        gaussian_diagnostics=gaussian_diagnostics,
     )
     unknown = set(report).difference(rebuilt, _OPTIONAL_REPORT_FIELDS)
     if unknown or any(report.get(key) != value for key, value in rebuilt.items()):
@@ -512,7 +530,9 @@ def _validate_report_identity(
     holdout_sha256: str,
 ) -> None:
     expected = {
-        "schema_version": 1,
+        "schema_version": (
+            2 if experiment.stage is ExperimentStage.RESEARCH else 1
+        ),
         "scene_id": experiment.scene_id,
         "candidate_id": experiment.candidate_id,
         "step": step,
@@ -603,7 +623,14 @@ def _reject_failure_record(run: Path) -> None:
 
 def _reject_production_holdout_artifacts(run: Path) -> None:
     stale = [run / name for name in _HOLDOUT_REPORT_NAMES]
-    stale.extend((run / "validation_renders", run / "snapshots"))
+    stale.extend(
+        (
+            run / "gaussian_diagnostics.json",
+            run / "validation_renders",
+            run / "diagnostic_filtered_renders",
+            run / "snapshots",
+        )
+    )
     present = next((path for path in stale if path.exists()), None)
     if present is not None:
         raise ValueError(

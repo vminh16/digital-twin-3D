@@ -1,0 +1,481 @@
+From 0a97270ae4cf3e9e8634c9b56716f1f5feb97828 Mon Sep 17 00:00:00 2001
+From: vminh16 <minhscntn1608@gmail.com>
+Date: Wed, 22 Jul 2026 16:53:55 +0700
+Subject: [PATCH] feat: add fair experiment command builder
+
+---
+ src/bts_nvs/experiments/commands.py    | 125 ++++++++++
+ tests/unit/test_experiment_commands.py | 329 +++++++++++++++++++++++++
+ 2 files changed, 454 insertions(+)
+ create mode 100644 src/bts_nvs/experiments/commands.py
+ create mode 100644 tests/unit/test_experiment_commands.py
+
+diff --git a/src/bts_nvs/experiments/commands.py b/src/bts_nvs/experiments/commands.py
+new file mode 100644
+index 0000000..be992c7
+--- /dev/null
++++ b/src/bts_nvs/experiments/commands.py
+@@ -0,0 +1,125 @@
++from __future__ import annotations
++
++import sys
++from pathlib import Path
++
++from bts_nvs.experiments.candidates import candidate_settings
++from bts_nvs.experiments.experiment import Experiment, ExperimentStage
++
++
++_OPTIMIZER_BACKENDS = frozenset(("adam", "adam-fused"))
++_PRECISIONS = frozenset(("fp32", "amp-fp16"))
++_TRAINING_SCRIPT = Path("src") / "bts_nvs" / "training" / "run_training.py"
++_RECOVERY_PATH = Path("checkpoints") / "recovery.pt"
++
++
++def build_training_command(
++    *,
++    repo_root: str | Path,
++    scene_dir: str | Path,
++    manifest_dir: str | Path,
++    output_dir: str | Path,
++    optimizer_backend: str,
++    precision: str,
++    experiment: Experiment,
++    stop_step: int,
++    resume_path: str | Path | None = None,
++) -> list[str]:
++    """Build one fair generic-training argument vector without launching it."""
++    if not isinstance(experiment, Experiment):
++        raise ValueError("experiment must be an Experiment")
++    _validate_runtime(optimizer_backend, precision)
++    _validate_stop_step(stop_step)
++
++    output = Path(output_dir)
++    resume = None if resume_path is None else Path(resume_path)
++    _validate_stage_run(experiment.stage, stop_step, resume, output)
++    candidate_id = candidate_settings(experiment.candidate_id).candidate_id
++
++    command = [
++        sys.executable,
++        str(Path(repo_root) / _TRAINING_SCRIPT),
++        "--scene_dir",
++        str(scene_dir),
++        "--manifest_dir",
++        str(manifest_dir),
++        "--output_dir",
++        str(output),
++        "--seed",
++        "0",
++        "--resize_factor",
++        "1",
++        "--max_steps",
++        str(experiment.horizon),
++        "--stop_step",
++        str(stop_step),
++        "--candidate_id",
++        candidate_id,
++        "--experiment_stage",
++        experiment.stage.value,
++        "--cache_images",
++        "--pinned_transfer",
++    ]
++    if experiment.stage is not ExperimentStage.PRODUCTION:
++        command.append("--internal_holdout")
++    if experiment.stage in (ExperimentStage.CONFIRM, ExperimentStage.PRODUCTION):
++        command.extend(
++            (
++                "--authorized_candidate_id",
++                candidate_id,
++                "--checkpoint_every",
++                "3000",
++                "--rolling_checkpoint",
++            )
++        )
++    if resume is not None:
++        command.extend(("--resume", str(resume)))
++    command.extend(
++        (
++            "--optimizer_backend",
++            optimizer_backend,
++            "--precision",
++            precision,
++        )
++    )
++    return command
++
++
++def _validate_runtime(optimizer_backend: str, precision: str) -> None:
++    if optimizer_backend not in _OPTIMIZER_BACKENDS:
++        raise ValueError("optimizer_backend is unsupported")
++    if precision not in _PRECISIONS:
++        raise ValueError("precision is unsupported")
++    if precision == "amp-fp16" and optimizer_backend != "adam-fused":
++        raise ValueError("amp-fp16 requires adam-fused")
++
++
++def _validate_stop_step(stop_step: int) -> None:
++    if isinstance(stop_step, bool) or not isinstance(stop_step, int):
++        raise ValueError("stop_step must be an integer")
++
++
++def _validate_stage_run(
++    stage: ExperimentStage,
++    stop_step: int,
++    resume_path: Path | None,
++    output_dir: Path,
++) -> None:
++    if stage in (ExperimentStage.REFERENCE, ExperimentStage.SCREEN):
++        if stop_step != 7_000 or resume_path is not None:
++            raise ValueError(f"{stage.value} requires a fresh 7000-step run")
++        return
++
++    expected_recovery = output_dir / _RECOVERY_PATH
++    if resume_path is not None and resume_path != expected_recovery:
++        raise ValueError("resume_path must be output_dir/checkpoints/recovery.pt")
++
++    if stage is ExperimentStage.CONFIRM:
++        if stop_step not in (15_000, 30_000):
++            raise ValueError("confirm requires stop_step 15000 or 30000")
++        if resume_path is not None and stop_step != 30_000:
++            raise ValueError("confirm resume requires stop_step 30000")
++        return
++
++    if stop_step != 30_000:
++        raise ValueError("production requires stop_step 30000")
+diff --git a/tests/unit/test_experiment_commands.py b/tests/unit/test_experiment_commands.py
+new file mode 100644
+index 0000000..df2dd8c
+--- /dev/null
++++ b/tests/unit/test_experiment_commands.py
+@@ -0,0 +1,329 @@
++from __future__ import annotations
++
++import sys
++from pathlib import Path
++
++import pytest
++
++from bts_nvs.experiments.commands import build_training_command
++from bts_nvs.experiments.experiment import Experiment, ExperimentStage
++
++
++def _paths(tmp_path: Path) -> dict[str, Path]:
++    return {
++        "repo_root": tmp_path / "repo",
++        "scene_dir": tmp_path / "scene",
++        "manifest_dir": tmp_path / "manifests",
++        "output_dir": tmp_path / "output",
++    }
++
++
++def _build(tmp_path: Path, experiment: Experiment, **overrides) -> list[str]:
++    arguments = {
++        **_paths(tmp_path),
++        "optimizer_backend": "adam-fused",
++        "precision": "amp-fp16",
++        "experiment": experiment,
++        "stop_step": experiment.horizon,
++    }
++    arguments.update(overrides)
++    return build_training_command(**arguments)
++
++
++def _option_values(command: list[str]) -> dict[str, str | bool]:
++    values: dict[str, str | bool] = {}
++    index = 2
++    while index < len(command):
++        option = command[index]
++        if index + 1 == len(command) or command[index + 1].startswith("--"):
++            values[option] = True
++            index += 1
++        else:
++            values[option] = command[index + 1]
++            index += 2
++    return values
++
++
++def test_reference_command_pins_the_locked_7k_runtime(tmp_path: Path) -> None:
++    paths = _paths(tmp_path)
++    experiment = Experiment(
++        stage=ExperimentStage.REFERENCE,
++        scene_id="HCM0644",
++        candidate_id="B0-reference",
++    )
++
++    command = _build(tmp_path, experiment)
++
++    assert command == [
++        sys.executable,
++        str(paths["repo_root"] / "src" / "bts_nvs" / "training" / "run_training.py"),
++        "--scene_dir",
++        str(paths["scene_dir"]),
++        "--manifest_dir",
++        str(paths["manifest_dir"]),
++        "--output_dir",
++        str(paths["output_dir"]),
++        "--seed",
++        "0",
++        "--resize_factor",
++        "1",
++        "--max_steps",
++        "7000",
++        "--stop_step",
++        "7000",
++        "--candidate_id",
++        "B0-reference",
++        "--experiment_stage",
++        "reference",
++        "--cache_images",
++        "--pinned_transfer",
++        "--internal_holdout",
++        "--optimizer_backend",
++        "adam-fused",
++        "--precision",
++        "amp-fp16",
++    ]
++
++
++def test_screen_command_is_fresh_7k_without_authorization_or_checkpoints(
++    tmp_path: Path,
++) -> None:
++    experiment = Experiment(
++        stage=ExperimentStage.SCREEN,
++        scene_id="HCM0644",
++        candidate_id="E1-density-absgrad-t04-v1",
++    )
++
++    options = _option_values(_build(tmp_path, experiment))
++
++    assert options["--max_steps"] == "7000"
++    assert options["--stop_step"] == "7000"
++    assert options["--internal_holdout"] is True
++    assert "--authorized_candidate_id" not in options
++    assert "--checkpoint_every" not in options
++    assert "--rolling_checkpoint" not in options
++    assert "--resume" not in options
++
++
++def test_confirmation_15k_command_uses_30k_schedule_and_rolling_recovery(
++    tmp_path: Path,
++) -> None:
++    experiment = Experiment(
++        stage=ExperimentStage.CONFIRM,
++        scene_id="HCM0644",
++        candidate_id="E1-density-absgrad-t04-v1",
++        authorized_scene_winner="E1-density-absgrad-t04-v1",
++    )
++
++    options = _option_values(_build(tmp_path, experiment, stop_step=15_000))
++
++    assert options["--max_steps"] == "30000"
++    assert options["--stop_step"] == "15000"
++    assert options["--checkpoint_every"] == "3000"
++    assert options["--rolling_checkpoint"] is True
++    assert options["--internal_holdout"] is True
++    assert options["--authorized_candidate_id"] == experiment.candidate_id
++    assert "--resume" not in options
++
++
++def test_confirmation_resume_targets_its_own_recovery_file(tmp_path: Path) -> None:
++    paths = _paths(tmp_path)
++    experiment = Experiment(
++        stage=ExperimentStage.CONFIRM,
++        scene_id="HCM0644",
++        candidate_id="E1-density-absgrad-t04-v1",
++        authorized_scene_winner="E1-density-absgrad-t04-v1",
++    )
++    recovery = paths["output_dir"] / "checkpoints" / "recovery.pt"
++
++    options = _option_values(
++        _build(
++            tmp_path,
++            experiment,
++            stop_step=30_000,
++            resume_path=recovery,
++        )
++    )
++
++    assert options["--max_steps"] == "30000"
++    assert options["--stop_step"] == "30000"
++    assert options["--resume"] == str(recovery)
++
++
++def test_fresh_b0_confirmation_supplies_the_cli_authorization(tmp_path: Path) -> None:
++    experiment = Experiment(
++        stage=ExperimentStage.CONFIRM,
++        scene_id="HCM0644",
++        candidate_id="B0-reference",
++    )
++
++    options = _option_values(_build(tmp_path, experiment, stop_step=30_000))
++
++    assert options["--authorized_candidate_id"] == "B0-reference"
++    assert "--resume" not in options
++
++
++def test_production_is_30k_without_holdout_and_only_resumes_explicitly(
++    tmp_path: Path,
++) -> None:
++    paths = _paths(tmp_path)
++    experiment = Experiment(
++        stage=ExperimentStage.PRODUCTION,
++        scene_id="HCM0644",
++        candidate_id="E1-density-absgrad-t04-v1",
++        authorized_cohort_candidate="E1-density-absgrad-t04-v1",
++    )
++    recovery = paths["output_dir"] / "checkpoints" / "recovery.pt"
++
++    fresh = _option_values(_build(tmp_path, experiment))
++    resumed = _option_values(_build(tmp_path, experiment, resume_path=recovery))
++
++    assert fresh["--max_steps"] == "30000"
++    assert fresh["--stop_step"] == "30000"
++    assert fresh["--checkpoint_every"] == "3000"
++    assert fresh["--rolling_checkpoint"] is True
++    assert "--internal_holdout" not in fresh
++    assert "--resume" not in fresh
++    assert resumed["--resume"] == str(recovery)
++
++
++def test_paired_confirmation_commands_keep_all_fairness_settings_identical(
++    tmp_path: Path,
++) -> None:
++    b0 = Experiment(
++        stage=ExperimentStage.CONFIRM,
++        scene_id="HCM0644",
++        candidate_id="B0-reference",
++    )
++    candidate = Experiment(
++        stage=ExperimentStage.CONFIRM,
++        scene_id="HCM0644",
++        candidate_id="E1-density-absgrad-t04-v1",
++        authorized_scene_winner="E1-density-absgrad-t04-v1",
++    )
++    b0_command = _build(tmp_path, b0, output_dir=tmp_path / "b0", stop_step=30_000)
++    candidate_command = _build(
++        tmp_path,
++        candidate,
++        output_dir=tmp_path / "candidate",
++        stop_step=30_000,
++    )
++    allowed_differences = {
++        "--candidate_id",
++        "--authorized_candidate_id",
++        "--output_dir",
++    }
++
++    b0_options = _option_values(b0_command)
++    candidate_options = _option_values(candidate_command)
++
++    assert {
++        key: value
++        for key, value in b0_options.items()
++        if key not in allowed_differences
++    } == {
++        key: value
++        for key, value in candidate_options.items()
++        if key not in allowed_differences
++    }
++    assert not set(b0_options).intersection(
++        {"--absgrad", "--grow_grad2d", "--grow_scale3d", "--prune_opa"}
++    )
++
++
++@pytest.mark.parametrize(
++    ("experiment", "stop_step", "resume_path", "match"),
++    [
++        (
++            Experiment(ExperimentStage.REFERENCE, "HCM0644", "B0-reference"),
++            15_000,
++            None,
++            "reference",
++        ),
++        (
++            Experiment(ExperimentStage.SCREEN, "HCM0644", "E1-density-absgrad-t04-v1"),
++            7_000,
++            "not-recovery.pt",
++            "screen",
++        ),
++        (
++            Experiment(
++                ExperimentStage.CONFIRM,
++                "HCM0644",
++                "E1-density-absgrad-t04-v1",
++                authorized_scene_winner="E1-density-absgrad-t04-v1",
++            ),
++            15_000,
++            "not-recovery.pt",
++            "resume_path",
++        ),
++        (
++            Experiment(
++                ExperimentStage.PRODUCTION,
++                "HCM0644",
++                "E1-density-absgrad-t04-v1",
++                authorized_cohort_candidate="E1-density-absgrad-t04-v1",
++            ),
++            15_000,
++            None,
++            "production",
++        ),
++    ],
++)
++def test_builder_rejects_illegal_stage_stop_and_resume_combinations(
++    tmp_path: Path,
++    experiment: Experiment,
++    stop_step: int,
++    resume_path: str | None,
++    match: str,
++) -> None:
++    with pytest.raises(ValueError, match=match):
++        _build(
++            tmp_path,
++            experiment,
++            stop_step=stop_step,
++            resume_path=resume_path,
++        )
++
++
++def test_confirmation_rejects_resuming_the_15k_invocation(tmp_path: Path) -> None:
++    paths = _paths(tmp_path)
++    experiment = Experiment(
++        stage=ExperimentStage.CONFIRM,
++        scene_id="HCM0644",
++        candidate_id="E1-density-absgrad-t04-v1",
++        authorized_scene_winner="E1-density-absgrad-t04-v1",
++    )
++
++    with pytest.raises(ValueError, match="confirm resume"):
++        _build(
++            tmp_path,
++            experiment,
++            stop_step=15_000,
++            resume_path=paths["output_dir"] / "checkpoints" / "recovery.pt",
++        )
++
++
++@pytest.mark.parametrize(
++    ("optimizer_backend", "precision", "match"),
++    [
++        ("sgd", "fp32", "optimizer_backend"),
++        ("adam", "bf16", "precision"),
++        ("adam", "amp-fp16", "amp-fp16 requires adam-fused"),
++    ],
++)
++def test_builder_rejects_unaccepted_runtime_settings(
++    tmp_path: Path,
++    optimizer_backend: str,
++    precision: str,
++    match: str,
++) -> None:
++    experiment = Experiment(ExperimentStage.REFERENCE, "HCM0644", "B0-reference")
++
++    with pytest.raises(ValueError, match=match):
++        _build(
++            tmp_path,
++            experiment,
++            optimizer_backend=optimizer_backend,
++            precision=precision,
++        )
+-- 
+2.49.0.windows.1
+

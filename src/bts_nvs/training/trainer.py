@@ -751,6 +751,7 @@ class Trainer:
 
             # 6. Strategy post-backward step (updates params/optimizers in-place)
             t_strategy_start = time.perf_counter()
+            gaussians_before_density = self.gaussians.num_gaussians
             self.strategy.step_post_backward(
                 state=self.strategy_state,
                 step=completed_step,
@@ -764,6 +765,9 @@ class Trainer:
                         f"control at completed step {completed_step}"
                     )
             t_strategy = time.perf_counter() - t_strategy_start
+            density_count_delta = (
+                self.gaussians.num_gaussians - gaussians_before_density
+            )
 
             # 7. Optimizer step and scheduler decay
             t_opt_start = time.perf_counter()
@@ -813,6 +817,7 @@ class Trainer:
                 "num_gaussians": self.gaussians.num_gaussians,
                 "lr_means": self.scheduler.get_last_lr()[0],
                 "sample_index": sample_idx,
+                "density_count_delta": density_count_delta,
             }
             with open(metrics_file, "a", encoding="utf-8") as f:
                 f.write(json.dumps(metrics, allow_nan=False) + "\n")
