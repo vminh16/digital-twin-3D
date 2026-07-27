@@ -9,6 +9,7 @@ __pycache__/
 # big file
 *.tar
 *.tar.gz
+/runs
 # Distribution / packaging
 .Python
 build/

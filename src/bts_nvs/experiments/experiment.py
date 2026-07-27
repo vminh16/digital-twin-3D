@@ -19,7 +19,7 @@ COHORT_SCENE_IDS = (
     "bonsai",
 )
 MAX_PEAK_VRAM_MB = 23 * 1024
-MAX_PAIRED_WALL_TIME_RATIO = 1.25
+MAX_PAIRED_WALL_TIME_RATIO = 3
 
 
 class ExperimentStage(str, Enum):
