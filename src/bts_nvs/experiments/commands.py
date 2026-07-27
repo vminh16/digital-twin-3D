@@ -109,6 +109,12 @@ def _validate_stage_run(
         if stop_step != 7_000 or resume_path is not None:
             raise ValueError(f"{stage.value} requires a fresh 7000-step run")
         return
+    if stage is ExperimentStage.RESEARCH:
+        if stop_step != 15_000 or resume_path is not None:
+            raise ValueError(
+                "research requires a fresh 15000-step run under the 30000-step schedule"
+            )
+        return
 
     expected_recovery = output_dir / _RECOVERY_PATH
     if resume_path is not None and (

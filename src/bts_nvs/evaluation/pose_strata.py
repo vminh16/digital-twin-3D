@@ -10,6 +10,7 @@ import numpy as np
 
 from bts_nvs.data.holdout import (
     HoldoutSplit,
+    holdout_identity_sha256,
     manifest_pose_distance_matrix,
     validate_holdout_split,
 )
@@ -123,6 +124,7 @@ def build_pose_strata(
         "algorithm": ALGORITHM,
         "holdout_algorithm": split.algorithm,
         "holdout_manifest_sha256": split.manifest_sha256,
+        "holdout_sha256": holdout_identity_sha256(split),
         "image_count": len(images),
         "images": images,
     }

@@ -15,7 +15,12 @@ import torch
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from bts_nvs.data.dataset import SceneDataset, estimate_image_cache_bytes
-from bts_nvs.data.holdout import HoldoutSplit, load_holdout_split
+from bts_nvs.data.holdout import (
+    HoldoutSplit,
+    holdout_identity_sha256,
+    load_holdout_split,
+)
+from bts_nvs.data.prepare_research_artifacts import RESEARCH_HOLDOUT_NAME
 from bts_nvs.data.manifest import (
     build_scene_manifest,
     load_scene_manifest,
@@ -24,6 +29,7 @@ from bts_nvs.data.manifest import (
 from bts_nvs.data.sparse_subset import build_split_sparse_initialization
 from bts_nvs.cameras.intrinsics import CameraIntrinsics
 from bts_nvs.evaluation.detail_metrics import evaluate_detail_directory
+from bts_nvs.evaluation.gaussian_diagnostics import build_gaussian_diagnostics
 from bts_nvs.evaluation.experiment_report import (
     build_experiment_report,
     save_experiment_report,
@@ -34,6 +40,7 @@ from bts_nvs.models.optimizer import setup_optimizers
 from bts_nvs.evaluation.pose_strata import build_pose_strata, save_pose_strata
 from bts_nvs.experiments.candidates import candidate_training_overrides
 from bts_nvs.experiments.experiment import (
+    ACTIVE_RESEARCH_SCENE_IDS,
     COHORT_SCENE_IDS,
     Experiment,
     ExperimentStage,
@@ -345,13 +352,24 @@ def validate_generic_experiment_args(args) -> None:
         raise ValueError("generic experiment identity cannot be combined with legacy modes")
 
     stage = ExperimentStage(stage_name)
-    if stage in (ExperimentStage.REFERENCE, ExperimentStage.SCREEN):
+    if stage in (
+        ExperimentStage.REFERENCE,
+        ExperimentStage.SCREEN,
+        ExperimentStage.RESEARCH,
+    ):
         if args.authorized_candidate_id is not None:
-            raise ValueError("generic authorization must be absent for reference/screen")
+            raise ValueError(
+                "generic authorization must be absent for reference/screen/research"
+            )
     elif args.authorized_candidate_id != candidate_id:
         raise ValueError("generic authorization must match candidate_id")
 
-    experiment = _generic_experiment(args, COHORT_SCENE_IDS[0])
+    validation_scene_id = (
+        ACTIVE_RESEARCH_SCENE_IDS[0]
+        if stage is ExperimentStage.RESEARCH
+        else COHORT_SCENE_IDS[0]
+    )
+    experiment = _generic_experiment(args, validation_scene_id)
     common_runtime = (
         args.resize_factor == 1
         and args.seed == 0
@@ -370,6 +388,22 @@ def validate_generic_experiment_args(args) -> None:
             raise ValueError(
                 f"{experiment.stage.value} requires a fresh factor-1, seed-0, "
                 "7000-step internal-holdout run with cached images, pinned "
+                "transfer, and no checkpoints"
+            )
+        return
+
+    if experiment.stage is ExperimentStage.RESEARCH:
+        if (
+            not common_runtime
+            or args.max_steps != 30_000
+            or args.stop_step != 15_000
+            or not args.internal_holdout
+            or args.resume is not None
+            or args.rolling_checkpoint
+        ):
+            raise ValueError(
+                "research requires a fresh factor-1, seed-0, 30000-step schedule "
+                "stopped at 15000 with internal holdout, cached images, pinned "
                 "transfer, and no checkpoints"
             )
         return
@@ -557,10 +591,13 @@ def load_internal_holdout(
     manifest,
     *,
     enabled: bool,
+    research: bool = False,
 ) -> HoldoutSplit | None:
     if not enabled:
         return None
-    path = Path(manifest_dir) / "holdout.json"
+    path = Path(manifest_dir) / (
+        RESEARCH_HOLDOUT_NAME if research else "holdout.json"
+    )
     if not path.is_file():
         raise FileNotFoundError(
             f"required internal holdout artifact does not exist: {path}"
@@ -701,11 +738,22 @@ def build_training_config(
     if args.candidate_id is not None:
         config["experiment_stage"] = args.experiment_stage
         config.update(candidate_training_overrides(args.candidate_id))
+        if args.experiment_stage in (
+            ExperimentStage.RESEARCH.value,
+            ExperimentStage.CONFIRM.value,
+        ) and manifest.scene_id in ACTIVE_RESEARCH_SCENE_IDS:
+            config.update(
+                {
+                    "diagnostic_scale_threshold": 0.1,
+                    "diagnostic_radius_threshold_pixels": 128.0,
+                }
+            )
     if split is not None:
         config.update(
             {
                 "holdout_algorithm": split.algorithm,
                 "holdout_manifest_sha256": split.manifest_sha256,
+                "holdout_sha256": holdout_identity_sha256(split),
                 "internal_train_count": len(split.train_image_names),
                 "guard_count": len(split.guard_image_names),
                 "validation_count": len(split.validation_image_names),
@@ -848,6 +896,17 @@ def build_experiment_resource_summary(output_dir: Path) -> dict[str, float | int
     }
 
 
+def build_density_control_summary(output_dir: Path) -> dict[str, int]:
+    records = _read_metric_records(Path(output_dir) / "metrics.jsonl")
+    deltas = [int(record.get("density_count_delta", 0)) for record in records]
+    return {
+        "event_count": sum(delta != 0 for delta in deltas),
+        "observed_net_added": sum(max(delta, 0) for delta in deltas),
+        "observed_net_removed": sum(max(-delta, 0) for delta in deltas),
+        "net_change": sum(deltas),
+    }
+
+
 def _qualification_report(
     *,
     scene_id: str,
@@ -904,7 +963,7 @@ def generate_generic_experiment_reports(
         validation=validation,
         resources=resources,
         config_sha256=trainer.config_hash,
-        holdout_sha256=split.manifest_sha256,
+        holdout_sha256=holdout_identity_sha256(split),
     )
     write_json_record(output / "qualification_report.json", qualification)
 
@@ -912,18 +971,39 @@ def generate_generic_experiment_reports(
     write_json_record(output / "detail_metrics.json", detail)
     pose_strata = build_pose_strata(manifest, split)
     save_pose_strata(pose_strata, output / "pose_strata.json")
-    experiment = build_experiment_report(
+    gaussian_diagnostics = None
+    if args.experiment_stage == ExperimentStage.RESEARCH.value:
+        gaussian_diagnostics = build_gaussian_diagnostics(
+            trainer,
+            validation_dataset,
+            output / "diagnostic_filtered_renders",
+            scale_threshold=float(
+                trainer.config["diagnostic_scale_threshold"]
+            ),
+            radius_threshold_pixels=float(
+                trainer.config["diagnostic_radius_threshold_pixels"]
+            ),
+            density_summary=build_density_control_summary(output),
+        )
+        write_json_record(
+            output / "gaussian_diagnostics.json",
+            gaussian_diagnostics,
+        )
+    report_arguments = dict(
         scene_id=manifest.scene_id,
         candidate_id=args.candidate_id,
         step=training_target_step(args),
         config_sha256=trainer.config_hash,
         manifest_sha256=trainer.manifest_hash,
-        holdout_sha256=split.manifest_sha256,
+        holdout_sha256=holdout_identity_sha256(split),
         full_frame_report=validation,
         detail_report=detail,
         pose_strata_report=pose_strata,
         resource_summary=resources,
     )
+    if gaussian_diagnostics is not None:
+        report_arguments["gaussian_diagnostics"] = gaussian_diagnostics
+    experiment = build_experiment_report(**report_arguments)
     save_experiment_report(experiment, output / "experiment_report.json")
     return experiment
 
@@ -1034,6 +1114,9 @@ def main():
         manifest_dir,
         manifest,
         enabled=internal_holdout_enabled(args),
+        research=args.experiment_stage
+        in (ExperimentStage.RESEARCH.value, ExperimentStage.CONFIRM.value)
+        and manifest.scene_id in ACTIVE_RESEARCH_SCENE_IDS,
     )
 
     # 2. Setup resolution resizing
@@ -1289,7 +1372,7 @@ def main():
             validation=validation,
             resources=resources,
             config_sha256=trainer.config_hash,
-            holdout_sha256=split.manifest_sha256,
+            holdout_sha256=holdout_identity_sha256(split),
         )
         save_qualification_report(
             qualification_report,

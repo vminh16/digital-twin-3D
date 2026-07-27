@@ -1,51 +1,50 @@
 # Documentation status
 
-## Current position — 2026-07-26
+## Current position — 2026-07-27
 
-- Closed baseline: `B0-submission-q99-v1`, official Score `70.98330`, 7/7
-  scenes.
-- Stage A completed seven deterministic `B0-reference` 7k holdouts.
-- Stage B1 completed on `HCM0421/HCM0539`.
-- Their AbsGrad production checkpoints are deadline-exception MVP artifacts,
-  not paired-confirmed research winners.
-- The five-scene 7k screen is complete:
+- `B0-submission-q99-v1` is closed at official Score `70.98330`.
+- `MVP-hybrid-4scene-q99-v1` is submitted and closed at official Score
+  `71.2124`, PSNR `24.629191`, SSIM `0.807208`, LPIPS `0.194533`, 7/7 scenes.
+- All Stage A, Stage B1, five-scene MVP, production, rerender and assembly work
+  through submission v2 is historical.
+- The only active research scope is deep optimization of `chair` and `bonsai`.
+- Five other scenes are frozen until this plan finishes.
+
+## Active read order
+
+Only these documents are required:
+
+1. [Repository rules](../AGENTS.md)
+2. [Active chair/bonsai authority](superpowers/specs/2026-07-27-chair-bonsai-deep-optimization.md)
+3. [Active execution plan](superpowers/plans/2026-07-27-chair-bonsai-deep-optimization.md)
+4. [Repository operations](../README.md)
+
+For prior decisions, read only the
+[phase closure](superpowers/history/2026-07-27-optimization-phase-closure.md).
+
+## Active harness
+
+New evidence writes to:
 
 ```text
-HCM0644 -> retain B0
-HCM0674 -> antialiased rejected; retain B0
-HCM0540 -> antialiased rejected; retain B0
-chair   -> local sharpness-weighted loss selected
-bonsai  -> SH4 selected
+runs/scene_opt_v3/research/<scene>/<candidate>/
 ```
 
-- Deadline-exception full-data 30k production is authorized for chair and
-  bonsai. It is operational MVP evidence, not paired 30k confirmation.
+The `research` stage is locked to `chair/bonsai`, uses a 30k optimizer
+schedule stopped at 15k, internal holdout and no model checkpoint.
 
-## Read order
+```bash
+bash scripts/run_chair_bonsai_research.sh <chair|bonsai> <candidate-id>
+```
 
-Only these documents are required for active work:
-
-1. [Repository rules](../AGENTS.md) — immutable data, output, metric and
-   reproducibility constraints.
-2. [Five-scene MVP authority](superpowers/specs/2026-07-26-five-scene-mvp.md) —
-   scope, candidates, gates and completion.
-3. [Five-scene screen plan](superpowers/plans/2026-07-26-five-scene-mvp-screen.md) —
-   implementation and VM execution order.
-4. [Repository README](../README.md) — installation and operational commands.
+E3 candidate IDs in the active spec are reserved until their implementations
+and tests enter the registry. Phase 1 targeted-holdout code is complete; the
+bounded L4 CUDA smoke remains its exit gate, so GPU screens are not yet
+authorized.
 
 ## Historical documents
 
-The two 2026-07-22 specs and completed Stage A/B1 plans remain in the tree only
-for provenance. Their durable constraints are consolidated in the active MVP
-authority. Old deleted Phase 3/4, C1 and module plans remain recoverable through
-Git history; they are not executable authorities.
-
-## Execution boundary
-
-- Local workstation: edit code, run unit tests and build the deployment bundle.
-- NVIDIA L4 VM: sequential full-data 30k production for chair and bonsai.
-- Existing `runs/scene_opt_v1/reference/` reports remain the paired B0
-  authority.
-- New runs and decisions use `runs/scene_opt_v2/`.
-- Only the deterministic chair and bonsai winners may enter production.
-- No hidden-test render is used for tuning.
+The 2026-07-22 through 2026-07-26 specs/plans are provenance only. Their
+durable conclusions are consolidated in the phase-closure record. They must
+not be treated as executable authority, and their v1/v2 artifacts must not be
+migrated or overwritten.

@@ -10,8 +10,11 @@ from bts_nvs.cameras.distortion import CameraDistortion
 from bts_nvs.cameras.intrinsics import CameraIntrinsics
 from bts_nvs.data.holdout import (
     ALGORITHM,
+    RESEARCH_ALGORITHM,
     _pose_distance_matrix,
     build_pose_holdout,
+    build_research_holdout,
+    holdout_split_sha256,
     load_holdout_split,
     manifest_pose_distance_matrix,
     manifest_holdout_sha256,
@@ -54,6 +57,19 @@ def _manifest(count: int = 150) -> SceneManifest:
         sparse_colors=np.asarray([[0, 0, 0]], dtype=np.uint8),
         normalization_transform=np.eye(4, dtype=np.float64),
         inverse_normalization_transform=np.eye(4, dtype=np.float64),
+    )
+
+
+def _research_manifest(scene_id: str, count: int = 150) -> SceneManifest:
+    manifest = _manifest(count)
+    names = tuple(f"frame_{index + 800:06d}.jpg" for index in range(count))
+    if scene_id == "bonsai":
+        names = tuple(f"frame_{index + 320:06d}.jpg" for index in range(count))
+    return replace(
+        manifest,
+        scene_id=scene_id,
+        train_image_names=names,
+        train_image_paths=tuple(f"train/images/{name}" for name in names),
     )
 
 
@@ -192,3 +208,36 @@ def test_holdout_load_rejects_tampered_partition(tmp_path) -> None:
     )
     with pytest.raises(DataContractError, match="deterministic algorithm"):
         load_holdout_split(path, manifest)
+
+
+@pytest.mark.parametrize("scene_id", ("chair", "bonsai"))
+def test_research_holdout_is_deterministic_versioned_and_separate(scene_id) -> None:
+    manifest = _research_manifest(scene_id)
+
+    first = build_research_holdout(manifest)
+    second = build_research_holdout(manifest)
+
+    assert first == second
+    assert first.algorithm == RESEARCH_ALGORITHM
+    assert first != build_pose_holdout(manifest)
+    assert len(first.train_image_names) >= int(
+        np.ceil(0.70 * len(manifest.train_image_names))
+    )
+    assert len(holdout_split_sha256(first)) == 64
+    if scene_id == "chair":
+        numbers = {
+            int(name.rsplit("_", 1)[1].split(".", 1)[0])
+            for name in first.validation_image_names
+        }
+        assert 870 in numbers
+        assert 885 in numbers
+    else:
+        assert "frame_000390.jpg" in first.validation_image_names
+
+
+def test_research_holdout_rejects_unsupported_scene_or_missing_sentinel() -> None:
+    with pytest.raises(DataContractError, match="chair and bonsai"):
+        build_research_holdout(_manifest())
+    bonsai = _research_manifest("bonsai", count=50)
+    with pytest.raises(DataContractError, match="frame 390"):
+        build_research_holdout(bonsai)

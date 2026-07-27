@@ -1,0 +1,78 @@
+From 92994dba640e4db449c82d0ea0d62990dc25b2f5 Mon Sep 17 00:00:00 2001
+From: vminh16 <minhscntn1608@gmail.com>
+Date: Wed, 22 Jul 2026 17:02:35 +0700
+Subject: [PATCH 2/2] fix: normalize experiment resume paths
+
+---
+ src/bts_nvs/experiments/commands.py    |  4 ++-
+ tests/unit/test_experiment_commands.py | 39 ++++++++++++++++++++++++++
+ 2 files changed, 42 insertions(+), 1 deletion(-)
+
+diff --git a/src/bts_nvs/experiments/commands.py b/src/bts_nvs/experiments/commands.py
+index be992c7..bf2682f 100644
+--- a/src/bts_nvs/experiments/commands.py
++++ b/src/bts_nvs/experiments/commands.py
+@@ -111,7 +111,9 @@ def _validate_stage_run(
+         return
+ 
+     expected_recovery = output_dir / _RECOVERY_PATH
+-    if resume_path is not None and resume_path != expected_recovery:
++    if resume_path is not None and (
++        resume_path.resolve(strict=False) != expected_recovery.resolve(strict=False)
++    ):
+         raise ValueError("resume_path must be output_dir/checkpoints/recovery.pt")
+ 
+     if stage is ExperimentStage.CONFIRM:
+diff --git a/tests/unit/test_experiment_commands.py b/tests/unit/test_experiment_commands.py
+index df2dd8c..d91bb05 100644
+--- a/tests/unit/test_experiment_commands.py
++++ b/tests/unit/test_experiment_commands.py
+@@ -150,6 +150,45 @@ def test_confirmation_resume_targets_its_own_recovery_file(tmp_path: Path) -> No
+     assert options["--resume"] == str(recovery)
+ 
+ 
++@pytest.mark.parametrize(
++    "resume_path",
++    (
++        "absolute-output/checkpoints/recovery.pt",
++        "relative-output/checkpoints/../checkpoints/recovery.pt",
++    ),
++)
++def test_confirmation_resume_accepts_equivalent_recovery_path_spellings(
++    tmp_path: Path,
++    monkeypatch: pytest.MonkeyPatch,
++    resume_path: str,
++) -> None:
++    monkeypatch.chdir(tmp_path)
++    experiment = Experiment(
++        stage=ExperimentStage.CONFIRM,
++        scene_id="HCM0644",
++        candidate_id="E1-density-absgrad-t04-v1",
++        authorized_scene_winner="E1-density-absgrad-t04-v1",
++    )
++    output_dir = Path("relative-output")
++    if resume_path.startswith("absolute-output"):
++        output_dir = Path("absolute-output")
++        resume = tmp_path / resume_path
++    else:
++        resume = Path(resume_path)
++
++    options = _option_values(
++        _build(
++            tmp_path,
++            experiment,
++            output_dir=output_dir,
++            stop_step=30_000,
++            resume_path=resume,
++        )
++    )
++
++    assert options["--resume"] == str(resume)
++
++
+ def test_fresh_b0_confirmation_supplies_the_cli_authorization(tmp_path: Path) -> None:
+     experiment = Experiment(
+         stage=ExperimentStage.CONFIRM,
+-- 
+2.49.0.windows.1
+

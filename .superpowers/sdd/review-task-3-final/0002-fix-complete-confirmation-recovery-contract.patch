@@ -1,0 +1,405 @@
+From 4673e88cffa020978363051cb7c4dc0b04054744 Mon Sep 17 00:00:00 2001
+From: vminh16 <minhscntn1608@gmail.com>
+Date: Wed, 22 Jul 2026 16:36:24 +0700
+Subject: [PATCH 2/2] fix: complete confirmation recovery contract
+
+---
+ src/bts_nvs/training/run_training.py |  86 +++++++++---
+ tests/unit/test_run_training.py      | 195 ++++++++++++++++++++++++++-
+ 2 files changed, 256 insertions(+), 25 deletions(-)
+
+diff --git a/src/bts_nvs/training/run_training.py b/src/bts_nvs/training/run_training.py
+index a072d38..63ab00e 100644
+--- a/src/bts_nvs/training/run_training.py
++++ b/src/bts_nvs/training/run_training.py
+@@ -446,6 +446,8 @@ def validate_recovery_checkpoint(
+     manifest_hash: str,
+     config_hash: str,
+     expected_step: int,
++    *,
++    require_precision_state: bool = False,
+ ) -> None:
+     state = load_checkpoint(
+         path,
+@@ -463,6 +465,8 @@ def validate_recovery_checkpoint(
+         "manifest_hash",
+         "config_hash",
+     }
++    if require_precision_state:
++        required.add("precision_state")
+     missing = sorted(required.difference(state))
+     if missing:
+         raise ValueError(f"recovery checkpoint is missing: {', '.join(missing)}")
+@@ -473,6 +477,24 @@ def validate_recovery_checkpoint(
+         )
+ 
+ 
++def validate_confirmation_recovery(
++    args,
++    *,
++    manifest_hash: str,
++    config_hash: str,
++    expected_step: int,
++) -> None:
++    if args.experiment_stage != ExperimentStage.CONFIRM.value:
++        return
++    validate_recovery_checkpoint(
++        Path(args.output_dir) / "checkpoints" / "recovery.pt",
++        manifest_hash,
++        config_hash,
++        expected_step,
++        require_precision_state=True,
++    )
++
++
+ def validate_confirmation_resume(
+     args,
+     *,
+@@ -489,11 +511,11 @@ def validate_confirmation_resume(
+         raise ValueError("confirm resume must use output checkpoints/recovery.pt")
+     if training_target_step(args) != 30_000:
+         raise ValueError("confirm resume must target step 30000")
+-    validate_recovery_checkpoint(
+-        expected_recovery,
+-        manifest_hash,
+-        config_hash,
+-        15_000,
++    validate_confirmation_recovery(
++        args,
++        manifest_hash=manifest_hash,
++        config_hash=config_hash,
++        expected_step=15_000,
+     )
+ 
+ 
+@@ -849,13 +871,16 @@ def generate_generic_experiment_reports(
+     manifest,
+     split: HoldoutSplit,
+     validation_dataset,
++    lpips_backend=None,
+ ) -> dict[str, object]:
+     output = Path(args.output_dir)
+     render_dir = output / "validation_renders"
++    if lpips_backend is None:
++        lpips_backend = LpipsBackend(backbone="alex", device=str(trainer.device))
+     validation = evaluate_internal_validation(
+         trainer,
+         validation_dataset,
+-        LpipsBackend(backbone="alex", device=str(trainer.device)),
++        lpips_backend,
+         render_dir,
+     )
+     resources = build_experiment_resource_summary(output)
+@@ -890,6 +915,30 @@ def generate_generic_experiment_reports(
+     return experiment
+ 
+ 
++def prepare_initial_validation(args, trainer, validation_dataset):
++    enabled = (
++        args.full_length_qualification
++        or args.experiment_stage == ExperimentStage.CONFIRM.value
++    )
++    if not enabled:
++        return None, None
++
++    lpips_backend = LpipsBackend(backbone="alex", device=str(trainer.device))
++    initial_validation_path = Path(args.output_dir) / "initial_validation.json"
++    if args.resume:
++        initial_validation = read_json_record(initial_validation_path)
++    else:
++        assert validation_dataset is not None
++        initial_validation = evaluate_internal_validation(
++            trainer,
++            validation_dataset,
++            lpips_backend,
++            None,
++        )
++        write_json_record(initial_validation_path, initial_validation)
++    return lpips_backend, initial_validation
++
++
+ def preserve_confirmation_snapshot(args) -> Path | None:
+     if (
+         args.experiment_stage != ExperimentStage.CONFIRM.value
+@@ -1078,19 +1127,11 @@ def main():
+         )
+         write_json_record(initial_metrics_path, initial_metrics)
+ 
+-    lpips_backend = None
+-    initial_validation = None
+-    if args.full_length_qualification:
+-        lpips_backend = LpipsBackend(backbone="alex", device=str(trainer.device))
+-        initial_validation_path = Path(args.output_dir) / "initial_validation.json"
+-        if args.resume:
+-            initial_validation = read_json_record(initial_validation_path)
+-        else:
+-            assert validation_dataset is not None
+-            initial_validation = evaluate_internal_validation(
+-                trainer, validation_dataset, lpips_backend, None
+-            )
+-            write_json_record(initial_validation_path, initial_validation)
++    lpips_backend, initial_validation = prepare_initial_validation(
++        args,
++        trainer,
++        validation_dataset,
++    )
+ 
+     # 8. Start optimization run
+     target_step = training_target_step(args)
+@@ -1107,6 +1148,12 @@ def main():
+         )
+     else:
+         print(f"Checkpoint is already at step {target_step}; finalizing artifacts...")
++    validate_confirmation_recovery(
++        args,
++        manifest_hash=trainer.manifest_hash,
++        config_hash=trainer.config_hash,
++        expected_step=target_step,
++    )
+     finalize_generic_resume_summary(
+         Path(args.output_dir),
+         prior_generic_summary,
+@@ -1187,6 +1234,7 @@ def main():
+             manifest=manifest,
+             split=split,
+             validation_dataset=validation_dataset,
++            lpips_backend=lpips_backend,
+         )
+         preserve_confirmation_snapshot(args)
+         print(
+diff --git a/tests/unit/test_run_training.py b/tests/unit/test_run_training.py
+index 27c189b..c36c3c8 100644
+--- a/tests/unit/test_run_training.py
++++ b/tests/unit/test_run_training.py
+@@ -462,6 +462,74 @@ def test_initial_metrics_round_trip_for_resume(tmp_path: Path):
+     assert run_training.read_json_record(path) == metrics
+ 
+ 
++def test_fresh_generic_confirmation_writes_initial_validation(
++    monkeypatch, tmp_path
++):
++    output = tmp_path / "confirm"
++    args = _generic_args(
++        "confirm",
++        "E1-density-absgrad-t04-v1",
++        output_dir=str(output),
++    )
++    trainer = SimpleNamespace(device=torch.device("cpu"))
++    validation_dataset = object()
++    backend = object()
++    validation = {"image_count": 3, "lpips_mean": 0.25}
++    observed = []
++
++    monkeypatch.setattr(run_training, "LpipsBackend", lambda **kwargs: backend)
++
++    def evaluate(trainer_arg, dataset_arg, backend_arg, render_dir):
++        observed.append((trainer_arg, dataset_arg, backend_arg, render_dir))
++        return validation
++
++    monkeypatch.setattr(run_training, "evaluate_internal_validation", evaluate)
++
++    actual_backend, actual_validation = run_training.prepare_initial_validation(
++        args,
++        trainer,
++        validation_dataset,
++    )
++
++    assert actual_backend is backend
++    assert actual_validation == validation
++    assert observed == [(trainer, validation_dataset, backend, None)]
++    assert run_training.read_json_record(output / "initial_validation.json") == validation
++
++
++def test_resumed_generic_confirmation_reuses_initial_validation_without_recompute(
++    monkeypatch, tmp_path
++):
++    output = tmp_path / "confirm"
++    initial_validation = {"image_count": 3, "lpips_mean": 0.25}
++    run_training.write_json_record(
++        output / "initial_validation.json",
++        initial_validation,
++    )
++    args = _generic_args(
++        "confirm",
++        "E1-density-absgrad-t04-v1",
++        output_dir=str(output),
++        resume=str(output / "checkpoints" / "recovery.pt"),
++    )
++    backend = object()
++    monkeypatch.setattr(run_training, "LpipsBackend", lambda **kwargs: backend)
++
++    def fail(*args, **kwargs):
++        raise AssertionError("initial validation must not be recomputed on resume")
++
++    monkeypatch.setattr(run_training, "evaluate_internal_validation", fail)
++
++    actual_backend, actual_validation = run_training.prepare_initial_validation(
++        args,
++        SimpleNamespace(device=torch.device("cpu")),
++        object(),
++    )
++
++    assert actual_backend is backend
++    assert actual_validation == initial_validation
++
++
+ def _generic_args(stage: str, candidate_id: str, **changes):
+     values = {
+         "experiment_stage": stage,
+@@ -663,12 +731,20 @@ def test_confirmation_resume_requires_complete_15k_recovery(
+     )
+     observed = {}
+ 
+-    def validate(path, manifest_hash, config_hash, expected_step):
++    def validate(
++        path,
++        manifest_hash,
++        config_hash,
++        expected_step,
++        *,
++        require_precision_state,
++    ):
+         observed.update(
+             path=path,
+             manifest_hash=manifest_hash,
+             config_hash=config_hash,
+             expected_step=expected_step,
++            require_precision_state=require_precision_state,
+         )
+ 
+     monkeypatch.setattr(run_training, "validate_recovery_checkpoint", validate)
+@@ -684,6 +760,103 @@ def test_confirmation_resume_requires_complete_15k_recovery(
+         "manifest_hash": "manifest",
+         "config_hash": "config",
+         "expected_step": 15_000,
++        "require_precision_state": True,
++    }
++
++
++def test_confirmation_rejects_missing_precision_state_but_legacy_allows_it(
++    monkeypatch, tmp_path
++):
++    output = tmp_path / "confirm"
++    recovery = output / "checkpoints" / "recovery.pt"
++    complete_legacy_state = {
++        "step": 15_000,
++        "gaussians": {},
++        "optimizers": {},
++        "scheduler": {},
++        "strategy_state": {},
++        "active_sh_degree": 3,
++        "rng_states": {},
++        "manifest_hash": "manifest",
++        "config_hash": "config",
++    }
++    monkeypatch.setattr(
++        run_training,
++        "load_checkpoint",
++        lambda *args, **kwargs: complete_legacy_state,
++    )
++
++    run_training.validate_recovery_checkpoint(
++        recovery,
++        "manifest",
++        "config",
++        15_000,
++    )
++
++    args = _generic_args(
++        "confirm",
++        "E1-density-absgrad-t04-v1",
++        output_dir=str(output),
++        max_steps=30_000,
++        stop_step=30_000,
++        checkpoint_every=3_000,
++        rolling_checkpoint=True,
++        resume=str(recovery),
++    )
++    with pytest.raises(ValueError, match="precision_state"):
++        run_training.validate_confirmation_resume(
++            args,
++            manifest_hash="manifest",
++            config_hash="config",
++        )
++
++
++def test_final_confirmation_recovery_requires_current_step_and_precision_state(
++    monkeypatch, tmp_path
++):
++    output = tmp_path / "confirm"
++    args = _generic_args(
++        "confirm",
++        "E1-density-absgrad-t04-v1",
++        output_dir=str(output),
++        max_steps=30_000,
++        stop_step=30_000,
++        checkpoint_every=3_000,
++        rolling_checkpoint=True,
++    )
++    observed = {}
++
++    def validate(
++        path,
++        manifest_hash,
++        config_hash,
++        expected_step,
++        *,
++        require_precision_state,
++    ):
++        observed.update(
++            path=path,
++            manifest_hash=manifest_hash,
++            config_hash=config_hash,
++            expected_step=expected_step,
++            require_precision_state=require_precision_state,
++        )
++
++    monkeypatch.setattr(run_training, "validate_recovery_checkpoint", validate)
++
++    run_training.validate_confirmation_recovery(
++        args,
++        manifest_hash="manifest",
++        config_hash="config",
++        expected_step=30_000,
++    )
++
++    assert observed == {
++        "path": output / "checkpoints" / "recovery.pt",
++        "manifest_hash": "manifest",
++        "config_hash": "config",
++        "expected_step": 30_000,
++        "require_precision_state": True,
+     }
+ 
+ 
+@@ -1058,12 +1231,22 @@ def test_15k_confirmation_snapshot_atomically_preserves_auditable_reports(
+     assert (snapshot / "validation_renders" / "camera.JPG").read_bytes() == b"render-15k"
+     assert not list(snapshot.rglob("*.pt"))
+ 
+-    run_training.write_json_record(output / "experiment_report.json", {"version": 30})
+-    render.write_bytes(b"render-30k")
+-    assert run_training.read_json_record(snapshot / "experiment_report.json") == {
+-        "version": 3
++    preserved_files = {
++        path.relative_to(snapshot).as_posix(): path.read_bytes()
++        for path in snapshot.rglob("*")
++        if path.is_file()
+     }
+-    assert (snapshot / "validation_renders" / "camera.JPG").read_bytes() == b"render-15k"
++    for index, name in enumerate(report_names, start=30):
++        run_training.write_json_record(output / name, {"version": index})
++    render.write_bytes(b"render-30k")
++    resumed_args = _args(**(vars(args) | {"stop_step": 30_000}))
++
++    assert run_training.preserve_confirmation_snapshot(resumed_args) is None
++    assert {
++        path.relative_to(snapshot).as_posix(): path.read_bytes()
++        for path in snapshot.rglob("*")
++        if path.is_file()
++    } == preserved_files
+ 
+ 
+ @pytest.mark.parametrize(
+-- 
+2.49.0.windows.1
+

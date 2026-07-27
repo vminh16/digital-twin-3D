@@ -8,7 +8,8 @@ from pathlib import Path
 
 import yaml
 
-from bts_nvs.data.holdout import load_holdout_split
+from bts_nvs.data.holdout import holdout_identity_sha256, load_holdout_split
+from bts_nvs.data.prepare_research_artifacts import RESEARCH_HOLDOUT_NAME
 from bts_nvs.data.manifest import load_scene_manifest
 from bts_nvs.experiments.artifacts import (
     ArtifactValidationResult,
@@ -21,7 +22,11 @@ from bts_nvs.experiments.decisions import (
     save_scene_decision,
     select_scene_candidate,
 )
-from bts_nvs.experiments.experiment import Experiment, ExperimentStage
+from bts_nvs.experiments.experiment import (
+    ACTIVE_RESEARCH_SCENE_IDS,
+    Experiment,
+    ExperimentStage,
+)
 from bts_nvs.experiments.provenance import (
     canonical_json_sha256,
     load_json_artifact,
@@ -277,9 +282,15 @@ def _prepare_run(
     expected_names: tuple[str, ...] = ()
     holdout_sha256 = None
     if stage is not ExperimentStage.PRODUCTION:
-        _require_file(manifest_dir / "holdout.json", "holdout")
-        split = load_holdout_split(manifest_dir / "holdout.json", manifest)
-        holdout_sha256 = split.manifest_sha256
+        holdout_name = (
+            RESEARCH_HOLDOUT_NAME
+            if stage in (ExperimentStage.RESEARCH, ExperimentStage.CONFIRM)
+            and scene_id in ACTIVE_RESEARCH_SCENE_IDS
+            else "holdout.json"
+        )
+        _require_file(manifest_dir / holdout_name, "holdout")
+        split = load_holdout_split(manifest_dir / holdout_name, manifest)
+        holdout_sha256 = holdout_identity_sha256(split)
         expected_names = tuple(split.validation_image_names)
 
     return _PreparedRun(
@@ -311,9 +322,15 @@ def _authorization(
     scene_decision_path: str | Path | None,
     cohort_decision_path: str | Path | None,
 ) -> tuple[str | None, str | None]:
-    if stage in (ExperimentStage.REFERENCE, ExperimentStage.SCREEN):
+    if stage in (
+        ExperimentStage.REFERENCE,
+        ExperimentStage.SCREEN,
+        ExperimentStage.RESEARCH,
+    ):
         if scene_decision_path is not None or cohort_decision_path is not None:
-            raise ValueError("reference/screen do not accept authorization artifacts")
+            raise ValueError(
+                "reference/screen/research do not accept authorization artifacts"
+            )
         return None, None
     if stage is ExperimentStage.CONFIRM:
         if cohort_decision_path is not None:

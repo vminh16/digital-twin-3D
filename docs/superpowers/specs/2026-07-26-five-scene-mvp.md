@@ -1,136 +1,59 @@
-# Five-scene MVP authority
+# Historical five-scene MVP authority
 
-**Status:** 7k screen complete; deadline production active from 2026-07-26.
+**Status:** CLOSED. Full detail and locked rerender commands remain in Git
+history and the repository README.
 
-This document is the concise scientific and execution authority for the next
-MVP. `AGENTS.md` still governs data, output, metric and reproducibility
-constraints. Older optimization and runner specs are historical provenance,
-not required reading for this MVP.
+## Scope and result
 
-## 1. Baseline and scope
-
-- Closed official baseline: `B0-submission-q99-v1`, Score `70.98330`.
-- `HCM0421` and `HCM0539` have deadline-exception AbsGrad production
-  checkpoints. They are operational artifacts, not paired-confirmed winners.
-- This MVP covers the other five scenes:
+The MVP screened:
 
 ```text
 HCM0644 HCM0674 HCM0540 chair bonsai
 ```
 
-- Hidden-test submission renders are never used for candidate selection.
-- Unit of comparison is one scene, one fixed holdout, seed 0 and 7,000 steps.
+Candidates:
 
-## 2. Evidence and policy
+- antialiased rasterization on HCM0674/HCM0540;
+- bounded local-Laplacian L1 weighting on chair/bonsai;
+- SH degree 4 on bonsai.
 
-| Scene | B0 Score50 | LPIPS | Hard−easy | Policy |
-|---|---:|---:|---:|---|
-| HCM0644 | 69.155 | 0.1737 | -9.225 | Freeze at B0; no new screen |
-| HCM0674 | 62.826 | 0.2316 | -16.046 | Screen antialiased rasterization |
-| HCM0540 | 65.804 | 0.2060 | -14.899 | Screen antialiased rasterization |
-| chair | 58.961 | 0.3559 | -3.745 | Screen bounded local sharpness weighting |
-| bonsai | 58.529 | 0.3927 | -19.454 | Screen weighting and SH4 separately |
-
-Missing-edge error dominates spurious-edge error in all five scenes. Global
-opacity sparsity, unconstrained random initialization, camera refinement and
-external monocular-depth priors are out of scope.
-
-## 3. Locked candidates
-
-Every candidate changes one mechanism relative to `B0-reference`.
-
-### `E2-raster-aa-v1`
-
-- `rasterize_mode=antialiased`;
-- all density, loss, SH and sampling settings remain B0;
-- authorized screen scenes: `HCM0674`, `HCM0540`.
-
-### `E2-loss-local-laplacian-v1`
-
-- camera sampling remains uniform;
-- precompute an aligned uint8 confidence map after undistortion and resize;
-- confidence is local variance of a 3×3 Laplacian, pooled over 31×31 patches;
-- normalize log-variance between the valid-pixel p20 and p80;
-- map range is `[0.5, 1.0]`; invalid pixels remain invalid;
-- weight only the L1 term; DSSIM remains unchanged;
-- authorized screen scenes: `chair`, `bonsai`.
-
-This bounded formulation cannot delete low-texture supervision and does not
-claim that low Laplacian always means blur.
-
-### `E2-appearance-sh4-v1`
-
-- allocate 25 RGB SH bases per Gaussian instead of 16;
-- activate degrees `0,1,2,3,4` at steps `0,1000,2000,3000,4000`;
-- all other settings remain B0;
-- authorized screen scene: `bonsai`.
-
-## 4. Run and decision contract
-
-- Reuse the completed `runs/scene_opt_v1/reference/<scene>/` B0 reports.
-- Write new candidate runs under `runs/scene_opt_v2/screen/`.
-- Run one GPU process at a time.
-- A screen is fresh, full resolution, internal holdout, seed 0, 7,000 steps,
-  cached images and the accepted backend/precision.
-- Do not resume a screen and do not save a model checkpoint at 7k.
-
-A candidate is eligible only when:
-
-1. all expected renders and reports are complete and finite;
-2. Score50 delta is strictly positive;
-3. LPIPS does not increase;
-4. hard-stratum Score50 does not decrease;
-5. missing-edge and spurious-edge do not both worsen;
-6. wall-time ratio is at most `1.25`;
-7. peak VRAM is below 23 GB and primitive growth remains controlled.
-
-If both bonsai candidates pass, choose larger Score50 gain, then lower LPIPS,
-then lower symmetric-edge distance. If none pass, retain B0.
-
-## 5. Confirmation boundary
-
-A 7k winner is mechanism evidence only. It must not replace a production
-baseline until one fresh 30k B0 and one fresh 30k candidate run pass the same
-holdout gates. With the current deadline, confirm at most two winners. Every
-model, loss, renderer or SH change uses a new candidate/baseline ID.
-
-### Deadline production exception
-
-The user authorized compute-first full-data 30k production without fresh
-paired 30k confirmation because of the deadline:
-
-```text
-chair  -> E2-loss-local-laplacian-v1
-bonsai -> E2-appearance-sh4-v1
-```
-
-Both production runs must start fresh, use all train images, retain one rolling
-recovery checkpoint and validate the selected 7k decision before launch. They
-remain deadline-exception artifacts, not paired-confirmed research winners.
-
-`HCM0644`, `HCM0674` and `HCM0540` retain their closed B0 checkpoints and
-renders. They must not be retrained for this MVP. The new hybrid submission ID
-is `MVP-hybrid-4scene-q99-v1`: AbsGrad for HCM0421/HCM0539, the two E2
-auxiliary winners, and B0 for the remaining three BTS scenes.
-
-## 6. Screen result
+Screen results:
 
 | Scene | Candidate | ΔScore50 | ΔLPIPS | Decision |
 |---|---|---:|---:|---|
 | chair | local Laplacian | +0.5688 | -0.00683 | production exception |
 | bonsai | local Laplacian | +0.2869 | -0.00213 | not selected |
 | bonsai | SH4 | +0.5963 | -0.00694 | production exception |
-| HCM0674 | antialiased | -4.9568 | +0.04888 | reject; retain B0 |
-| HCM0540 | antialiased | -4.7899 | +0.04347 | reject; retain B0 |
+| HCM0674 | antialiased | -4.9568 | +0.04888 | reject |
+| HCM0540 | antialiased | -4.7899 | +0.04347 | reject |
+| HCM0644 | no screen | — | — | retain B0 |
 
-## 7. Completion
+Chair and bonsai received fresh full-data 30k production under a deadline
+exception. They were not fresh paired 30k-confirmed research winners.
 
-This MVP is complete when:
+## Closed hybrid
 
-- code and tests support all three locked candidates;
-- all five 7k runs and five scene decisions remain preserved;
-- chair and bonsai full-data 30k checkpoints validate;
-- the other three scenes remain byte-identical B0 artifacts;
-- all seven scene renders pass the output contract at JPEG Q99;
-- selected winners, fallback decisions, timings and blockers are summarized;
-- no production or submission artifact is silently overwritten.
+`MVP-hybrid-4scene-q99-v1` used:
+
+```text
+HCM0421 HCM0539 -> AbsGrad
+chair            -> local Laplacian
+bonsai           -> SH4
+HCM0644 HCM0674 HCM0540 -> byte-identical B0 folders
+```
+
+It was submitted and closed with official Score `71.2124`, PSNR `24.629191`,
+SSIM `80.7208`, LPIPS `19.4533`, 7/7 matched scenes.
+
+The official result has no per-scene breakdown and is not a tuning signal.
+
+## Preserved invariants
+
+- JPEG Q99, 4:4:4, optimized, non-progressive;
+- exact `test_poses.csv` names, poses, intrinsics and dimensions;
+- no re-encoding of B0 fallback folders;
+- no hidden-test RGB selection;
+- no silent artifact overwrite.
+
+Current authority:
+`2026-07-27-chair-bonsai-deep-optimization.md`.

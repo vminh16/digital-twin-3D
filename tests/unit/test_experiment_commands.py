@@ -105,6 +105,26 @@ def test_screen_command_is_fresh_7k_without_authorization_or_checkpoints(
     assert "--resume" not in options
 
 
+def test_research_command_uses_30k_schedule_stopped_at_15k_without_checkpoint(
+    tmp_path: Path,
+) -> None:
+    experiment = Experiment(
+        stage=ExperimentStage.RESEARCH,
+        scene_id="chair",
+        candidate_id="B0-reference",
+    )
+
+    options = _option_values(_build(tmp_path, experiment, stop_step=15_000))
+
+    assert options["--max_steps"] == "30000"
+    assert options["--stop_step"] == "15000"
+    assert options["--internal_holdout"] is True
+    assert "--authorized_candidate_id" not in options
+    assert "--checkpoint_every" not in options
+    assert "--rolling_checkpoint" not in options
+    assert "--resume" not in options
+
+
 def test_confirmation_15k_command_uses_30k_schedule_and_rolling_recovery(
     tmp_path: Path,
 ) -> None:
@@ -284,6 +304,12 @@ def test_paired_confirmation_commands_keep_all_fairness_settings_identical(
             7_000,
             "not-recovery.pt",
             "screen",
+        ),
+        (
+            Experiment(ExperimentStage.RESEARCH, "chair", "B0-reference"),
+            7_000,
+            None,
+            "research",
         ),
         (
             Experiment(

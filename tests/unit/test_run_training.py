@@ -684,6 +684,32 @@ def test_generic_reference_and_screen_lock_fresh_7k_holdout_contract():
             )
 
 
+def test_generic_research_locks_30k_schedule_stopped_at_15k_without_checkpoint():
+    research = _generic_args(
+        "research",
+        "B0-reference",
+        max_steps=30_000,
+        stop_step=15_000,
+    )
+
+    run_training.validate_generic_experiment_args(research)
+    assert run_training.training_target_step(research) == 15_000
+    assert run_training.should_save_checkpoints(research) is False
+
+    for change in (
+        {"max_steps": 15_000},
+        {"stop_step": 7_000},
+        {"internal_holdout": False},
+        {"resume": "recovery.pt"},
+        {"rolling_checkpoint": True},
+        {"authorized_candidate_id": "B0-reference"},
+    ):
+        with pytest.raises(ValueError, match="research"):
+            run_training.validate_generic_experiment_args(
+                _args(**(vars(research) | change))
+            )
+
+
 def test_generic_confirmation_locks_30k_schedule_and_rolling_recovery(tmp_path):
     output = tmp_path / "confirm"
     valid = _generic_args(

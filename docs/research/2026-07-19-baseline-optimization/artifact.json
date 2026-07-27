@@ -1,0 +1,527 @@
+{
+  "surface": "report",
+  "manifest": {
+    "version": 1,
+    "surface": "report",
+    "title": "BTS Digital Twin — nghiên cứu tối ưu sau baseline 70.9833",
+    "description": "Kiểm toán toán học, bằng chứng trong repo, đối chiếu tài liệu gốc và thiết kế thí nghiệm chi phí thấp để cải thiện 3D Gaussian Splatting.",
+    "generatedAt": "2026-07-19T06:00:00Z",
+    "cards": [
+      {
+        "id": "official_baseline",
+        "description": "Kết quả evaluator chính thức của B0-submission-q99-v1 trên đủ 7/7 scene; không phải benchmark local.",
+        "dataset": "baseline_metrics",
+        "sourceId": "baseline_contract",
+        "metrics": [
+          { "label": "Official score", "field": "score", "format": "number" },
+          { "label": "PSNR (dB)", "field": "psnr", "format": "number" },
+          { "label": "SSIM (%)", "field": "ssim_pct", "format": "number" },
+          { "label": "LPIPS (%)", "field": "lpips_pct", "format": "number" }
+        ]
+      },
+      {
+        "id": "target_gap",
+        "description": "Khoảng cách số học từ baseline tới hai mục tiêu, chưa phải dự báo hiệu quả nghiên cứu.",
+        "dataset": "target_gaps",
+        "sourceId": "score_math",
+        "metrics": [
+          { "label": "Còn thiếu tới 80", "field": "gap_80", "format": "number" },
+          { "label": "Còn thiếu tới 90", "field": "gap_90", "format": "number" },
+          { "label": "Trần nếu chỉ LPIPS→0", "field": "lpips_only_ceiling", "format": "number" }
+        ]
+      },
+      {
+        "id": "hcm0181_30k",
+        "description": "Kiểm chứng nội bộ HCM0181 ở 30k bước trên NVIDIA L4; không được đồng nhất với official score.",
+        "dataset": "hcm0181_metrics",
+        "sourceId": "git_30k",
+        "metrics": [
+          { "label": "Local score @30k", "field": "score_30k", "format": "number" },
+          { "label": "Tăng so với 7k", "field": "delta_vs_7k", "format": "number", "signed": true },
+          { "label": "Thời gian (giờ)", "field": "hours", "format": "number" },
+          { "label": "Peak VRAM (GB)", "field": "vram_gb", "format": "number" }
+        ]
+      }
+    ],
+    "charts": [
+      {
+        "id": "score_frontier",
+        "title": "Mặt cắt số học của mục tiêu điểm",
+        "subtitle": "Các kịch bản chỉ minh họa điều kiện metric; không phải dự báo mô hình sẽ đạt được.",
+        "type": "bar",
+        "dataset": "score_scenarios",
+        "sourceId": "score_math",
+        "valueFormat": "number",
+        "encodings": {
+          "x": { "field": "scenario", "type": "nominal", "label": "Kịch bản" },
+          "y": { "field": "score", "type": "quantitative", "label": "Score" },
+          "tooltip": [
+            { "field": "psnr", "type": "quantitative", "label": "PSNR (dB)" },
+            { "field": "ssim_pct", "type": "quantitative", "label": "SSIM (%)" },
+            { "field": "lpips_pct", "type": "quantitative", "label": "LPIPS (%)" }
+          ]
+        },
+        "referenceLines": [
+          { "value": 80, "label": "Mục tiêu 80" },
+          { "value": 90, "label": "Mục tiêu 90" }
+        ]
+      },
+      {
+        "id": "paired_density",
+        "title": "Hiệu ứng tăng mật độ trên 6 scene nội bộ",
+        "subtitle": "ΔScore₅₀ = B0-reference − B0-compact; reference thắng cả 6 scene.",
+        "type": "bar",
+        "dataset": "density_pairs",
+        "sourceId": "git_qualification",
+        "valueFormat": "number",
+        "encodings": {
+          "x": { "field": "scene", "type": "nominal", "label": "Scene" },
+          "y": { "field": "delta_score", "type": "quantitative", "label": "ΔScore₅₀" },
+          "tooltip": [
+            { "field": "reference_score", "type": "quantitative", "label": "B0-reference" },
+            { "field": "compact_score", "type": "quantitative", "label": "B0-compact" }
+          ]
+        },
+        "referenceLines": [
+          { "value": 0, "label": "Không đổi" }
+        ]
+      },
+      {
+        "id": "gsplat_reference_delta",
+        "title": "Độ lớn hiệu ứng tham khảo từ gsplat trên Mip-NeRF360",
+        "subtitle": "ΔScore quy đổi bằng cùng PSNR_max=50; đây là prior ngoại bộ, không phải dự báo BTS.",
+        "type": "bar",
+        "dataset": "gsplat_candidates",
+        "sourceId": "gsplat_eval",
+        "valueFormat": "number",
+        "encodings": {
+          "x": { "field": "variant", "type": "nominal", "label": "Variant" },
+          "y": { "field": "delta_score", "type": "quantitative", "label": "ΔScore tham khảo" },
+          "tooltip": [
+            { "field": "time_ratio", "type": "quantitative", "label": "Tỷ lệ thời gian" },
+            { "field": "memory_ratio", "type": "quantitative", "label": "Tỷ lệ VRAM" },
+            { "field": "gaussian_ratio", "type": "quantitative", "label": "Tỷ lệ số Gaussian" }
+          ]
+        },
+        "referenceLines": [
+          { "value": 0, "label": "gsplat default" }
+        ]
+      }
+    ],
+    "tables": [
+      {
+        "id": "experiment_matrix",
+        "title": "Ma trận thí nghiệm được khuyến nghị",
+        "subtitle": "Thí nghiệm được xếp theo mức bằng chứng, chi phí và khả năng quy trách nhiệm nhân quả.",
+        "dataset": "experiment_matrix",
+        "sourceId": "research_protocol",
+        "density": "spacious",
+        "columns": [
+          { "field": "priority", "label": "Ưu tiên", "type": "text" },
+          { "field": "candidate", "label": "Candidate", "type": "text" },
+          { "field": "change", "label": "Thay đổi duy nhất", "type": "text" },
+          { "field": "evidence", "label": "Cơ sở", "type": "text" },
+          { "field": "gate", "label": "Gate để đi tiếp", "type": "text" },
+          { "field": "cost", "label": "Chi phí dự kiến", "type": "text" }
+        ]
+      },
+      {
+        "id": "cost_plan",
+        "title": "Ngân sách GPU tuần tự trước khi production",
+        "subtitle": "Ước lượng dùng mốc HCM0181 7k≈18.2 phút và 30k≈2.90 giờ; scene khác có thể lệch đáng kể.",
+        "dataset": "cost_plan",
+        "sourceId": "cost_analysis",
+        "density": "dense",
+        "columns": [
+          { "field": "stage", "label": "Giai đoạn", "type": "text" },
+          { "field": "scope", "label": "Phạm vi", "type": "text" },
+          { "field": "gpu_hours", "label": "GPU-giờ ước lượng", "format": "number" },
+          { "field": "decision", "label": "Quyết định", "type": "text" }
+        ]
+      },
+      {
+        "id": "direction_ranking",
+        "title": "Xếp hạng hướng nghiên cứu",
+        "subtitle": "Expected gain chỉ là khoảng tham khảo từ benchmark công khai; không cộng tuyến tính giữa các phương pháp.",
+        "dataset": "direction_ranking",
+        "sourceId": "research_synthesis",
+        "density": "spacious",
+        "columns": [
+          { "field": "rank", "label": "Hạng", "format": "number" },
+          { "field": "direction", "label": "Hướng", "type": "text" },
+          { "field": "why", "label": "Lý do định lượng", "type": "text" },
+          { "field": "risk", "label": "Rủi ro / điều kiện", "type": "text" },
+          { "field": "decision", "label": "Quyết định", "type": "text" }
+        ]
+      }
+    ],
+    "sources": [
+      {
+        "id": "baseline_contract",
+        "label": "Repo baseline and evaluation contract",
+        "path": "AGENTS.md",
+        "query": {
+          "engine": "reviewed snapshot",
+          "sql": "SELECT 70.98330 AS score, 24.611499 AS psnr, 80.4805 AS ssim_pct, 19.8195 AS lpips_pct",
+          "description": "Materializes the official aggregate values recorded in AGENTS.md for the report snapshot.",
+          "tables_used": ["AGENTS.md"],
+          "executed_at": "2026-07-19T06:00:00Z"
+        }
+      },
+      {
+        "id": "baseline_implementation",
+        "label": "Baseline 3DGS implementation in repository",
+        "query": {
+          "engine": "Git working tree",
+          "description": "Inspected Gaussian initialization/parameterization, rasterization, density strategy, optimizer and training loss.",
+          "tables_used": [
+            "src/bts_nvs/models/initialization.py",
+            "src/bts_nvs/models/gaussian_parameters.py",
+            "src/bts_nvs/rendering/gsplat_renderer.py",
+            "src/bts_nvs/rendering/density_strategy.py",
+            "src/bts_nvs/training/trainer.py",
+            "src/bts_nvs/models/loss.py",
+            "src/bts_nvs/training/optimizer.py"
+          ],
+          "executed_at": "2026-07-19T06:00:00Z"
+        }
+      },
+      {
+        "id": "git_qualification",
+        "label": "Six-scene paired 7k qualification artifact",
+        "query": {
+          "engine": "git",
+          "query": "git show b1d67e9:runs/phase4/qualification/qualification_decision.json",
+          "sql": "SELECT * FROM snapshot.density_pairs",
+          "description": "Reads the committed aggregate decision and paired B0-reference/B0-compact results.",
+          "executed_at": "2026-07-19T06:00:00Z"
+        }
+      },
+      {
+        "id": "git_30k",
+        "label": "HCM0181 30k internal validation artifacts",
+        "query": {
+          "engine": "git",
+          "query": "git show 411c8de:runs/phase4/dry_run_30k/HCM0181/full_length_report.json",
+          "sql": "SELECT 73.325 AS score_30k, 3.646 AS delta_vs_7k, 2.8965 AS hours, 11.79 AS vram_gb",
+          "description": "Reads committed 30k train/validation metrics, resource usage and gates for HCM0181.",
+          "tables_used": [
+            "runs/phase4/dry_run_30k/HCM0181/full_length_report.json",
+            "runs/phase4/dry_run_30k/HCM0181/summary.json",
+            "runs/phase4/dry_run_30k/HCM0181/timing.json",
+            "runs/phase4/dry_run_30k/HCM0181/metrics.jsonl"
+          ],
+          "executed_at": "2026-07-19T06:00:00Z"
+        }
+      },
+      {
+        "id": "score_math",
+        "label": "Score algebra derived from official rounded metrics",
+        "query": {
+          "engine": "deterministic calculation",
+          "sql": "SELECT * FROM snapshot.score_scenarios",
+          "description": "Solves PSNR_max from the official score and computes marginal score sensitivities and target scenarios.",
+          "metric_definitions": [
+            "Score points = 40 - 0.4*LPIPS_percent + 0.3*SSIM_percent + 0.6*PSNR_dB when PSNR_max=50",
+            "Delta score = -0.4*Delta LPIPS_percent + 0.3*Delta SSIM_percent + 0.6*Delta PSNR_dB",
+            "Scenario scores are substitutions into the score equation, not model forecasts"
+          ],
+          "executed_at": "2026-07-19T06:00:00Z"
+        }
+      },
+      {
+        "id": "cost_analysis",
+        "label": "GPU budget calculation from repository timing artifacts",
+        "query": {
+          "engine": "deterministic calculation",
+          "sql": "SELECT * FROM snapshot.cost_plan",
+          "description": "Uses HCM0181 7k and 30k timings and the six-scene qualification aggregate as planning anchors.",
+          "metric_definitions": [
+            "Research GPU-hours are sequential estimates; they exclude implementation/debug overhead",
+            "Production estimate uses HCM0181 30k time as a scene proxy and is not a guaranteed wall-clock time"
+          ],
+          "executed_at": "2026-07-19T06:00:00Z"
+        }
+      },
+      {
+        "id": "research_protocol",
+        "label": "Pre-registered experiment protocol in this report",
+        "path": "docs/research/2026-07-19-baseline-optimization/artifact.json",
+        "query": {
+          "engine": "artifact snapshot",
+          "sql": "SELECT * FROM snapshot.experiment_matrix",
+          "description": "Reads the pre-registered candidate matrix embedded in this report artifact.",
+          "executed_at": "2026-07-19T06:00:00Z"
+        }
+      },
+      {
+        "id": "research_synthesis",
+        "label": "Primary-source synthesis and repo-fit assessment",
+        "path": "docs/research/2026-07-19-baseline-optimization/artifact.json",
+        "query": {
+          "engine": "artifact snapshot",
+          "sql": "SELECT * FROM snapshot.direction_ranking",
+          "description": "Reads the ranked synthesis whose row-level rationale is documented in the report and linked sources.",
+          "executed_at": "2026-07-19T06:00:00Z"
+        }
+      },
+      {
+        "id": "original_3dgs",
+        "label": "3D Gaussian Splatting — official project and paper",
+        "href": "https://repo-sam.inria.fr/fungraph/3d-gaussian-splatting/"
+      },
+      {
+        "id": "gsplat_eval",
+        "label": "gsplat official evaluation",
+        "href": "https://docs.gsplat.studio/main/tests/eval.html",
+        "query": {
+          "engine": "reviewed snapshot",
+          "sql": "SELECT * FROM snapshot.gsplat_candidates",
+          "description": "Materializes the reported Mip-NeRF360 averages and deterministic score/cost ratios used in the chart.",
+          "executed_at": "2026-07-19T06:00:00Z"
+        }
+      },
+      {
+        "id": "absgs",
+        "label": "AbsGS official project",
+        "href": "https://ty424.github.io/AbsGS.github.io/"
+      },
+      {
+        "id": "mcmc",
+        "label": "3D Gaussian Splatting as Markov Chain Monte Carlo",
+        "href": "https://arxiv.org/abs/2404.09591"
+      },
+      {
+        "id": "mip_splatting",
+        "label": "Mip-Splatting — CVPR 2024",
+        "href": "https://openaccess.thecvf.com/content/CVPR2024/html/Yu_Mip-Splatting_Alias-free_3D_Gaussian_Splatting_CVPR_2024_paper.html"
+      },
+      {
+        "id": "revising_densification",
+        "label": "Revising Densification in Gaussian Splatting — ECCV 2024",
+        "href": "https://eccv.ecva.net/virtual/2024/poster/916"
+      },
+      {
+        "id": "pixel_gs",
+        "label": "Pixel-GS — ECCV 2024 paper",
+        "href": "https://www.ecva.net/papers/eccv_2024/papers_ECCV/papers/02926.pdf"
+      },
+      {
+        "id": "fregs",
+        "label": "FreGS — CVPR 2024 paper",
+        "href": "https://openaccess.thecvf.com/content/CVPR2024/papers/Zhang_FreGS_3D_Gaussian_Splatting_with_Progressive_Frequency_Regularization_CVPR_2024_paper.pdf"
+      },
+      {
+        "id": "wildgaussians",
+        "label": "WildGaussians — NeurIPS 2024",
+        "href": "https://papers.nips.cc/paper_files/paper/2024/hash/25c0fe7b157821dd3140727dc07461da-Abstract-Conference.html"
+      },
+      {
+        "id": "twodgs",
+        "label": "2D Gaussian Splatting official project",
+        "href": "https://surfsplatting.github.io/"
+      }
+    ],
+    "blocks": [
+      {
+        "id": "title",
+        "type": "markdown",
+        "body": "# BTS Digital Twin — nghiên cứu tối ưu sau baseline 70.9833\n\nBáo cáo kỹ thuật, ngày 19/07/2026. Phạm vi: baseline 3DGS hiện tại, bằng chứng local không rò rỉ ground truth, tài liệu gốc và roadmap thí nghiệm đến hạn 30/07/2026."
+      },
+      {
+        "id": "executive_answer",
+        "type": "markdown",
+        "sourceId": "research_synthesis",
+        "body": "## Kết luận điều hành\n\n**Không có bằng chứng để hứa 80–90 điểm.** Mốc 80 là mục tiêu nghiên cứu tham vọng nhưng còn khả năng kiểm chứng; mốc 90 hiện không khả thi về mặt bằng chứng vì đòi hỏi một bộ metric gần PSNR 38 dB, SSIM 97% và LPIPS 3%. Các cải tiến plug-in mạnh nhất trong benchmark công khai thường chỉ mang lại khoảng 1–2 điểm quy đổi, và hiệu ứng giữa các kỹ thuật không được phép cộng tuyến tính.\n\n**Quyết định đề xuất:** giữ `B0-submission-q99-v1` bất biến; mở candidate mới theo factorial nhỏ `AbsGrad × revised_opacity`, sau đó so sánh winner với `MCMCStrategy` cap 2M/3M. Chỉ thêm FreGS nếu candidate thắng qua holdout khóa. Không đổi loss theo LPIPS trước khi xác nhận backbone của evaluator."
+      },
+      { "id": "headline_metrics", "type": "metric-strip", "cardIds": ["official_baseline", "target_gap", "hcm0181_30k"] },
+      {
+        "id": "score_math_section",
+        "type": "markdown",
+        "sourceId": "score_math",
+        "body": "## Toán học của evaluator\n\nTừ metric evaluator đã làm tròn, nghiệm của `PSNR_max` là **49.99983**, nên dùng **50** là nhất quán trong sai số làm tròn. Với LPIPS và SSIM ở đơn vị phần trăm, score trên thang 100 là:\n\n`Score = 40 − 0.4·LPIPS% + 0.3·SSIM% + 0.6·PSNR_dB`.\n\nDo đó: giảm LPIPS tuyệt đối `0.01` cho **+0.4 điểm**; tăng SSIM `0.01` cho **+0.3 điểm**; tăng PSNR `1 dB` cho **+0.6 điểm**. Nếu giữ PSNR/SSIM baseline và đặt LPIPS bằng 0 — một giới hạn lý tưởng — score chỉ đạt **78.911**; vì vậy tối ưu LPIPS đơn lẻ không thể đạt 80.\n\nKhi ảnh nằm trong `[0,1]` và chưa chạm clamp PSNR, tối đa hóa score tương đương tối thiểu hóa, bỏ hằng số:\n\n`J_score = 40·LPIPS + 30·(1−SSIM) + (6/ln 10)·ln(MSE)`.\n\nĐây là đồng nhất đại số với evaluator, **không phải chứng minh** rằng huấn luyện trực tiếp bằng `J_score` sẽ tối ưu generalization: mô hình phi lồi, metric minibatch khác metric held-out, và backbone LPIPS chính thức chưa biết."
+      },
+      { "id": "score_frontier_block", "type": "chart", "chartId": "score_frontier" },
+      {
+        "id": "baseline_model",
+        "type": "markdown",
+        "sourceId": "baseline_implementation",
+        "body": "## Mô hình baseline thực sự đang tối ưu gì\n\nMỗi primitive là `Gᵢ=(μᵢ,qᵢ,sᵢ,oᵢ,cᵢ^SH)`, với covariance `Σᵢ=R(qᵢ)·diag(exp(2sᵢ))·R(qᵢ)ᵀ`, opacity `αᵢ=sigmoid(oᵢ)` và màu phụ thuộc hướng từ spherical harmonics tới bậc 3. Pixel được alpha-composite theo depth: `C(p)=Σᵢ Tᵢ(p)·αᵢ(p)·cᵢ(v)`, `Tᵢ=Πⱼ<ᵢ(1−αⱼ)`.\n\nRepo khởi tạo `μ` từ `points3D.bin`, scale đẳng hướng từ khoảng cách trung bình 3 láng giềng, quaternion đơn vị, opacity 0.1, SH-DC từ RGB; không chạy lại SfM. Loss hiện tại là `0.8·L1 + 0.2·(1−SSIM)` với cửa sổ Gaussian 11×11, σ=1.5. Renderer dùng classic rasterization, `eps2d=0.3`, `absgrad=False`; densification dùng signed average 2D gradient, ngưỡng 0.0002, dừng ở bước 15k.\n\nLoss train không có perceptual term nên không trực tiếp tối ưu LPIPS. Tuy nhiên thay loss ngay chưa có cơ sở khi backbone official chưa được xác nhận; ngược lại, thay densification tác động trực tiếp tới capacity/placement và đã có bằng chứng paired trong repo."
+      },
+      {
+        "id": "repo_density_evidence",
+        "type": "markdown",
+        "sourceId": "git_qualification",
+        "body": "## Bằng chứng mạnh nhất trong repo: placement/mật độ đang là nút thắt\n\nỞ 6 scene khóa tại 7k, B0-reference dùng trung bình **3.485M Gaussian** so với **1.927M** của B0-compact và thắng cả 6 scene. ΔScore₅₀ trung bình là **+1.141**; exact two-sided sign test cho 6/6 cùng dấu có `p=2/2⁶=0.03125`, không cần giả định phân phối độ lớn hiệu ứng.\n\nĐây chưa chứng minh nhiều Gaussian luôn tốt; nó chỉ chứng minh cấu hình compact cụ thể làm mất chất lượng nhất quán. Kết quả ưu tiên nghiên cứu **quy tắc đặt/split/relocate Gaussian**, không ưu tiên nén tiếp hoặc đổi codec."
+      },
+      { "id": "paired_density_block", "type": "chart", "chartId": "paired_density" },
+      {
+        "id": "repo_30k_evidence",
+        "type": "markdown",
+        "sourceId": "git_30k",
+        "body": "## Bằng chứng 30k: thêm tối ưu vẫn có giá trị, nhưng không đủ để ngoại suy\n\nTrên HCM0181, validation từ 7k sang 30k tăng từ PSNR **21.733→22.692**, SSIM **0.768→0.805**, LPIPS **0.160→0.111**, tương ứng **+3.646 Score₅₀**. Run 30k mất **2.90 giờ**, peak **11.79 GB**, kết thúc với **6.862M Gaussian**. Densification đã dừng ở 15k nhưng rolling train loss còn giảm từ 0.0439 ở 15k xuống 0.0351 ở 30k.\n\nGiới hạn: chỉ một scene, một seed và hai checkpoint validation 7k/30k. Không có cơ sở nói 40k sẽ tốt hơn; cũng không được coi metric local này là official performance."
+      },
+      {
+        "id": "literature_decision",
+        "type": "markdown",
+        "sourceId": "gsplat_eval",
+        "body": "## Đối chiếu công trình: AbsGrad là thử nghiệm đầu tiên có tỷ lệ lợi ích/chi phí tốt nhất\n\nTrong evaluation chính thức của gsplat trên trung bình 7 scene Mip-NeRF360, AbsGrad đổi từ `29.00/.87/.14` thành `29.11/.88/.12` (PSNR/SSIM/LPIPS). Quy đổi qua cùng hàm điểm là **+1.166 điểm**, đồng thời Gaussian giảm khoảng **24%**, VRAM giảm **22%**, thời gian giảm **7%**. MCMC 2M cho **+1.018** với VRAM giảm **39%**, thời gian tăng **12%**; MCMC 3M cho **+1.790**, VRAM giảm **11%**, thời gian tăng **42%**. Antialias đơn lẻ chỉ **+0.018** điểm tham khảo.\n\nCác con số này là prior trên dataset khác. Chúng chỉ dùng để xếp thứ tự thí nghiệm, không được gán trực tiếp vào leaderboard BTS."
+      },
+      { "id": "gsplat_delta_block", "type": "chart", "chartId": "gsplat_reference_delta" },
+      {
+        "id": "absgs_theory",
+        "type": "markdown",
+        "sourceId": "absgs",
+        "body": "## Vì sao AbsGrad phù hợp về mặt toán học\n\nDefault densification lấy norm sau khi cộng signed gradient của nhiều pixel. Nếu hai pixel tạo gradient `g` và `−g`, tổng bằng 0 dù từng pixel đều báo Gaussian đang sai vị trí — hiện tượng gradient collision. AbsGS thay bằng tích lũy component-wise absolute gradient trước khi chuẩn hóa, nên `|g|+|−g|=2|g|` và không bỏ mất tín hiệu split cho cấu trúc nhỏ.\n\nĐây là lập luận cơ chế đã công bố; việc nó giúp anten/dây/tháp BTS là một giả thuyết có cơ sở, chưa phải kết quả repo. Bản `gsplat==1.4.0` đang cài đã hỗ trợ `absgrad`, nên chi phí triển khai thấp."
+      },
+      {
+        "id": "mcmc_theory",
+        "type": "markdown",
+        "sourceId": "mcmc",
+        "body": "## MCMC là phương án thay thế, không phải add-on mặc định\n\nMCMC diễn giải Gaussian như mẫu của một phân phối, dùng nhiễu SGLD và relocation trong các state transition, đồng thời đặt hard cap số Gaussian. Điều này biến bài toán tăng capacity không kiểm soát thành tìm kiếm dưới ngân sách primitive. Vì `MCMCStrategy` thay thế `DefaultStrategy`, thí nghiệm phải so như một nhánh độc lập với AbsGrad/revised-opacity, không bật tất cả cùng lúc rồi mất khả năng quy trách nhiệm."
+      },
+      {
+        "id": "revised_density_theory",
+        "type": "markdown",
+        "sourceId": "revising_densification",
+        "body": "## Revised opacity là factor thứ hai nên kiểm tra\n\nRevising Densification chỉ ra opacity cloning có thể thay đổi sai tổng đóng góp quang học sau clone/split và đề xuất công thức opacity sửa đổi cùng kiểm soát density theo pixel error/budget. Repo đang dùng opacity heuristic mặc định; thư viện gsplat cài sẵn đã có cờ `revised_opacity`. Vì vậy factorial `AbsGrad × revised_opacity` là phép thử nhỏ nhất tách được hiệu ứng gradient selection khỏi hiệu ứng bảo toàn opacity."
+      },
+      {
+        "id": "ranking_block",
+        "type": "table",
+        "tableId": "direction_ranking"
+      },
+      {
+        "id": "experiment_block",
+        "type": "table",
+        "tableId": "experiment_matrix"
+      },
+      {
+        "id": "protocol",
+        "type": "markdown",
+        "sourceId": "research_protocol",
+        "body": "## Protocol quyết định — khóa trước khi chạy\n\n1. **Không dùng official test RGB/pose để chọn config.** Giữ nguyên holdout nội bộ và seed camera split.\n2. **Đo noise trước:** chạy thêm seed 1 và 2 cho B0 ở 7k trên HCM0181; nếu độ lệch seed đủ lớn so với effect mong đợi, tăng replication thay vì mở rộng candidate.\n3. **Screen hai scene:** HCM0181 và HCM1439, gồm B0 control, AbsGrad τ=0.0006, AbsGrad τ=0.0008, revised-opacity, và tổ hợp. Hai τ là bracket giới hạn: 0.0006 theo recipe evaluation công khai và 0.0008 theo docstring của gsplat đang cài.\n4. **Qualification sáu scene:** chỉ top-2; đánh giá paired `ΔScore₅₀` cùng ảnh/camera. Candidate ưu tiên phải có mean ≥+0.75, median >0, không scene nào giảm quá 0.5, thời gian ≤1.25× và peak VRAM trong ngân sách máy. Với n=6, tiêu chuẩn mạnh nhất là thắng 6/6, exact sign-test p=0.03125.\n5. **Full-length:** chỉ winner; checkpoint/evaluate ở 7k, 15k, 30k trên HCM0181 và hai scene đại diện. Dừng nếu 15k và 30k không còn gain paired dương.\n6. **Confirmation:** khóa config rồi thử trên scene nội bộ chưa tham gia tuning. Mọi thay đổi tạo candidate ID mới; B0 vẫn CLOSED.\n\nKhông cộng effect giữa paper; không chọn theo một metric; báo cáo mean, median, min-scene, từng metric, Gaussian count, VRAM và thời gian. Bootstrap CI chỉ là mô tả ở n nhỏ, không thay cho holdout xác nhận."
+      },
+      { "id": "cost_block", "type": "table", "tableId": "cost_plan" },
+      {
+        "id": "fre_gs",
+        "type": "markdown",
+        "sourceId": "fregs",
+        "body": "## Hướng vòng hai: FreGS\n\nFreGS thêm regularization biên độ và pha trong miền tần số, anneal từ low-frequency sang high-frequency và chỉ áp dụng tới khi densification kết thúc. Trên Mip-NeRF360 trong paper, baseline `27.21/.815/.214` lên `27.85/.826/.209`, tương đương khoảng **+0.914 Score₅₀**. Hướng này hợp lý sau khi density winner đã ổn định vì nó tác động texture/frequency, nhưng có chi phí FFT và chưa có triển khai trong repo."
+      },
+      {
+        "id": "pixel_gs",
+        "type": "markdown",
+        "sourceId": "pixel_gs",
+        "body": "## Pixel-GS: có bằng chứng chất lượng nhưng chưa rẻ\n\nPixel-GS weighting gradient theo số pixel được primitive phủ và depth scaling. Paper báo mức quy đổi khoảng **+1.382** trên Mip-NeRF360 và **+0.934** trên Tanks & Temples, nhưng thời gian tăng khoảng **61%**, memory tăng khoảng **67%** trong cấu hình được báo cáo. Vì vậy đây là nhánh sau MCMC/AbsGrad, không phải vòng đầu."
+      },
+      {
+        "id": "conditional_and_rejected",
+        "type": "markdown",
+        "body": "## Hướng có điều kiện hoặc tạm loại\n\n- **Mip-Splatting / antialias:** chỉ ưu tiên nếu audit train-camera chứng minh target có scale/focal/distance khác mạnh. Antialias đơn lẻ trong gsplat có effect gần 0; full Mip-Splatting có cơ sở cho aliasing do sampling-rate shift nhưng cần thêm filter 3D/2D.\n- **WildGaussians / appearance embedding:** mạnh cho distractor và appearance variation, nhưng dùng pretrained DINO có nguy cơ vi phạm ràng buộc không external data; pose test cũng không cung cấp appearance code thật. Tạm loại.\n- **2DGS:** cải thiện geometry bằng surfel, ray-splat intersection và depth/normal regularization, nhưng đổi representation/renderer lớn; không phải đường rẻ nhất để tăng metric RGB trước deadline.\n- **JPEG Q100:** B0 đã Q99 4:4:4 và ZIP 335 MB/350 MB. Codec không có dư địa đủ lớn để bù khoảng cách 9 điểm; không sửa baseline đã đóng.\n- **Direct LPIPS loss:** chờ xác nhận backbone, implementation và quy định pretrained weights. Nếu không khớp evaluator, tối ưu có thể sai mục tiêu."
+      },
+      {
+        "id": "feasibility",
+        "type": "markdown",
+        "sourceId": "score_math",
+        "body": "## Đánh giá khả thi 80–90\n\nĐể vượt 80, một cấu hình ví dụ cần đồng thời khoảng `PSNR=30 dB`, `SSIM=88%`, `LPIPS=8%`, cho score 81.2. Đây là bước nhảy lớn so với official `24.61/80.48/19.82`; đại số không tự bác bỏ mục tiêu 80, nhưng cũng không tạo bằng chứng rằng mô hình sẽ đạt được.\n\nĐể gần 90, ví dụ `38 dB/97%/3%` mới cho 90.7. Không có dữ liệu trong nghiên cứu này hỗ trợ mức tăng đó cho held-out outdoor NVS. Vì vậy: **mục tiêu vận hành nên là vượt 73–75 bằng candidate rẻ, sau đó đánh giá lại; 80 là stretch goal; 90 không nên dùng làm cam kết.**"
+      },
+      {
+        "id": "limitations",
+        "type": "markdown",
+        "body": "## Giới hạn và điều chưa biết\n\n- Official evaluator chỉ trả aggregate 7 scene; không có per-scene breakdown để chẩn đoán scene nào kéo điểm xuống.\n- Metric official đã làm tròn; `PSNR_max=50` là suy luận gần như chắc chắn từ đồng nhất số học, chưa phải xác nhận từ grading harness. LPIPS backbone và SSIM implementation vẫn chưa biết.\n- Local 30k evidence chỉ có một scene/seed; six-scene qualification là 7k và khác cohort submission chính thức.\n- So sánh paper khác dataset, phần cứng, implementation và protocol; effect chỉ dùng làm prior xếp hạng.\n- Deadline còn ngắn; chi phí kỹ thuật/debug không nằm trong GPU-hour table.\n- Không có theorem bảo đảm candidate sẽ generalize hoặc effect sẽ cộng dồn. Báo cáo cố ý không đưa ra bảo đảm như vậy."
+      },
+      {
+        "id": "next_steps",
+        "type": "markdown",
+        "body": "## Hành động tiếp theo\n\n**Phê duyệt một vòng nghiên cứu C1** gồm: expose `absgrad`, `revised_opacity` và ngưỡng gradient trong config; thêm candidate IDs và test; chạy noise audit; screen hai scene; qualification top-2 trên sáu scene. Chỉ sau khi qua gate mới chạy 30k và production 7 scene.\n\nDeliverable của mỗi candidate: config hash, commit, environment, seed, per-scene/per-image metric, `Score₅₀`, Gaussian trajectory, peak VRAM, wall time, checkpoint và decision log."
+      }
+    ]
+  },
+  "snapshot": {
+    "version": 1,
+    "generatedAt": "2026-07-19T06:00:00Z",
+    "status": "ready",
+    "datasets": {
+      "baseline_metrics": [
+        { "cohort": "official 7/7", "score": 70.9833, "psnr": 24.611499, "ssim_pct": 80.4805, "lpips_pct": 19.8195 }
+      ],
+      "target_gaps": [
+        { "gap_80": 9.0167, "gap_90": 19.0167, "lpips_only_ceiling": 78.911 }
+      ],
+      "hcm0181_metrics": [
+        { "score_30k": 73.325, "delta_vs_7k": 3.646, "hours": 2.8965, "vram_gb": 11.79 }
+      ],
+      "score_scenarios": [
+        { "scenario": "Official baseline", "score": 70.9833, "psnr": 24.611499, "ssim_pct": 80.4805, "lpips_pct": 19.8195 },
+        { "scenario": "Moderate 27/85/12", "score": 76.9, "psnr": 27, "ssim_pct": 85, "lpips_pct": 12 },
+        { "scenario": "LPIPS=0 only", "score": 78.911, "psnr": 24.611499, "ssim_pct": 80.4805, "lpips_pct": 0 },
+        { "scenario": "Joint 30/88/8", "score": 81.2, "psnr": 30, "ssim_pct": 88, "lpips_pct": 8 },
+        { "scenario": "Near-90 38/97/3", "score": 90.7, "psnr": 38, "ssim_pct": 97, "lpips_pct": 3 }
+      ],
+      "density_pairs": [
+        { "scene": "hcm0031", "reference_score": 70.567, "compact_score": 69.721, "delta_score": 0.846 },
+        { "scene": "HCM0181", "reference_score": 69.679, "compact_score": 68.638, "delta_score": 1.041 },
+        { "scene": "HCM0421", "reference_score": 68.204, "compact_score": 67.178, "delta_score": 1.026 },
+        { "scene": "HCM1439", "reference_score": 61.979, "compact_score": 60.367, "delta_score": 1.612 },
+        { "scene": "HNI0131", "reference_score": 67.959, "compact_score": 67.082, "delta_score": 0.877 },
+        { "scene": "HNI0265", "reference_score": 67.296, "compact_score": 65.853, "delta_score": 1.443 }
+      ],
+      "gsplat_candidates": [
+        { "variant": "Default", "delta_score": 0, "gaussian_ratio": 1, "memory_ratio": 1, "time_ratio": 1 },
+        { "variant": "AbsGrad", "delta_score": 1.166, "gaussian_ratio": 0.762, "memory_ratio": 0.783, "time_ratio": 0.933 },
+        { "variant": "Antialiased", "delta_score": 0.018, "gaussian_ratio": 1.044, "memory_ratio": 1.044, "time_ratio": 1.007 },
+        { "variant": "MCMC 1M", "delta_score": 0.108, "gaussian_ratio": 0.309, "memory_ratio": 0.352, "time_ratio": 0.795 },
+        { "variant": "MCMC 2M", "delta_score": 1.018, "gaussian_ratio": 0.618, "memory_ratio": 0.61, "time_ratio": 1.124 },
+        { "variant": "MCMC 3M", "delta_score": 1.79, "gaussian_ratio": 0.927, "memory_ratio": 0.888, "time_ratio": 1.425 }
+      ],
+      "experiment_matrix": [
+        { "priority": "P0", "candidate": "B0 seeds 1–2", "change": "Chỉ random seed", "evidence": "Ước lượng noise để không chọn false positive", "gate": "Effect candidate phải lớn hơn noise thực dụng", "cost": "≈0.61 GPU-h" },
+        { "priority": "P1", "candidate": "C1-A", "change": "AbsGrad, τ=0.0006", "evidence": "gsplat +1.166 tham khảo; AbsGS mechanism", "gate": "Qua screen paired 2 scene", "cost": "Thấp; backend đã có" },
+        { "priority": "P1", "candidate": "C1-B", "change": "AbsGrad, τ=0.0008", "evidence": "Ngưỡng docstring gsplat cho abs gradient", "gate": "So trực tiếp C1-A", "cost": "Thấp" },
+        { "priority": "P1", "candidate": "C1-C", "change": "revised_opacity=True", "evidence": "ECCV Revising Densification; backend đã có", "gate": "Effect dương paired", "cost": "Thấp" },
+        { "priority": "P1", "candidate": "C1-D", "change": "AbsGrad winner + revised opacity", "evidence": "Factorial tách interaction", "gate": "Top-2 vào 6 scene", "cost": "Thấp" },
+        { "priority": "P2", "candidate": "C2-2M", "change": "MCMCStrategy cap 2M", "evidence": "+1.018, VRAM 0.61×, time 1.12× tham khảo", "gate": "So với C1 winner", "cost": "Trung bình" },
+        { "priority": "P2", "candidate": "C2-3M", "change": "MCMCStrategy cap 3M", "evidence": "+1.790, VRAM 0.89×, time 1.43× tham khảo", "gate": "Chỉ nếu 2M thiếu quality", "cost": "Trung bình-cao" },
+        { "priority": "P3", "candidate": "C3-FreGS", "change": "Frequency regularization tới densify stop", "evidence": "+0.914 tham khảo", "gate": "Chỉ sau density winner", "cost": "FFT + implementation" },
+        { "priority": "P4", "candidate": "C4-AA", "change": "Full Mip/AA có điều kiện", "evidence": "Chỉ hợp lý khi có scale shift", "gate": "Cần audit camera sampling trước", "cost": "Tùy triển khai" }
+      ],
+      "cost_plan": [
+        { "stage": "0 — Noise audit", "scope": "2 seed bổ sung × HCM0181 × 7k", "gpu_hours": 0.61, "decision": "Ước lượng variance" },
+        { "stage": "1 — Screen", "scope": "4 candidate × 2 scene × 7k", "gpu_hours": 2.43, "decision": "Giữ top-2" },
+        { "stage": "2 — Qualification", "scope": "Top-2 × 6 scene × 7k", "gpu_hours": 3.7, "decision": "Chọn winner hoặc dừng" },
+        { "stage": "3 — Full-length", "scope": "Winner × 3 scene × 30k", "gpu_hours": 8.69, "decision": "Kiểm tra gain bền theo step" },
+        { "stage": "4 — Locked confirmation", "scope": "Winner × 3 scene chưa tuning × 7k", "gpu_hours": 0.91, "decision": "Ước lượng generalization nội bộ" },
+        { "stage": "Production nếu pass", "scope": "Winner × 7 scene × 30k", "gpu_hours": 20.28, "decision": "Tạo submission candidate mới" }
+      ],
+      "direction_ranking": [
+        { "rank": 1, "direction": "AbsGrad × revised opacity", "why": "Repo chứng minh density quan trọng; official gsplat cho effect/cost tốt; backend sẵn", "risk": "Ngưỡng gradient phải retune; interaction chưa biết", "decision": "Chạy ngay, factorial nhỏ" },
+        { "rank": 2, "direction": "MCMC cap 2M/3M", "why": "Quality–memory frontier tốt và cap primitive rõ ràng", "risk": "Strategy thay thế; 3M chậm hơn", "decision": "So như nhánh độc lập" },
+        { "rank": 3, "direction": "FreGS", "why": "Tác động frequency khác trục density; effect paper dương", "risk": "FFT/implementation; transfer chưa biết", "decision": "Chỉ sau winner P1/P2" },
+        { "rank": 4, "direction": "Pixel-GS", "why": "Weighted gradient theo pixel/depth có effect dương", "risk": "Paper báo time/memory tăng mạnh", "decision": "Hoãn" },
+        { "rank": 5, "direction": "Mip-Splatting", "why": "Có lý thuyết đúng cho sampling-rate shift", "risk": "Chưa có bằng chứng shift trong repo; AA đơn lẻ gần 0", "decision": "Chỉ khi camera audit xác nhận" },
+        { "rank": 6, "direction": "WildGaussians / 2DGS / NeRF rewrite", "why": "Giải quyết appearance/geometry rộng hơn", "risk": "External pretrained data hoặc rewrite lớn", "decision": "Loại khỏi vòng deadline" }
+      ]
+    }
+  },
+  "sources": [
+    { "id": "baseline_contract", "label": "Repo baseline and evaluation contract", "path": "AGENTS.md" },
+    { "id": "baseline_implementation", "label": "Baseline 3DGS implementation in repository", "query": { "engine": "Git working tree", "description": "Inspected the current baseline implementation.", "executed_at": "2026-07-19T06:00:00Z" } },
+    { "id": "git_qualification", "label": "Six-scene paired 7k qualification artifact", "query": { "engine": "git", "query": "git show b1d67e9:runs/phase4/qualification/qualification_decision.json", "executed_at": "2026-07-19T06:00:00Z" } },
+    { "id": "git_30k", "label": "HCM0181 30k internal validation artifacts", "query": { "engine": "git", "query": "git show 411c8de:runs/phase4/dry_run_30k/HCM0181/full_length_report.json", "executed_at": "2026-07-19T06:00:00Z" } },
+    { "id": "score_math", "label": "Score algebra derived from official rounded metrics", "query": { "engine": "deterministic calculation", "description": "Score sensitivity and target-frontier calculations.", "executed_at": "2026-07-19T06:00:00Z" } },
+    { "id": "cost_analysis", "label": "GPU budget calculation from repository timing artifacts", "query": { "engine": "deterministic calculation", "description": "Sequential GPU-hour planning estimate.", "executed_at": "2026-07-19T06:00:00Z" } },
+    { "id": "research_protocol", "label": "Pre-registered experiment protocol in this report", "path": "docs/research/2026-07-19-baseline-optimization/artifact.json" },
+    { "id": "research_synthesis", "label": "Primary-source synthesis and repo-fit assessment", "path": "docs/research/2026-07-19-baseline-optimization/artifact.json" },
+    { "id": "original_3dgs", "label": "3D Gaussian Splatting — official project and paper", "href": "https://repo-sam.inria.fr/fungraph/3d-gaussian-splatting/" },
+    { "id": "gsplat_eval", "label": "gsplat official evaluation", "href": "https://docs.gsplat.studio/main/tests/eval.html" },
+    { "id": "absgs", "label": "AbsGS official project", "href": "https://ty424.github.io/AbsGS.github.io/" },
+    { "id": "mcmc", "label": "3D Gaussian Splatting as Markov Chain Monte Carlo", "href": "https://arxiv.org/abs/2404.09591" },
+    { "id": "mip_splatting", "label": "Mip-Splatting — CVPR 2024", "href": "https://openaccess.thecvf.com/content/CVPR2024/html/Yu_Mip-Splatting_Alias-free_3D_Gaussian_Splatting_CVPR_2024_paper.html" },
+    { "id": "revising_densification", "label": "Revising Densification in Gaussian Splatting — ECCV 2024", "href": "https://eccv.ecva.net/virtual/2024/poster/916" },
+    { "id": "pixel_gs", "label": "Pixel-GS — ECCV 2024 paper", "href": "https://www.ecva.net/papers/eccv_2024/papers_ECCV/papers/02926.pdf" },
+    { "id": "fregs", "label": "FreGS — CVPR 2024 paper", "href": "https://openaccess.thecvf.com/content/CVPR2024/papers/Zhang_FreGS_3D_Gaussian_Splatting_with_Progressive_Frequency_Regularization_CVPR_2024_paper.pdf" },
+    { "id": "wildgaussians", "label": "WildGaussians — NeurIPS 2024", "href": "https://papers.nips.cc/paper_files/paper/2024/hash/25c0fe7b157821dd3140727dc07461da-Abstract-Conference.html" },
+    { "id": "twodgs", "label": "2D Gaussian Splatting official project", "href": "https://surfsplatting.github.io/" }
+  ]
+}

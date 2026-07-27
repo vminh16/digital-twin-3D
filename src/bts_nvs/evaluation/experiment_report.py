@@ -99,6 +99,7 @@ def build_experiment_report(
     detail_report: Mapping[str, object],
     pose_strata_report: Mapping[str, object],
     resource_summary: Mapping[str, object],
+    gaussian_diagnostics: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
     if not isinstance(scene_id, str) or not scene_id.strip():
         raise ValueError("scene_id must be a non-empty string")
@@ -123,7 +124,11 @@ def build_experiment_report(
     _validate_image_count(pose_strata_report, pose_images, "pose_strata_report")
     if detail_report.get("scene_id") != scene_id or pose_strata_report.get("scene_id") != scene_id:
         raise ValueError("report scene_id does not match experiment scene_id")
-    if pose_strata_report.get("holdout_manifest_sha256") != holdout_sha256:
+    pose_holdout_identity = pose_strata_report.get(
+        "holdout_sha256",
+        pose_strata_report.get("holdout_manifest_sha256"),
+    )
+    if pose_holdout_identity != holdout_sha256:
         raise ValueError("pose strata holdout identity does not match holdout_sha256")
 
     combined: dict[str, dict[str, object]] = {}
@@ -164,7 +169,7 @@ def build_experiment_report(
         )
         for stratum in STRATA
     }
-    return {
+    report = {
         "schema_version": 1,
         "scene_id": scene_id,
         "candidate_id": candidate_id,
@@ -176,6 +181,70 @@ def build_experiment_report(
         "resources": resources,
         "images": combined,
     }
+    if gaussian_diagnostics is not None:
+        diagnostics = _mapping(gaussian_diagnostics, "gaussian_diagnostics")
+        if (
+            diagnostics.get("scene_id") != scene_id
+            or diagnostics.get("diagnostic_only") is not True
+        ):
+            raise ValueError("Gaussian diagnostics identity is invalid")
+        diagnostic_images = _mapping(
+            diagnostics.get("images"), "gaussian_diagnostics.images"
+        )
+        if set(diagnostic_images) != names:
+            raise ValueError("Gaussian diagnostics image names do not match")
+        worst_count = max(1, math.ceil(len(combined) * 0.10))
+        worst_names = tuple(
+            sorted(
+                combined,
+                key=lambda name: (-float(combined[name]["lpips"]), name),
+            )[:worst_count]
+        )
+        veil_names = tuple(
+            name
+            for name in ordered_names
+            if float(combined[name]["missing_edge"]) >= 0.25
+            and float(combined[name]["missing_edge"])
+            >= 2.0 * max(float(combined[name]["spurious_edge"]), 1e-12)
+        )
+        collapse_names = tuple(
+            name
+            for name in ordered_names
+            if float(combined[name]["lpips"]) >= 0.5
+            or float(combined[name]["ssim"]) <= 0.5
+        )
+        report.update(
+            {
+                "schema_version": 2,
+                "tails": {
+                    "worst_decile_image_count": worst_count,
+                    "worst_decile_image_names": list(worst_names),
+                    "worst_decile_lpips": float(
+                        sum(float(combined[name]["lpips"]) for name in worst_names)
+                        / worst_count
+                    ),
+                    "worst_decile_symmetric_edge_distance": float(
+                        sum(
+                            float(combined[name]["symmetric_edge_distance"])
+                            for name in worst_names
+                        )
+                        / worst_count
+                    ),
+                },
+                "failure_flags": {
+                    "policy": {
+                        "veil": "missing_edge>=0.25 and missing_edge>=2*spurious_edge",
+                        "collapse": "lpips>=0.5 or ssim<=0.5",
+                    },
+                    "veil_count": len(veil_names),
+                    "veil_image_names": list(veil_names),
+                    "collapse_count": len(collapse_names),
+                    "collapse_image_names": list(collapse_names),
+                },
+                "gaussian_diagnostics": dict(diagnostics),
+            }
+        )
+    return report
 
 
 def save_experiment_report(report: Mapping[str, object], path: Path) -> None:

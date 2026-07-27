@@ -4,6 +4,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import tempfile
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -16,6 +17,8 @@ from .validation import DataContractError
 
 SCHEMA_VERSION = 1
 ALGORITHM = "pose_fps_guard2_v1"
+RESEARCH_ALGORITHM = "targeted_pose_guard2_v3"
+RESEARCH_SCENES = frozenset(("chair", "bonsai"))
 
 
 @dataclass(frozen=True)
@@ -203,10 +206,125 @@ def build_pose_holdout(manifest: SceneManifest) -> HoldoutSplit:
     return split
 
 
+def _frame_number(name: str) -> int | None:
+    groups = re.findall(r"\d+", Path(name).stem)
+    return int(groups[-1]) if groups else None
+
+
+def _research_required_indices(
+    manifest: SceneManifest,
+    names: tuple[str, ...],
+    distances: np.ndarray,
+) -> tuple[int, ...]:
+    if manifest.scene_id == "chair":
+        numbered = tuple(
+            (index, number)
+            for index, name in enumerate(names)
+            if (number := _frame_number(name)) is not None
+            and 840 <= number <= 920
+        )
+        if len(numbered) < 2:
+            raise DataContractError(
+                "chair research holdout requires at least two frames in 840-920"
+            )
+        selected: list[int] = []
+        for anchor in (870, 885):
+            index, _ = min(
+                (
+                    item
+                    for item in numbered
+                    if item[0] not in selected
+                ),
+                key=lambda item: (abs(item[1] - anchor), names[item[0]]),
+            )
+            selected.append(index)
+        return tuple(selected)
+
+    if manifest.scene_id == "bonsai":
+        numbered = tuple(
+            (index, number)
+            for index, name in enumerate(names)
+            if (number := _frame_number(name)) is not None
+        )
+        if not numbered:
+            raise DataContractError("bonsai research holdout requires numbered frames")
+        frame_390, distance = min(
+            numbered,
+            key=lambda item: (abs(item[1] - 390), names[item[0]]),
+        )
+        if distance != 390:
+            raise DataContractError("bonsai research holdout requires frame 390")
+        off_diagonal = distances.copy()
+        np.fill_diagonal(off_diagonal, np.inf)
+        nearest_gap = np.min(off_diagonal, axis=1)
+        high_gap = sorted(
+            (index for index in range(len(names)) if index != frame_390),
+            key=lambda index: (-float(nearest_gap[index]), names[index]),
+        )[:4]
+        return (frame_390, *high_gap)
+
+    raise DataContractError(
+        "research holdout is only defined for chair and bonsai"
+    )
+
+
+def build_research_holdout(manifest: SceneManifest) -> HoldoutSplit:
+    count = len(manifest.train_image_names)
+    if count < 8:
+        raise DataContractError("holdout requires at least 8 train cameras")
+    if manifest.scene_id not in RESEARCH_SCENES:
+        raise DataContractError(
+            "research holdout is only defined for chair and bonsai"
+        )
+    names, normalized_centers, axes = _ordered_pose_geometry(manifest)
+    distances = _pose_distance_matrix(normalized_centers, axes)
+    required = list(_research_required_indices(manifest, names, distances))
+    target = max(8, math.floor(count / 8 + 0.5), len(required))
+    validation = list(required)
+    while len(validation) < target:
+        selected = set(validation)
+        candidate = min(
+            (index for index in range(count) if index not in selected),
+            key=lambda index: (
+                -float(distances[index, validation].min()),
+                names[index],
+            ),
+        )
+        validation.append(candidate)
+
+    minimum_train = math.ceil(0.70 * count)
+    while True:
+        guard = _guard_indices(validation, distances, names)
+        train = set(range(count)) - set(validation) - guard
+        if len(train) >= minimum_train:
+            break
+        if len(validation) == len(required):
+            raise DataContractError(
+                "targeted sentinels cannot retain minimum train coverage"
+            )
+        validation.pop()
+
+    split = HoldoutSplit(
+        schema_version=SCHEMA_VERSION,
+        scene_id=manifest.scene_id,
+        manifest_sha256=manifest_holdout_sha256(manifest),
+        algorithm=RESEARCH_ALGORITHM,
+        train_image_names=tuple(
+            names[index] for index in sorted(train, key=lambda i: names[i])
+        ),
+        validation_image_names=tuple(names[index] for index in validation),
+        guard_image_names=tuple(
+            names[index] for index in sorted(guard, key=lambda i: names[i])
+        ),
+    )
+    _validate_partition(split, manifest)
+    return split
+
+
 def _validate_partition(split: HoldoutSplit, manifest: SceneManifest) -> None:
     if split.schema_version != SCHEMA_VERSION:
         raise DataContractError(f"unsupported holdout schema: {split.schema_version}")
-    if split.algorithm != ALGORITHM:
+    if split.algorithm not in {ALGORITHM, RESEARCH_ALGORITHM}:
         raise DataContractError(f"unsupported holdout algorithm: {split.algorithm}")
     if split.scene_id != manifest.scene_id:
         raise DataContractError("holdout scene_id does not match manifest")
@@ -235,8 +353,31 @@ def _validate_partition(split: HoldoutSplit, manifest: SceneManifest) -> None:
 
 def validate_holdout_split(split: HoldoutSplit, manifest: SceneManifest) -> None:
     _validate_partition(split, manifest)
-    if split != build_pose_holdout(manifest):
+    expected = (
+        build_research_holdout(manifest)
+        if split.algorithm == RESEARCH_ALGORITHM
+        else build_pose_holdout(manifest)
+    )
+    if split != expected:
         raise DataContractError("holdout partition does not match deterministic algorithm")
+
+
+def holdout_split_sha256(split: HoldoutSplit) -> str:
+    payload = json.dumps(
+        asdict(split),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def holdout_identity_sha256(split: HoldoutSplit) -> str:
+    """Preserve legacy identity while giving v3 splits their own provenance."""
+    if getattr(split, "algorithm", None) == RESEARCH_ALGORITHM:
+        return holdout_split_sha256(split)
+    return split.manifest_sha256
 
 
 def save_holdout_split(split: HoldoutSplit, path: Path) -> None:
