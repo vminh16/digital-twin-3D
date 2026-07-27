@@ -10,6 +10,7 @@ from pathlib import Path
 import yaml
 
 from bts_nvs.evaluation.experiment_report import build_experiment_report
+from bts_nvs.experiments.candidates import candidate_settings
 from bts_nvs.experiments.experiment import (
     Experiment,
     ExperimentStage,
@@ -78,10 +79,11 @@ def validate_run_artifacts(
         experiment,
         config_sha256,
     )
-    if experiment.candidate_id == "E3-chair-observation-scale-v1":
+    settings = candidate_settings(experiment.candidate_id)
+    if settings.observation_mapping_mode == "continuous-reprojection":
         if config.get("observation_mapping_mode") != "continuous-reprojection":
             raise ValueError(
-                "config observation_mapping_mode does not match chair control"
+                "config observation_mapping_mode does not match candidate"
             )
         validate_observation_mapping_artifact(
             run / "initialization_diagnostics.json"

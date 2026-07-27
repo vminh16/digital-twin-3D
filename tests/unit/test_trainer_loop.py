@@ -273,6 +273,7 @@ def test_trainer_normalizes_raw_camera_pose_before_render(
         ("B0-reference", False, 0.0002, "classic"),
         ("E1-density-absgrad-t04-v1", True, 0.0004, "classic"),
         ("E2-raster-aa-v1", False, 0.0002, "antialiased"),
+        ("E4-chair-observation-scale-absgrad-v1", True, 0.0004, "classic"),
     ],
 )
 def test_trainer_forwards_candidate_density_settings(

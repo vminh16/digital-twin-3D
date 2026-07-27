@@ -86,11 +86,11 @@ HCM0644 HCM0674 HCM0540 HCM0539 HCM0421 chair bonsai
   validate. Candidate-theory gate và local SfM audit nằm tại
   `docs/superpowers/research/2026-07-27-chair-bonsai-candidate-validation.md`;
   Phase 2 chỉ mở candidate sau khi code, contract và test được merge.
-- Các candidate E3 ghi trong spec là reserved cho tới khi code, contract và
-  test tương ứng được merge vào registry. Ngoại lệ hiện tại là
-  `E3-chair-observation-scale-v1`: đã được triển khai như control chỉ cho
-  `chair/research`, không được confirm hoặc production. Không được dùng tên
-  trong docs để bypass preflight.
+- Các candidate chưa có trong registry vẫn là reserved. Hai candidate chair
+  `E3-chair-observation-scale-v1` và
+  `E4-chair-observation-scale-absgrad-v1` đã được triển khai chỉ cho
+  `chair/research`; confirm và production phải từ chối cả hai. Không được dùng
+  tên trong docs để bypass preflight.
 
 ## Closed hybrid submission
 

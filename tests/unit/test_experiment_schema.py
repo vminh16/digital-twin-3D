@@ -253,24 +253,25 @@ def test_research_stage_is_locked_to_the_active_auxiliary_scenes() -> None:
         )
 
 
-def test_chair_observation_scale_control_is_research_only() -> None:
-    control = Experiment(
-        ExperimentStage.RESEARCH,
-        "chair",
+@pytest.mark.parametrize(
+    "candidate_id",
+    (
         "E3-chair-observation-scale-v1",
-    )
+        "E4-chair-observation-scale-absgrad-v1",
+    ),
+)
+def test_chair_observation_scale_candidates_are_research_only(
+    candidate_id: str,
+) -> None:
+    control = Experiment(ExperimentStage.RESEARCH, "chair", candidate_id)
     assert control.horizon == 30_000
 
     with pytest.raises(ValueError, match="chair.*research"):
-        Experiment(
-            ExperimentStage.RESEARCH,
-            "bonsai",
-            "E3-chair-observation-scale-v1",
-        )
+        Experiment(ExperimentStage.RESEARCH, "bonsai", candidate_id)
     with pytest.raises(ValueError, match="chair.*research"):
         Experiment(
             ExperimentStage.CONFIRM,
             "chair",
-            "E3-chair-observation-scale-v1",
-            authorized_scene_winner="E3-chair-observation-scale-v1",
+            candidate_id,
+            authorized_scene_winner=candidate_id,
         )

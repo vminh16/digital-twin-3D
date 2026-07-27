@@ -1,6 +1,6 @@
 # Chair and bonsai deep-optimization authority
 
-**Status:** ACTIVE — Phase 1 and theory gate validated; Phase 2A chair control
+**Status:** ACTIVE — Phase 2A chair control validated; chair E4 AbsGrad
 implemented locally, paired L4 run pending.
 
 **Plan ID:** `scene-opt-v3-chair-bonsai`
@@ -77,10 +77,12 @@ Candidate ladder:
    - change no loss, density or appearance setting.
    - allow only `stage=research, scene=chair`; confirm and production must
      reject this ID because production already uses `points3D.bin` colors.
-2. `E4-chair-observation-scale-absgrad-v1` — reserved, not executable yet.
+2. `E4-chair-observation-scale-absgrad-v1` — implemented research candidate.
    - inherit the passing observation-scale candidate;
    - add the already-supported AbsGrad `t04` density policy;
    - run only if giant-radius sentinel failure remains.
+   - allow only `stage=research, scene=chair`; confirm and production reject
+     this ID.
 
 Exact Pixel-GS is a second-line method. An ellipse-area or tile-count proxy is
 not allowed to use the Pixel-GS name because current `gsplat` does not expose

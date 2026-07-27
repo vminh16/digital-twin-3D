@@ -37,10 +37,9 @@ schedule stopped at 15k, internal holdout and no model checkpoint.
 bash scripts/run_chair_bonsai_research.sh <chair|bonsai> <candidate-id>
 ```
 
-E3 candidate IDs in the active spec are reserved until their implementations
-and tests enter the registry. Phase 1 targeted-holdout code is complete; the
-bounded L4 CUDA smoke remains its exit gate, so GPU screens are not yet
-authorized.
+Chair E3 and E4 are registered research-only candidates. E3 completed its
+paired L4 control; E4 is the next executable AbsGrad screen. Unregistered
+candidate IDs in the active spec remain reserved.
 
 ## Historical documents
 

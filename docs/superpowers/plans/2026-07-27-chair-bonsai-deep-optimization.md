@@ -2,8 +2,8 @@
 
 **Authority:** `../specs/2026-07-27-chair-bonsai-deep-optimization.md`
 
-**Status:** ACTIVE — Phase 1 and candidate-theory gate validated; chair E3
-research control implemented locally, L4 run pending.
+**Status:** ACTIVE — chair E3 paired control complete; E4 AbsGrad implemented,
+paired L4 run pending.
 
 ## Success criteria
 
@@ -115,8 +115,11 @@ Implementation status:
 - complete: E3 registry, chair/research-only scope and artifact validation;
 - complete: real-chair CPU preflight recovered scale `(1.50001973,
   1.50001935)` and reduced mean RGB MAE `77.10911 -> 33.29314`;
-- pending: paired E3 15k L4 run and per-view decision;
-- conditional: E4 AbsGrad implementation.
+- complete: paired E3 15k L4 run; mapping fixed frame `525` collapse while
+  giant-radius failures remained at `870/885`;
+- complete: E4 AbsGrad registry, chair/research-only scope and artifact
+  validation;
+- pending: paired E4 15k L4 run against E3.
 
 Execution:
 
@@ -219,9 +222,11 @@ Only registered candidates may be invoked:
 ```bash
 bash scripts/run_chair_bonsai_research.sh chair E2-loss-local-laplacian-v1
 bash scripts/run_chair_bonsai_research.sh chair E3-chair-observation-scale-v1
+bash scripts/run_chair_bonsai_research.sh chair E4-chair-observation-scale-absgrad-v1
 bash scripts/run_chair_bonsai_research.sh bonsai E2-appearance-sh4-v1
 ```
 
-The E2 commands reproduce the closed Phase 1 incumbents. E3 is the first
-executable Phase 2 research control. Remaining Phase 2 IDs stay reserved until
-their implementation, contracts and tests are merged.
+The E2 commands reproduce the closed Phase 1 incumbents. Chair E3 is the
+completed Phase 2 control and chair E4 is its executable AbsGrad comparison.
+Remaining Phase 2 IDs stay reserved until their implementation, contracts and
+tests are merged.

@@ -6,7 +6,10 @@ import math
 from pathlib import Path
 from types import MappingProxyType
 
-from bts_nvs.experiments.candidates import candidate_settings
+from bts_nvs.experiments.candidates import (
+    CHAIR_RESEARCH_CANDIDATE_IDS,
+    candidate_settings,
+)
 
 
 COHORT_SCENE_IDS = (
@@ -89,12 +92,12 @@ class Experiment:
             raise ValueError("research stage is limited to chair and bonsai")
 
         candidate_settings(self.candidate_id)
-        if self.candidate_id == "E3-chair-observation-scale-v1" and (
+        if self.candidate_id in CHAIR_RESEARCH_CANDIDATE_IDS and (
             self.scene_id != "chair"
             or self.stage is not ExperimentStage.RESEARCH
         ):
             raise ValueError(
-                "E3 chair observation-scale control requires chair research"
+                "chair observation-scale candidates require chair research"
             )
         self._validate_authorization(
             "authorized_scene_winner", self.authorized_scene_winner

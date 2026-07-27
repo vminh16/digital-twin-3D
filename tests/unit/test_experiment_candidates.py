@@ -42,6 +42,7 @@ def test_registry_locks_first_executable_candidates() -> None:
         "E2-loss-local-laplacian-v1",
         "E2-appearance-sh4-v1",
         "E3-chair-observation-scale-v1",
+        "E4-chair-observation-scale-absgrad-v1",
     )
     baseline = candidate_settings("B0-reference")
     absgrad = candidate_settings("E1-density-absgrad-t04-v1")
@@ -50,6 +51,9 @@ def test_registry_locks_first_executable_candidates() -> None:
     weighted = candidate_settings("E2-loss-local-laplacian-v1")
     sh4 = candidate_settings("E2-appearance-sh4-v1")
     chair_mapping = candidate_settings("E3-chair-observation-scale-v1")
+    chair_absgrad = candidate_settings(
+        "E4-chair-observation-scale-absgrad-v1"
+    )
 
     assert absgrad == replace(
         baseline,
@@ -82,6 +86,12 @@ def test_registry_locks_first_executable_candidates() -> None:
         weighted,
         candidate_id="E3-chair-observation-scale-v1",
         observation_mapping_mode="continuous-reprojection",
+    )
+    assert chair_absgrad == replace(
+        chair_mapping,
+        candidate_id="E4-chair-observation-scale-absgrad-v1",
+        absgrad=True,
+        grow_grad2d=0.0004,
     )
 
 

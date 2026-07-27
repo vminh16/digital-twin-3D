@@ -9,6 +9,7 @@ import yaml
 
 from bts_nvs.evaluation.experiment_report import build_experiment_report
 from bts_nvs.experiments.artifacts import append_failure, validate_run_artifacts
+from bts_nvs.experiments.candidates import candidate_settings
 from bts_nvs.experiments.experiment import Experiment, ExperimentStage
 from bts_nvs.training.checkpoint import save_checkpoint
 from bts_nvs.training.trainer import compute_config_sha256
@@ -127,7 +128,10 @@ def _write_run(
         "max_steps": experiment.horizon,
         "internal_holdout": experiment.stage is not ExperimentStage.PRODUCTION,
     }
-    if experiment.candidate_id == "E3-chair-observation-scale-v1":
+    if (
+        candidate_settings(experiment.candidate_id).observation_mapping_mode
+        == "continuous-reprojection"
+    ):
         config["observation_mapping_mode"] = "continuous-reprojection"
     config_sha256 = compute_config_sha256(config)
     (run / "config.yaml").write_text(
@@ -135,7 +139,10 @@ def _write_run(
     )
     _write_json(run / "environment.json", {"device": "test", "cuda": False})
     _write_json(run / "manifest_hash.json", {"manifest_hash": MANIFEST_SHA256})
-    if experiment.candidate_id == "E3-chair-observation-scale-v1":
+    if (
+        candidate_settings(experiment.candidate_id).observation_mapping_mode
+        == "continuous-reprojection"
+    ):
         _write_json(
             run / "initialization_diagnostics.json",
             {
@@ -315,13 +322,21 @@ def test_research_validation_accepts_15k_evidence_without_model_checkpoint(
         result.integrity_passed = False
 
 
-def test_chair_observation_control_requires_improving_initialization_diagnostics(
+@pytest.mark.parametrize(
+    "candidate_id",
+    (
+        "E3-chair-observation-scale-v1",
+        "E4-chair-observation-scale-absgrad-v1",
+    ),
+)
+def test_chair_observation_candidates_require_improving_initialization_diagnostics(
     tmp_path: Path,
+    candidate_id: str,
 ) -> None:
     experiment = Experiment(
         ExperimentStage.RESEARCH,
         "chair",
-        "E3-chair-observation-scale-v1",
+        candidate_id,
     )
     run, config_sha256 = _write_run(tmp_path, experiment, step=15_000)
 
