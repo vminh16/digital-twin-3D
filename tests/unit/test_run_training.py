@@ -9,6 +9,7 @@ import pytest
 import torch
 
 import bts_nvs.training.run_training as run_training
+from bts_nvs.data.sparse_subset import ObservationMappingDiagnostics
 
 
 def _args(**changes):
@@ -384,7 +385,7 @@ def test_training_config_records_holdout_identity():
     assert config["validation_count"] == 1
 
 
-def test_internal_holdout_replaces_only_sparse_initialization(monkeypatch):
+def test_internal_holdout_replaces_only_sparse_initialization(tmp_path, monkeypatch):
     @dataclass(frozen=True)
     class Manifest:
         sparse_points: np.ndarray
@@ -395,21 +396,70 @@ def test_internal_holdout_replaces_only_sparse_initialization(monkeypatch):
         np.zeros((1, 3), dtype=np.uint8),
     )
     split = SimpleNamespace()
+    diagnostics = ObservationMappingDiagnostics(
+        mode="continuous-reprojection",
+        scale=(1.5, 1.5),
+        legacy_scale=(2.0, 2.0),
+        fit_observation_count=10,
+        mapped_reprojection_p50_px=0.1,
+        mapped_reprojection_p95_px=0.2,
+        legacy_reprojection_p50_px=4.0,
+        legacy_reprojection_p95_px=8.0,
+        color_comparison_point_count=2,
+        selected_color_mae_mean=10.0,
+        selected_color_mae_median=9.0,
+        selected_color_mae_p90=12.0,
+        legacy_color_mae_mean=20.0,
+        legacy_color_mae_median=19.0,
+        legacy_color_mae_p90=22.0,
+    )
     sparse = SimpleNamespace(
         points=np.ones((2, 3), dtype=np.float64),
         colors=np.full((2, 3), 7, dtype=np.uint8),
+        observation_mapping_diagnostics=diagnostics,
     )
+    seen = {}
+
+    def build_sparse(value, root, holdout, *, observation_mapping_mode):
+        seen["mode"] = observation_mapping_mode
+        return sparse
+
     monkeypatch.setattr(
         run_training,
         "build_split_sparse_initialization",
-        lambda value, root, holdout: sparse,
+        build_sparse,
     )
+    diagnostics_path = tmp_path / "initialization_diagnostics.json"
 
-    result = run_training.build_initialization_manifest(manifest, Path("scene"), split)
+    result = run_training.build_initialization_manifest(
+        manifest,
+        Path("scene"),
+        split,
+        observation_mapping_mode="continuous-reprojection",
+        diagnostics_path=diagnostics_path,
+    )
 
     np.testing.assert_array_equal(result.sparse_points, sparse.points)
     np.testing.assert_array_equal(result.sparse_colors, sparse.colors)
     np.testing.assert_array_equal(manifest.sparse_points, np.zeros((1, 3)))
+    assert seen == {"mode": "continuous-reprojection"}
+    assert json.loads(diagnostics_path.read_text(encoding="utf-8")) == {
+        "color_comparison_point_count": 2,
+        "fit_observation_count": 10,
+        "legacy_color_mae_mean": 20.0,
+        "legacy_color_mae_median": 19.0,
+        "legacy_color_mae_p90": 22.0,
+        "legacy_reprojection_p50_px": 4.0,
+        "legacy_reprojection_p95_px": 8.0,
+        "legacy_scale": [2.0, 2.0],
+        "mapped_reprojection_p50_px": 0.1,
+        "mapped_reprojection_p95_px": 0.2,
+        "mode": "continuous-reprojection",
+        "scale": [1.5, 1.5],
+        "selected_color_mae_mean": 10.0,
+        "selected_color_mae_median": 9.0,
+        "selected_color_mae_p90": 12.0,
+    }
 
 
 def test_host_resource_preflight_rejects_swap_and_low_cache_ram():

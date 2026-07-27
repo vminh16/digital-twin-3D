@@ -6,7 +6,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from dataclasses import replace
+from dataclasses import asdict, replace
 from pathlib import Path
 
 import torch
@@ -605,10 +605,33 @@ def load_internal_holdout(
     return load_holdout_split(path, manifest)
 
 
-def build_initialization_manifest(manifest, scene_root: Path, split):
+def build_initialization_manifest(
+    manifest,
+    scene_root: Path,
+    split,
+    *,
+    observation_mapping_mode: str = "legacy-ceil",
+    diagnostics_path: Path | None = None,
+):
     if split is None:
+        if observation_mapping_mode != "legacy-ceil":
+            raise ValueError(
+                "continuous observation mapping requires an internal holdout"
+            )
         return manifest
-    sparse = build_split_sparse_initialization(manifest, scene_root, split)
+    sparse = build_split_sparse_initialization(
+        manifest,
+        scene_root,
+        split,
+        observation_mapping_mode=observation_mapping_mode,
+    )
+    if diagnostics_path is not None:
+        diagnostics = sparse.observation_mapping_diagnostics
+        if diagnostics is None:
+            raise ValueError(
+                "initialization diagnostics require continuous observation mapping"
+            )
+        write_json_record(diagnostics_path, asdict(diagnostics))
     return replace(
         manifest,
         sparse_points=sparse.points,
@@ -1133,6 +1156,7 @@ def main():
             "pixel_weight_mode": "uniform",
             "pixel_weight_floor": 0.5,
             "pixel_weight_patch_size": 31,
+            "observation_mapping_mode": "legacy-ceil",
         }
     )
     validate_host_resources(
@@ -1196,6 +1220,15 @@ def main():
         manifest,
         scene_root,
         split,
+        observation_mapping_mode=str(
+            candidate_overrides["observation_mapping_mode"]
+        ),
+        diagnostics_path=(
+            Path(args.output_dir) / "initialization_diagnostics.json"
+            if candidate_overrides["observation_mapping_mode"]
+            == "continuous-reprojection"
+            else None
+        ),
     )
     gaussians = initialize_from_manifest(
         initialization_manifest,

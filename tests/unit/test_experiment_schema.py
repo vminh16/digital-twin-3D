@@ -251,3 +251,26 @@ def test_research_stage_is_locked_to_the_active_auxiliary_scenes() -> None:
             "HCM0644",
             "B0-reference",
         )
+
+
+def test_chair_observation_scale_control_is_research_only() -> None:
+    control = Experiment(
+        ExperimentStage.RESEARCH,
+        "chair",
+        "E3-chair-observation-scale-v1",
+    )
+    assert control.horizon == 30_000
+
+    with pytest.raises(ValueError, match="chair.*research"):
+        Experiment(
+            ExperimentStage.RESEARCH,
+            "bonsai",
+            "E3-chair-observation-scale-v1",
+        )
+    with pytest.raises(ValueError, match="chair.*research"):
+        Experiment(
+            ExperimentStage.CONFIRM,
+            "chair",
+            "E3-chair-observation-scale-v1",
+            authorized_scene_winner="E3-chair-observation-scale-v1",
+        )

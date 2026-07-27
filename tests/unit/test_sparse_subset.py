@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import numpy as np
 import pytest
 from PIL import Image
@@ -125,3 +127,100 @@ def test_sparse_initialization_rejects_color_cast_overflow() -> None:
             points=[[0.0, 0.0, 0.0]],
             colors=[[256.0, 0.0, 0.0]],
         )
+
+
+def test_continuous_observation_mapping_recovers_noninteger_scale(
+    tmp_path, monkeypatch
+) -> None:
+    scene_root = tmp_path / "chair"
+    manifest = _manifest(scene_root)
+    intrinsics = CameraIntrinsics(4, 4, 1.0, 1.0, 2.0, 2.0)
+    manifest = replace(
+        manifest,
+        train_intrinsics=(intrinsics,) * len(manifest.train_image_names),
+    )
+    image = np.fromfunction(
+        lambda y, x, channel: x * 10 + y * 20 + channel,
+        (4, 4, 3),
+        dtype=int,
+    ).astype(np.uint8)
+    for name in manifest.train_image_names:
+        Image.fromarray(image).save(scene_root / "train" / "images" / name)
+
+    split = build_pose_holdout(manifest)
+    observed_name = split.train_image_names[0]
+    observed_index = manifest.train_image_names.index(observed_name)
+    camera_to_world = manifest.train_camera_to_world[observed_index]
+    camera_points = np.asarray(
+        [[0.0, 0.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0]],
+        dtype=np.float64,
+    )
+    world_points = (camera_to_world @ camera_points.T).T[:, :3]
+
+    image_ids = {
+        name: index + 1 for index, name in enumerate(manifest.train_image_names)
+    }
+    images = {
+        image_id: ColmapImageRecord(
+            image_id,
+            name,
+            1,
+            manifest.train_world_to_camera[index],
+        )
+        for index, (name, image_id) in enumerate(image_ids.items())
+    }
+    images[image_ids[observed_name]] = ColmapImageRecord(
+        image_ids[observed_name],
+        observed_name,
+        1,
+        manifest.train_world_to_camera[observed_index],
+        points2d_xy=np.asarray([[3.0, 3.0], [4.5, 4.5]]),
+        point3d_ids=np.asarray([1, 2]),
+    )
+    points = {
+        point_id: ColmapPointRecord(
+            point_id,
+            xyz,
+            image[y, x],
+            0.0,
+            (image_ids[observed_name],),
+        )
+        for point_id, xyz, x, y in (
+            (1, world_points[0], 2, 2),
+            (2, world_points[1], 3, 3),
+        )
+    }
+    model = ColmapModel(
+        cameras={
+            1: ColmapCameraRecord(
+                1,
+                intrinsics,
+                CameraDistortion("PINHOLE", ()),
+            )
+        },
+        images=images,
+        points3d=points,
+    )
+    monkeypatch.setattr(
+        "bts_nvs.data.sparse_subset.read_colmap_model", lambda path: model
+    )
+
+    legacy = build_split_sparse_initialization(manifest, scene_root, split)
+    corrected = build_split_sparse_initialization(
+        manifest,
+        scene_root,
+        split,
+        observation_mapping_mode="continuous-reprojection",
+    )
+
+    np.testing.assert_array_equal(corrected.colors, [image[2, 2], image[3, 3]])
+    assert not np.array_equal(legacy.colors, corrected.colors)
+    diagnostics = corrected.observation_mapping_diagnostics
+    assert diagnostics is not None
+    assert diagnostics.scale == pytest.approx((1.5, 1.5))
+    assert diagnostics.legacy_scale == pytest.approx((2.0, 2.0))
+    assert diagnostics.fit_observation_count == 2
+    assert diagnostics.mapped_reprojection_p95_px == pytest.approx(0.0)
+    assert diagnostics.legacy_reprojection_p95_px > 0.0
+    assert diagnostics.selected_color_mae_mean == pytest.approx(0.0)
+    assert diagnostics.legacy_color_mae_mean > 0.0

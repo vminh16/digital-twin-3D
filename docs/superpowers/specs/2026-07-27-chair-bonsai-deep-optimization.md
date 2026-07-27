@@ -1,6 +1,7 @@
 # Chair and bonsai deep-optimization authority
 
-**Status:** ACTIVE — Phase 1 implemented; L4 CUDA smoke pending.
+**Status:** ACTIVE — Phase 1 and theory gate validated; Phase 2A chair control
+implemented locally, paired L4 run pending.
 
 **Plan ID:** `scene-opt-v3-chair-bonsai`
 
@@ -55,52 +56,62 @@ not repair missing or malformed topology.
 
 ## 3. Active method families
 
-### Method C — chair: scale-controlled frequency densification
+The candidate-theory evidence is recorded in
+`../research/2026-07-27-chair-bonsai-candidate-validation.md`.
 
-Goal: prevent giant near-camera splats while preserving the chair mesh.
+### Method C — chair: repair initialization before density control
+
+Goal: remove the proved sparse-color coordinate defect, then repair any
+remaining large-Gaussian gradient collision without deleting useful splats.
 
 Candidate ladder:
 
-1. `E3-chair-scale-guard-v1` — reserved, not executable yet.
+1. `E3-chair-observation-scale-v1` — implemented research control.
    - inherit the current chair incumbent
      `E2-loss-local-laplacian-v1`;
-   - enable conservative 3D scale pruning;
-   - collect normalized projected radius during densification;
-   - split or prune only the extreme projected-scale tail;
-   - log removed/split counts and scale/radius quantiles.
-2. `E3-chair-scale-fregs-v1` — reserved, not executable yet.
-   - inherit the passing scale-guard candidate;
-   - add progressive frequency regularization during densification;
-   - do not add a second appearance model.
+   - replace integer-ceiling observation-scale inference with a robust
+     continuous reprojection mapping;
+   - prove that current image coordinates, intrinsics and points agree after
+     mapping;
+   - log old/new sparse-color error before Gaussian parameter allocation;
+   - change no loss, density or appearance setting.
+   - allow only `stage=research, scene=chair`; confirm and production must
+     reject this ID because production already uses `points3D.bin` colors.
+2. `E4-chair-observation-scale-absgrad-v1` — reserved, not executable yet.
+   - inherit the passing observation-scale candidate;
+   - add the already-supported AbsGrad `t04` density policy;
+   - run only if giant-radius sentinel failure remains.
 
-Unconditional anisotropy rewards are forbidden. A valid regularizer caps
-absolute/projected size and pathological in-plane elongation; it must not
-penalize the thin axis of a legitimate planar or wire-like primitive.
-
-Strong-blur down-weighting is a later isolated ablation. It is not bundled
-into the first scale candidate.
+Exact Pixel-GS is a second-line method. An ellipse-area or tile-count proxy is
+not allowed to use the Pixel-GS name because current `gsplat` does not expose
+its exact post-transmittance pixel-participation count.
 
 ### Method B — bonsai: geometry-consistent reflective appearance
 
-Goal: stabilize the table and surrounding depth before increasing specular
-appearance capacity.
+Goal: prevent early floater overgrowth, recover split signals for large
+Gaussians and then add only the geometry supervision supported by provided
+observations.
 
 Candidate ladder:
 
-1. `E3-bonsai-scale-guard-sh4-v1` — reserved, not executable yet.
+1. `E3-bonsai-c2f-absgrad-sh4-v1` — reserved, not executable yet.
    - inherit the current bonsai incumbent `E2-appearance-sh4-v1`;
-   - apply the same instrumented conservative scale guard;
+   - use the Spec-Gaussian density curriculum: start with both image dimensions
+     downsampled by factor 4, reach full resolution by step 5k and use absolute
+     projected gradients;
    - retain SH4 unchanged.
-2. `E3-bonsai-geometry-sh4-v1` — reserved, not executable yet.
-   - inherit the passing scale-guard candidate;
+2. `E4-bonsai-c2f-absgrad-sh4-sparse-depth-v1` — reserved, not executable yet.
+   - inherit the passing c2f candidate;
    - add robust sparse-depth anchors from the provided COLMAP tracks;
-   - add weak edge-aware depth/normal or multi-view geometry consistency;
-   - use confidence masks derived only from provided train observations;
+   - use confidence from track length and reprojection error;
+   - correct legacy observation coordinates before projecting any anchor;
    - retain SH4 as the appearance component.
 
 External monocular-depth weights, diffusion priors and external images remain
-out of scope. Spec-Gaussian or GaussianShader is a later appearance-only
-fallback after geometry passes; neither is authorized in the first ladder.
+out of scope. Sparse depth cannot be claimed to supervise the table interior:
+the frame-390 tabletop ROI has only half the image-average SfM point density.
+2DGS/PGSR, exact Pixel-GS, MCMC, ASG, GaussianShader, HMGS and SpecTRe-GS are
+documented fallbacks and are not authorized in the first ladder.
 
 ## 4. Unified research harness
 
@@ -195,12 +206,14 @@ Mean improvement cannot override a failed tail gate.
 
 ```text
 Phase 0  CLOSED  close old phases; add research stage and unified wrapper
-Phase 1  IMPLEMENTED  CPU contract passed; bounded L4 CUDA smoke pending
-Phase 2  PENDING implement and screen chair method family
-Phase 3  PENDING implement and screen bonsai method family
-Phase 4  PENDING paired 30k confirmation
-Phase 5  PENDING full-data production, rerender and new submission assembly
+Phase 1  CLOSED  two complete L4 incumbent runs and reports validated
+Phase 2  PLANNED paired chair/bonsai mechanism screens
+Phase 3  PENDING paired 30k confirmation
+Phase 4  PENDING full-data production, rerender and new submission assembly
 ```
 
-No Phase 2+ GPU run is authorized until Phase 1 tests and artifact contract
-pass.
+`E3-chair-observation-scale-v1` is executable only as a chair research control.
+All other Phase 2 candidate IDs remain reserved until their implementation,
+contracts and tests are merged. The former `E3-*-scale-guard-*` names are
+superseded and must not be registered. The detailed run order and stop gates
+are in the active execution plan.

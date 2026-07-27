@@ -82,11 +82,15 @@ HCM0644 HCM0674 HCM0540 HCM0539 HCM0421 chair bonsai
   không checkpoint và chỉ chấp nhận `chair/bonsai`. Production vẫn là fresh
   full-data 30k không holdout.
 - Phase 1 dùng artifact riêng `holdout_research_v3.json`; không được thay hoặc
-  ghi đè `holdout.json`. CPU contract đã pass nhưng bounded diagnostics CUDA
-  smoke trên L4 vẫn là exit gate trước khi mở Phase 2.
+  ghi đè `holdout.json`. Hai incumbent L4 15k và artifact contract đã được
+  validate. Candidate-theory gate và local SfM audit nằm tại
+  `docs/superpowers/research/2026-07-27-chair-bonsai-candidate-validation.md`;
+  Phase 2 chỉ mở candidate sau khi code, contract và test được merge.
 - Các candidate E3 ghi trong spec là reserved cho tới khi code, contract và
-  test tương ứng được merge vào registry. Không được dùng tên trong docs để
-  bypass preflight.
+  test tương ứng được merge vào registry. Ngoại lệ hiện tại là
+  `E3-chair-observation-scale-v1`: đã được triển khai như control chỉ cho
+  `chair/research`, không được confirm hoặc production. Không được dùng tên
+  trong docs để bypass preflight.
 
 ## Closed hybrid submission
 
@@ -133,6 +137,11 @@ PSNR_norm = clamp(PSNR / PSNR_max, 0, 1)
 - **No ground-truth leakage.** Do not attempt to access or infer held-out test images through any channel outside the documented data contract.
 - **Fully automated output.** Every rendered image must come directly from the pipeline — no manual compositing, retouching, or per-pose manual intervention.
 - **Reproducibility is a deliverable, not an afterthought.** Track: training/inference code, exact configs, dependency versions, checkpoints, and training logs, from the start — not reconstructed retroactively. Fix random seeds where applicable.
+- **Preserve production module boundaries.** Do not place method-specific
+  geometry, diagnostics, artifact validation and orchestration in one file.
+  Keep each module focused on one responsibility, expose a small typed API,
+  and move reusable policy or math into a named module before merging. A
+  passing test suite does not justify leaving an oversized catch-all module.
 
 ## Data availability / milestones
 | | |

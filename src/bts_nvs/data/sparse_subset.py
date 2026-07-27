@@ -10,6 +10,12 @@ from PIL import Image
 from .colmap import read_colmap_model
 from .holdout import HoldoutSplit, validate_holdout_split
 from .manifest import SceneManifest
+from .observation_mapping import (
+    ObservationMappingDiagnostics,
+    ObservationMappingFit,
+    build_observation_mapping_diagnostics,
+    fit_continuous_observation_mapping,
+)
 from .validation import DataContractError
 
 
@@ -24,6 +30,7 @@ class SparseInitialization:
     point_ids: np.ndarray
     points: np.ndarray
     colors: np.ndarray
+    observation_mapping_diagnostics: ObservationMappingDiagnostics | None = None
 
     def __post_init__(self) -> None:
         color_source = np.asarray(self.colors)
@@ -63,10 +70,16 @@ def _bilinear_samples(image: np.ndarray, coordinates: np.ndarray) -> np.ndarray:
 def _infer_observation_scale(
     manifest: SceneManifest,
     images_by_name: dict[str, object],
+    image_names: tuple[str, ...] | None = None,
 ) -> np.ndarray:
     ratios_x: list[np.ndarray] = []
     ratios_y: list[np.ndarray] = []
-    for name, intrinsics in zip(manifest.train_image_names, manifest.train_intrinsics):
+    intrinsics_by_name = dict(
+        zip(manifest.train_image_names, manifest.train_intrinsics)
+    )
+    selected_names = manifest.train_image_names if image_names is None else image_names
+    for name in selected_names:
+        intrinsics = intrinsics_by_name[name]
         registration = images_by_name.get(name)
         if registration is None:
             raise DataContractError(f"train image lacks COLMAP registration: {name}")
@@ -98,11 +111,45 @@ def _infer_observation_scale(
     return scale
 
 
+def _aggregate_observed_colors(
+    point_id_chunks: list[np.ndarray],
+    color_chunks: list[np.ndarray],
+    valid_points: dict[int, object],
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    if not point_id_chunks:
+        raise DataContractError(
+            "internal train split has no valid sparse color observations"
+        )
+    observed_ids = np.concatenate(point_id_chunks).astype(np.int64, copy=False)
+    observed_colors = np.concatenate(color_chunks)
+    order = np.argsort(observed_ids, kind="stable")
+    observed_ids = observed_ids[order]
+    observed_colors = observed_colors[order]
+    point_ids, starts = np.unique(observed_ids, return_index=True)
+    ends = np.r_[starts[1:], len(observed_ids)]
+    colors = np.stack(
+        [
+            np.median(observed_colors[start:end], axis=0)
+            for start, end in zip(starts, ends)
+        ]
+    )
+    colors = np.floor(colors + 0.5).astype(np.uint8)
+    points = np.stack([valid_points[int(point_id)].xyz for point_id in point_ids])
+    return point_ids, points, colors
+
+
 def build_split_sparse_initialization(
     manifest: SceneManifest,
     scene_root: Path,
     split: HoldoutSplit,
+    *,
+    observation_mapping_mode: str = "legacy-ceil",
 ) -> SparseInitialization:
+    if observation_mapping_mode not in {
+        "legacy-ceil",
+        "continuous-reprojection",
+    }:
+        raise ValueError("observation_mapping_mode is unsupported")
     validate_holdout_split(split, manifest)
     root = Path(scene_root)
     model = read_colmap_model(root / "train" / "sparse" / "0")
@@ -114,10 +161,31 @@ def build_split_sparse_initialization(
         for point_id, point in model.points3d.items()
         if np.all(np.isfinite(point.xyz))
     }
-    observation_scale = _infer_observation_scale(manifest, images_by_name)
+    legacy_scale = _infer_observation_scale(
+        manifest,
+        images_by_name,
+        (
+            split.train_image_names
+            if observation_mapping_mode == "continuous-reprojection"
+            else None
+        ),
+    )
+    observation_scale = legacy_scale
+    mapping_fit: ObservationMappingFit | None = None
+    if observation_mapping_mode == "continuous-reprojection":
+        mapping_fit = fit_continuous_observation_mapping(
+            manifest,
+            images_by_name,
+            valid_points,
+            legacy_scale,
+            split.train_image_names,
+        )
+        observation_scale = np.asarray(mapping_fit.scale, dtype=np.float64)
 
-    point_id_chunks: list[np.ndarray] = []
-    color_chunks: list[np.ndarray] = []
+    selected_id_chunks: list[np.ndarray] = []
+    selected_color_chunks: list[np.ndarray] = []
+    legacy_id_chunks: list[np.ndarray] = []
+    legacy_color_chunks: list[np.ndarray] = []
     for name in split.train_image_names:
         registration = images_by_name.get(name)
         if registration is None:
@@ -131,41 +199,80 @@ def build_split_sparse_initialization(
         if image.shape[:2] != (intrinsics.height, intrinsics.width):
             raise DataContractError(f"image resolution does not match intrinsics: {name}")
 
-        coordinates = registration.points2d_xy / observation_scale
-        point_ids = registration.point3d_ids
-        inside = (
-            (coordinates[:, 0] >= 0.0)
-            & (coordinates[:, 0] <= image.shape[1] - 1)
-            & (coordinates[:, 1] >= 0.0)
-            & (coordinates[:, 1] <= image.shape[0] - 1)
-        )
-        candidate_ids = point_ids[inside]
-        candidate_coordinates = coordinates[inside]
-        supported = np.fromiter(
-            (int(point_id) in valid_points for point_id in candidate_ids),
-            dtype=bool,
-            count=len(candidate_ids),
-        )
-        if np.any(supported):
-            point_id_chunks.append(candidate_ids[supported])
-            color_chunks.append(
-                _bilinear_samples(image, candidate_coordinates[supported])
+        mappings = [
+            (
+                observation_scale,
+                selected_id_chunks,
+                selected_color_chunks,
             )
+        ]
+        if observation_mapping_mode == "continuous-reprojection":
+            mappings.append(
+                (
+                    legacy_scale,
+                    legacy_id_chunks,
+                    legacy_color_chunks,
+                )
+            )
+        for scale, point_id_chunks, color_chunks in mappings:
+            coordinates = registration.points2d_xy / scale
+            point_ids = registration.point3d_ids
+            inside = (
+                (coordinates[:, 0] >= 0.0)
+                & (coordinates[:, 0] <= image.shape[1] - 1)
+                & (coordinates[:, 1] >= 0.0)
+                & (coordinates[:, 1] <= image.shape[0] - 1)
+            )
+            candidate_ids = point_ids[inside]
+            candidate_coordinates = coordinates[inside]
+            supported = np.fromiter(
+                (int(point_id) in valid_points for point_id in candidate_ids),
+                dtype=bool,
+                count=len(candidate_ids),
+            )
+            if np.any(supported):
+                point_id_chunks.append(candidate_ids[supported])
+                color_chunks.append(
+                    _bilinear_samples(
+                        image,
+                        candidate_coordinates[supported],
+                    )
+                )
 
-    if not point_id_chunks:
-        raise DataContractError(
-            "internal train split has no valid sparse color observations"
-        )
-    observed_ids = np.concatenate(point_id_chunks).astype(np.int64, copy=False)
-    observed_colors = np.concatenate(color_chunks)
-    order = np.argsort(observed_ids, kind="stable")
-    observed_ids = observed_ids[order]
-    observed_colors = observed_colors[order]
-    point_ids, starts = np.unique(observed_ids, return_index=True)
-    ends = np.r_[starts[1:], len(observed_ids)]
-    colors = np.stack(
-        [np.median(observed_colors[start:end], axis=0) for start, end in zip(starts, ends)]
+    point_ids, points, colors = _aggregate_observed_colors(
+        selected_id_chunks,
+        selected_color_chunks,
+        valid_points,
     )
-    colors = np.floor(colors + 0.5).astype(np.uint8)
-    points = np.stack([valid_points[int(point_id)].xyz for point_id in point_ids])
-    return SparseInitialization(point_ids=point_ids, points=points, colors=colors)
+    diagnostics = None
+    if observation_mapping_mode == "continuous-reprojection":
+        legacy_ids, _, legacy_colors = _aggregate_observed_colors(
+            legacy_id_chunks,
+            legacy_color_chunks,
+            valid_points,
+        )
+        common_ids, selected_indices, legacy_indices = np.intersect1d(
+            point_ids,
+            legacy_ids,
+            assume_unique=True,
+            return_indices=True,
+        )
+        if len(common_ids) == 0:
+            raise DataContractError(
+                "continuous and legacy mappings have no common sparse points"
+            )
+        if mapping_fit is None:
+            raise RuntimeError("continuous observation mapping fit is missing")
+        diagnostics = build_observation_mapping_diagnostics(
+            mapping_fit,
+            common_ids,
+            colors[selected_indices],
+            legacy_colors[legacy_indices],
+            valid_points,
+        )
+    return SparseInitialization(
+        point_ids=point_ids,
+        points=points,
+        colors=colors,
+        observation_mapping_diagnostics=diagnostics,
+    )

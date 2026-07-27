@@ -10,6 +10,7 @@ CANDIDATE_IDS = (
     "E2-raster-aa-v1",
     "E2-loss-local-laplacian-v1",
     "E2-appearance-sh4-v1",
+    "E3-chair-observation-scale-v1",
 )
 
 _BASELINE = CandidateSettings(
@@ -26,6 +27,7 @@ _BASELINE = CandidateSettings(
         pixel_weight_mode="uniform",
         pixel_weight_floor=0.5,
         pixel_weight_patch_size=31,
+        observation_mapping_mode="legacy-ceil",
     )
 
 _CANDIDATES = {
@@ -44,6 +46,7 @@ _CANDIDATES = {
         pixel_weight_mode="uniform",
         pixel_weight_floor=0.5,
         pixel_weight_patch_size=31,
+        observation_mapping_mode="legacy-ceil",
     ),
     "E1-density-scale005-v1": CandidateSettings(
         candidate_id="E1-density-scale005-v1",
@@ -59,6 +62,7 @@ _CANDIDATES = {
         pixel_weight_mode="uniform",
         pixel_weight_floor=0.5,
         pixel_weight_patch_size=31,
+        observation_mapping_mode="legacy-ceil",
     ),
     "E2-raster-aa-v1": CandidateSettings(
         candidate_id="E2-raster-aa-v1",
@@ -74,6 +78,7 @@ _CANDIDATES = {
         pixel_weight_mode="uniform",
         pixel_weight_floor=0.5,
         pixel_weight_patch_size=31,
+        observation_mapping_mode="legacy-ceil",
     ),
     "E2-loss-local-laplacian-v1": CandidateSettings(
         candidate_id="E2-loss-local-laplacian-v1",
@@ -89,6 +94,7 @@ _CANDIDATES = {
         pixel_weight_mode="local-laplacian",
         pixel_weight_floor=0.5,
         pixel_weight_patch_size=31,
+        observation_mapping_mode="legacy-ceil",
     ),
     "E2-appearance-sh4-v1": CandidateSettings(
         candidate_id="E2-appearance-sh4-v1",
@@ -104,6 +110,23 @@ _CANDIDATES = {
         pixel_weight_mode="uniform",
         pixel_weight_floor=0.5,
         pixel_weight_patch_size=31,
+        observation_mapping_mode="legacy-ceil",
+    ),
+    "E3-chair-observation-scale-v1": CandidateSettings(
+        candidate_id="E3-chair-observation-scale-v1",
+        absgrad=False,
+        grow_grad2d=0.0002,
+        grow_scale3d=0.01,
+        prune_opa=0.005,
+        refine_stop_step=15_000,
+        rasterize_mode="classic",
+        appearance_mode="baseline",
+        sampling_mode="uniform",
+        max_sh_degree=3,
+        pixel_weight_mode="local-laplacian",
+        pixel_weight_floor=0.5,
+        pixel_weight_patch_size=31,
+        observation_mapping_mode="continuous-reprojection",
     ),
 }
 

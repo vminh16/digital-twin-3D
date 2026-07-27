@@ -19,6 +19,7 @@ class CandidateSettings:
     pixel_weight_mode: str
     pixel_weight_floor: float
     pixel_weight_patch_size: int
+    observation_mapping_mode: str
 
     def __post_init__(self) -> None:
         if (
@@ -64,6 +65,11 @@ class CandidateSettings:
             raise ValueError("max_sh_degree 4 requires appearance_mode sh4")
         if self.pixel_weight_mode not in {"uniform", "local-laplacian"}:
             raise ValueError("pixel_weight_mode is unsupported")
+        if self.observation_mapping_mode not in {
+            "legacy-ceil",
+            "continuous-reprojection",
+        }:
+            raise ValueError("observation_mapping_mode is unsupported")
         if (
             isinstance(self.pixel_weight_floor, bool)
             or not isinstance(self.pixel_weight_floor, (int, float))

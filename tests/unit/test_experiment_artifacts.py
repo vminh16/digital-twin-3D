@@ -127,12 +127,35 @@ def _write_run(
         "max_steps": experiment.horizon,
         "internal_holdout": experiment.stage is not ExperimentStage.PRODUCTION,
     }
+    if experiment.candidate_id == "E3-chair-observation-scale-v1":
+        config["observation_mapping_mode"] = "continuous-reprojection"
     config_sha256 = compute_config_sha256(config)
     (run / "config.yaml").write_text(
         yaml.safe_dump(config, sort_keys=True), encoding="utf-8"
     )
     _write_json(run / "environment.json", {"device": "test", "cuda": False})
     _write_json(run / "manifest_hash.json", {"manifest_hash": MANIFEST_SHA256})
+    if experiment.candidate_id == "E3-chair-observation-scale-v1":
+        _write_json(
+            run / "initialization_diagnostics.json",
+            {
+                "mode": "continuous-reprojection",
+                "scale": [1.5, 1.5],
+                "legacy_scale": [2.0, 2.0],
+                "fit_observation_count": 100,
+                "mapped_reprojection_p50_px": 0.1,
+                "mapped_reprojection_p95_px": 0.2,
+                "legacy_reprojection_p50_px": 10.0,
+                "legacy_reprojection_p95_px": 20.0,
+                "color_comparison_point_count": 80,
+                "selected_color_mae_mean": 20.0,
+                "selected_color_mae_median": 18.0,
+                "selected_color_mae_p90": 30.0,
+                "legacy_color_mae_mean": 50.0,
+                "legacy_color_mae_median": 45.0,
+                "legacy_color_mae_p90": 70.0,
+            },
+        )
     _write_json(
         run / "summary.json",
         {
@@ -290,6 +313,35 @@ def test_research_validation_accepts_15k_evidence_without_model_checkpoint(
     assert result.paired_wall_time_ratio is None
     with pytest.raises(FrozenInstanceError):
         result.integrity_passed = False
+
+
+def test_chair_observation_control_requires_improving_initialization_diagnostics(
+    tmp_path: Path,
+) -> None:
+    experiment = Experiment(
+        ExperimentStage.RESEARCH,
+        "chair",
+        "E3-chair-observation-scale-v1",
+    )
+    run, config_sha256 = _write_run(tmp_path, experiment, step=15_000)
+
+    assert _validate(
+        run,
+        experiment,
+        config_sha256,
+        step=15_000,
+    ).experiment_report is not None
+
+    diagnostics_path = run / "initialization_diagnostics.json"
+    diagnostics = json.loads(diagnostics_path.read_text(encoding="utf-8"))
+    diagnostics["selected_color_mae_mean"] = diagnostics["legacy_color_mae_mean"]
+    _write_json(diagnostics_path, diagnostics)
+    with pytest.raises(ValueError, match="initialization.*color"):
+        _validate(run, experiment, config_sha256, step=15_000)
+
+    diagnostics_path.unlink()
+    with pytest.raises(FileNotFoundError, match="initialization_diagnostics"):
+        _validate(run, experiment, config_sha256, step=15_000)
 
 
 def test_production_has_an_explicit_minimal_contract_without_holdout_reports(

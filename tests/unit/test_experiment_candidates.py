@@ -27,6 +27,7 @@ def _settings(**overrides) -> CandidateSettings:
         "pixel_weight_mode": "uniform",
         "pixel_weight_floor": 0.5,
         "pixel_weight_patch_size": 31,
+        "observation_mapping_mode": "legacy-ceil",
     }
     values.update(overrides)
     return CandidateSettings(**values)
@@ -40,6 +41,7 @@ def test_registry_locks_first_executable_candidates() -> None:
         "E2-raster-aa-v1",
         "E2-loss-local-laplacian-v1",
         "E2-appearance-sh4-v1",
+        "E3-chair-observation-scale-v1",
     )
     baseline = candidate_settings("B0-reference")
     absgrad = candidate_settings("E1-density-absgrad-t04-v1")
@@ -47,6 +49,7 @@ def test_registry_locks_first_executable_candidates() -> None:
     antialiased = candidate_settings("E2-raster-aa-v1")
     weighted = candidate_settings("E2-loss-local-laplacian-v1")
     sh4 = candidate_settings("E2-appearance-sh4-v1")
+    chair_mapping = candidate_settings("E3-chair-observation-scale-v1")
 
     assert absgrad == replace(
         baseline,
@@ -74,6 +77,11 @@ def test_registry_locks_first_executable_candidates() -> None:
         candidate_id="E2-appearance-sh4-v1",
         appearance_mode="sh4",
         max_sh_degree=4,
+    )
+    assert chair_mapping == replace(
+        weighted,
+        candidate_id="E3-chair-observation-scale-v1",
+        observation_mapping_mode="continuous-reprojection",
     )
 
 
@@ -107,6 +115,7 @@ def test_training_overrides_are_complete_fresh_plain_values() -> None:
         "pixel_weight_mode": "uniform",
         "pixel_weight_floor": 0.5,
         "pixel_weight_patch_size": 31,
+        "observation_mapping_mode": "legacy-ceil",
     }
 
     overrides["grow_grad2d"] = 1.0
@@ -154,6 +163,7 @@ def test_candidate_contract_rejects_invalid_numeric_fields(field, value) -> None
         ("appearance_mode", "affine"),
         ("sampling_mode", "quality"),
         ("pixel_weight_mode", "gradient"),
+        ("observation_mapping_mode", "affine"),
     ],
 )
 def test_candidate_contract_rejects_invalid_identity_and_modes(field, value) -> None:

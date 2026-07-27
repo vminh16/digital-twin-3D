@@ -16,6 +16,9 @@ from bts_nvs.experiments.experiment import (
     validate_paired_wall_time_ratio,
     validate_peak_vram_mb,
 )
+from bts_nvs.experiments.observation_mapping_artifacts import (
+    validate_observation_mapping_artifact,
+)
 from bts_nvs.experiments.provenance import (
     canonical_json_sha256,
     load_json_artifact,
@@ -75,6 +78,14 @@ def validate_run_artifacts(
         experiment,
         config_sha256,
     )
+    if experiment.candidate_id == "E3-chair-observation-scale-v1":
+        if config.get("observation_mapping_mode") != "continuous-reprojection":
+            raise ValueError(
+                "config observation_mapping_mode does not match chair control"
+            )
+        validate_observation_mapping_artifact(
+            run / "initialization_diagnostics.json"
+        )
     del config
     _validate_provenance(run, manifest_sha256)
     summary = _load_summary(run / "summary.json", target_step)
@@ -626,6 +637,7 @@ def _reject_production_holdout_artifacts(run: Path) -> None:
     stale.extend(
         (
             run / "gaussian_diagnostics.json",
+            run / "initialization_diagnostics.json",
             run / "validation_renders",
             run / "diagnostic_filtered_renders",
             run / "snapshots",

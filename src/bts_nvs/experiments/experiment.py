@@ -20,7 +20,7 @@ COHORT_SCENE_IDS = (
 )
 ACTIVE_RESEARCH_SCENE_IDS = ("chair", "bonsai")
 MAX_PEAK_VRAM_MB = 23 * 1024
-MAX_PAIRED_WALL_TIME_RATIO = 3
+MAX_PAIRED_WALL_TIME_RATIO = 1.25
 
 
 class ExperimentStage(str, Enum):
@@ -89,6 +89,13 @@ class Experiment:
             raise ValueError("research stage is limited to chair and bonsai")
 
         candidate_settings(self.candidate_id)
+        if self.candidate_id == "E3-chair-observation-scale-v1" and (
+            self.scene_id != "chair"
+            or self.stage is not ExperimentStage.RESEARCH
+        ):
+            raise ValueError(
+                "E3 chair observation-scale control requires chair research"
+            )
         self._validate_authorization(
             "authorized_scene_winner", self.authorized_scene_winner
         )
