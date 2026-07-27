@@ -1,0 +1,238 @@
+{
+  "density_control": {
+    "event_count": 145,
+    "net_change": 979295,
+    "observed_net_added": 1445950,
+    "observed_net_removed": 466655
+  },
+  "diagnostic_only": true,
+  "image_count": 25,
+  "images": {
+    "frame_000020.jpg": {
+      "projected_radius_max": 88849.0,
+      "projected_radius_p50": 11.0,
+      "projected_radius_p95": 42.0,
+      "projected_radius_p99": 91.0,
+      "radius_above_threshold_count": 3513,
+      "visible_gaussians": 606907
+    },
+    "frame_000110.jpg": {
+      "projected_radius_max": 61231.0,
+      "projected_radius_p50": 11.0,
+      "projected_radius_p95": 43.0,
+      "projected_radius_p99": 98.0,
+      "radius_above_threshold_count": 3829,
+      "visible_gaussians": 595205
+    },
+    "frame_000190.jpg": {
+      "projected_radius_max": 28291.0,
+      "projected_radius_p50": 12.0,
+      "projected_radius_p95": 46.0,
+      "projected_radius_p99": 109.0,
+      "radius_above_threshold_count": 4511,
+      "visible_gaussians": 633416
+    },
+    "frame_000290.jpg": {
+      "projected_radius_max": 19712.0,
+      "projected_radius_p50": 11.0,
+      "projected_radius_p95": 54.0,
+      "projected_radius_p99": 114.0,
+      "radius_above_threshold_count": 4467,
+      "visible_gaussians": 588871
+    },
+    "frame_000340.jpg": {
+      "projected_radius_max": 58305.0,
+      "projected_radius_p50": 11.0,
+      "projected_radius_p95": 50.0,
+      "projected_radius_p99": 120.0,
+      "radius_above_threshold_count": 5122,
+      "visible_gaussians": 570426
+    },
+    "frame_000390.jpg": {
+      "projected_radius_max": 127214.0,
+      "projected_radius_p50": 11.0,
+      "projected_radius_p95": 48.0,
+      "projected_radius_p99": 108.0,
+      "radius_above_threshold_count": 4309,
+      "visible_gaussians": 588153
+    },
+    "frame_000420.jpg": {
+      "projected_radius_max": 106334.0,
+      "projected_radius_p50": 12.0,
+      "projected_radius_p95": 45.0,
+      "projected_radius_p99": 112.0,
+      "radius_above_threshold_count": 4256,
+      "visible_gaussians": 527669
+    },
+    "frame_000430.jpg": {
+      "projected_radius_max": 322278.0,
+      "projected_radius_p50": 12.0,
+      "projected_radius_p95": 45.0,
+      "projected_radius_p99": 113.0,
+      "radius_above_threshold_count": 4260,
+      "visible_gaussians": 513794
+    },
+    "frame_000460.jpg": {
+      "projected_radius_max": 99640.0,
+      "projected_radius_p50": 12.0,
+      "projected_radius_p95": 48.0,
+      "projected_radius_p99": 122.0,
+      "radius_above_threshold_count": 4234,
+      "visible_gaussians": 458970
+    },
+    "frame_000490.jpg": {
+      "projected_radius_max": 43651.0,
+      "projected_radius_p50": 11.0,
+      "projected_radius_p95": 51.0,
+      "projected_radius_p99": 128.0,
+      "radius_above_threshold_count": 3883,
+      "visible_gaussians": 392444
+    },
+    "frame_000540.jpg": {
+      "projected_radius_max": 37178.0,
+      "projected_radius_p50": 12.0,
+      "projected_radius_p95": 46.0,
+      "projected_radius_p99": 120.0,
+      "radius_above_threshold_count": 3633,
+      "visible_gaussians": 403431
+    },
+    "frame_000580.jpg": {
+      "projected_radius_max": 29245.0,
+      "projected_radius_p50": 12.0,
+      "projected_radius_p95": 42.0,
+      "projected_radius_p99": 102.0,
+      "radius_above_threshold_count": 3197,
+      "visible_gaussians": 450903
+    },
+    "frame_000620.jpg": {
+      "projected_radius_max": 16383.0,
+      "projected_radius_p50": 12.0,
+      "projected_radius_p95": 42.0,
+      "projected_radius_p99": 103.0,
+      "radius_above_threshold_count": 3239,
+      "visible_gaussians": 445553
+    },
+    "frame_000650.jpg": {
+      "projected_radius_max": 50712.0,
+      "projected_radius_p50": 12.0,
+      "projected_radius_p95": 42.0,
+      "projected_radius_p99": 105.0,
+      "radius_above_threshold_count": 3460,
+      "visible_gaussians": 479401
+    },
+    "frame_000680.jpg": {
+      "projected_radius_max": 45834.0,
+      "projected_radius_p50": 12.0,
+      "projected_radius_p95": 41.0,
+      "projected_radius_p99": 101.0,
+      "radius_above_threshold_count": 3597,
+      "visible_gaussians": 531429
+    },
+    "frame_000720.jpg": {
+      "projected_radius_max": 23617.0,
+      "projected_radius_p50": 11.0,
+      "projected_radius_p95": 41.0,
+      "projected_radius_p99": 96.0,
+      "radius_above_threshold_count": 3556,
+      "visible_gaussians": 569293
+    },
+    "frame_000850.jpg": {
+      "projected_radius_max": 33582.0,
+      "projected_radius_p50": 12.0,
+      "projected_radius_p95": 47.0,
+      "projected_radius_p99": 118.0,
+      "radius_above_threshold_count": 4131,
+      "visible_gaussians": 466521
+    },
+    "frame_000940.jpg": {
+      "projected_radius_max": 113063.0,
+      "projected_radius_p50": 14.0,
+      "projected_radius_p95": 51.0,
+      "projected_radius_p99": 116.0,
+      "radius_above_threshold_count": 3881,
+      "visible_gaussians": 455218
+    },
+    "frame_001040.jpg": {
+      "projected_radius_max": 25331.0,
+      "projected_radius_p50": 18.0,
+      "projected_radius_p95": 63.0,
+      "projected_radius_p99": 142.0,
+      "radius_above_threshold_count": 4255,
+      "visible_gaussians": 361932
+    },
+    "frame_001260.jpg": {
+      "projected_radius_max": 18931.0,
+      "projected_radius_p50": 20.0,
+      "projected_radius_p95": 72.0,
+      "projected_radius_p99": 157.0,
+      "radius_above_threshold_count": 4105,
+      "visible_gaussians": 290939
+    },
+    "frame_001310.jpg": {
+      "projected_radius_max": 53284.0,
+      "projected_radius_p50": 14.0,
+      "projected_radius_p95": 57.0,
+      "projected_radius_p99": 133.0,
+      "radius_above_threshold_count": 3762,
+      "visible_gaussians": 358919
+    },
+    "frame_001600.jpg": {
+      "projected_radius_max": 19898.0,
+      "projected_radius_p50": 12.0,
+      "projected_radius_p95": 45.0,
+      "projected_radius_p99": 109.0,
+      "radius_above_threshold_count": 3801,
+      "visible_gaussians": 475429
+    },
+    "frame_001760.jpg": {
+      "projected_radius_max": 26770.0,
+      "projected_radius_p50": 11.0,
+      "projected_radius_p95": 46.0,
+      "projected_radius_p99": 115.0,
+      "radius_above_threshold_count": 3594,
+      "visible_gaussians": 422867
+    },
+    "frame_002430.jpg": {
+      "projected_radius_max": 36905.0,
+      "projected_radius_p50": 14.0,
+      "projected_radius_p95": 62.0,
+      "projected_radius_p99": 162.0,
+      "radius_above_threshold_count": 4564,
+      "visible_gaussians": 319244
+    },
+    "frame_002480.jpg": {
+      "projected_radius_max": 22745.0,
+      "projected_radius_p50": 16.0,
+      "projected_radius_p95": 58.0,
+      "projected_radius_p99": 141.0,
+      "radius_above_threshold_count": 3648,
+      "visible_gaussians": 314191
+    }
+  },
+  "projected_radius": {
+    "projected_radius_max": 322278.0,
+    "projected_radius_p95": 72.0,
+    "projected_radius_p99": 162.0,
+    "quantile_aggregation": "max_of_per_view_quantile_v1",
+    "radius_above_threshold_count": 21088,
+    "radius_above_threshold_opacity_fraction": 0.021615879610180855,
+    "radius_above_threshold_opacity_mass": 6755.533203125,
+    "radius_threshold_pixels": 128.0
+  },
+  "scale_opacity": {
+    "opacity_max": 1.0,
+    "opacity_p50": 0.14935295283794403,
+    "opacity_p95": 0.9645853638648987,
+    "opacity_p99": 0.9956124424934387,
+    "scale3d_max": 4.218125343322754,
+    "scale3d_p50": 0.0053674145601689816,
+    "scale3d_p95": 0.0173433069139719,
+    "scale3d_p99": 0.051888998597860336,
+    "scale_above_threshold_count": 4201,
+    "scale_above_threshold_opacity_fraction": 0.004511093255132437,
+    "scale_above_threshold_opacity_mass": 1409.835693359375,
+    "scale_threshold": 0.1
+  },
+  "scene_id": "bonsai",
+  "schema_version": 1
+}

@@ -1,0 +1,151 @@
+{
+  "algorithm": "nearest_train_tertiles_v1",
+  "holdout_algorithm": "targeted_pose_guard2_v3",
+  "holdout_manifest_sha256": "62348b814d9252f51e1ea4d355530c45d88291fa7a214db0f472a5381e2c7853",
+  "holdout_sha256": "358bd651db8f238c56dd848b010197cacaa1dfeff643eaaaff18e45ee53ebfed",
+  "image_count": 20,
+  "images": {
+    "frame_000020.jpg": {
+      "center_distance": 0.024538160895471464,
+      "nearest_train_image_name": "frame_000005.jpg",
+      "pose_distance": 0.02850194170363311,
+      "rotation_angle_deg": 2.8539221818763836,
+      "stratum": "easy"
+    },
+    "frame_000110.jpg": {
+      "center_distance": 0.08397506488687378,
+      "nearest_train_image_name": "frame_000100.jpg",
+      "pose_distance": 0.09089121711729917,
+      "rotation_angle_deg": 4.979629605906276,
+      "stratum": "easy"
+    },
+    "frame_000170.jpg": {
+      "center_distance": 0.1912769787936964,
+      "nearest_train_image_name": "frame_000185.jpg",
+      "pose_distance": 0.20494260052519586,
+      "rotation_angle_deg": 9.839247646679592,
+      "stratum": "hard"
+    },
+    "frame_000215.jpg": {
+      "center_distance": 0.1370682818259453,
+      "nearest_train_image_name": "frame_000225.jpg",
+      "pose_distance": 0.14672361651901836,
+      "rotation_angle_deg": 6.951840979012595,
+      "stratum": "medium"
+    },
+    "frame_000260.jpg": {
+      "center_distance": 0.20393796443677656,
+      "nearest_train_image_name": "frame_000245.jpg",
+      "pose_distance": 0.2177730510546594,
+      "rotation_angle_deg": 9.961262364875655,
+      "stratum": "hard"
+    },
+    "frame_000315.jpg": {
+      "center_distance": 0.18517931391553716,
+      "nearest_train_image_name": "frame_000300.jpg",
+      "pose_distance": 0.1988783533108722,
+      "rotation_angle_deg": 9.863308364641227,
+      "stratum": "hard"
+    },
+    "frame_000350.jpg": {
+      "center_distance": 0.1002514354690776,
+      "nearest_train_image_name": "frame_000340.jpg",
+      "pose_distance": 0.10771219990935015,
+      "rotation_angle_deg": 5.37175039699624,
+      "stratum": "easy"
+    },
+    "frame_000390.jpg": {
+      "center_distance": 0.24754964484899136,
+      "nearest_train_image_name": "frame_000370.jpg",
+      "pose_distance": 0.26320906387528736,
+      "rotation_angle_deg": 11.274781698933126,
+      "stratum": "hard"
+    },
+    "frame_000435.jpg": {
+      "center_distance": 0.11889086173258451,
+      "nearest_train_image_name": "frame_000445.jpg",
+      "pose_distance": 0.1263187887773977,
+      "rotation_angle_deg": 5.348107472265483,
+      "stratum": "medium"
+    },
+    "frame_000475.jpg": {
+      "center_distance": 0.0906457259933709,
+      "nearest_train_image_name": "frame_000485.jpg",
+      "pose_distance": 0.0981835455123839,
+      "rotation_angle_deg": 5.427230053689362,
+      "stratum": "easy"
+    },
+    "frame_000525.jpg": {
+      "center_distance": 0.12978019014336833,
+      "nearest_train_image_name": "frame_000515.jpg",
+      "pose_distance": 0.13703957575779888,
+      "rotation_angle_deg": 5.226757642389992,
+      "stratum": "medium"
+    },
+    "frame_000700.jpg": {
+      "center_distance": 0.09258329229377062,
+      "nearest_train_image_name": "frame_000710.jpg",
+      "pose_distance": 0.10255302116286778,
+      "rotation_angle_deg": 7.178204785749956,
+      "stratum": "easy"
+    },
+    "frame_000765.jpg": {
+      "center_distance": 0.11026727151619854,
+      "nearest_train_image_name": "frame_000755.jpg",
+      "pose_distance": 0.12240562974323613,
+      "rotation_angle_deg": 8.739617923467057,
+      "stratum": "easy"
+    },
+    "frame_000870.jpg": {
+      "center_distance": 0.1666954833023226,
+      "nearest_train_image_name": "frame_000850.jpg",
+      "pose_distance": 0.19055930719894154,
+      "rotation_angle_deg": 17.18195320556565,
+      "stratum": "hard"
+    },
+    "frame_000885.jpg": {
+      "center_distance": 0.1555977336856953,
+      "nearest_train_image_name": "frame_000900.jpg",
+      "pose_distance": 0.17228666322264996,
+      "rotation_angle_deg": 12.01602926660737,
+      "stratum": "hard"
+    },
+    "frame_000955.jpg": {
+      "center_distance": 0.12076073914169262,
+      "nearest_train_image_name": "frame_000965.jpg",
+      "pose_distance": 0.1282165124127927,
+      "rotation_angle_deg": 5.368156755192053,
+      "stratum": "medium"
+    },
+    "frame_001020.jpg": {
+      "center_distance": 0.10899616500204302,
+      "nearest_train_image_name": "frame_001010.jpg",
+      "pose_distance": 0.12285579654165046,
+      "rotation_angle_deg": 9.97893470851736,
+      "stratum": "easy"
+    },
+    "frame_001095.jpg": {
+      "center_distance": 0.13074452323885657,
+      "nearest_train_image_name": "frame_001105.jpg",
+      "pose_distance": 0.14647469487835715,
+      "rotation_angle_deg": 11.325723580440423,
+      "stratum": "medium"
+    },
+    "frame_001150.jpg": {
+      "center_distance": 0.13694183939105192,
+      "nearest_train_image_name": "frame_001160.jpg",
+      "pose_distance": 0.15055858907530242,
+      "rotation_angle_deg": 9.804059772660352,
+      "stratum": "medium"
+    },
+    "frame_001185.jpg": {
+      "center_distance": 0.13554005398235347,
+      "nearest_train_image_name": "frame_001195.jpg",
+      "pose_distance": 0.14937821981695906,
+      "rotation_angle_deg": 9.963479400916029,
+      "stratum": "medium"
+    }
+  },
+  "scene_id": "chair",
+  "schema_version": 1
+}
