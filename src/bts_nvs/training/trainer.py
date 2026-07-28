@@ -18,10 +18,11 @@ from PIL import Image
 
 from bts_nvs.cameras.poses import camera_center_from_world_to_camera
 from bts_nvs.data.dataset import SceneDataset
+from bts_nvs.models.density_regularization import DensityRegularizer
 from bts_nvs.models.gaussian_parameters import GaussianParameters
 from bts_nvs.models.loss import JointLoss
 from bts_nvs.models.optimizer import setup_mean_scheduler, setup_optimizers
-from bts_nvs.rendering.density_strategy import GsplatStrategy
+from bts_nvs.rendering.density_strategy_factory import build_density_strategy
 from bts_nvs.rendering.gsplat_renderer import render_gaussians
 from bts_nvs.training.backend_qualification import (
     AUDIT_STEPS,
@@ -375,19 +376,13 @@ class Trainer:
         self.scheduler = setup_mean_scheduler(self.optimizers, max_steps=self.max_steps)
 
         # Setup Density Strategy matching workspace signature
-        self.strategy = GsplatStrategy(
+        self.strategy = build_density_strategy(
             self.gaussians,
             self.optimizers,
-            prune_opa=self.config.get("prune_opa", 0.005),
-            grow_grad2d=self.config.get("grow_grad2d", 0.0002),
-            grow_scale3d=self.config.get("grow_scale3d", 0.01),
-            refine_start_step=self.config.get("refine_start_step", 500),
-            refine_stop_step=self.config.get("refine_stop_step", 15000),
-            refine_every=self.config.get("refine_every", 100),
-            reset_every=self.config.get("reset_every", 3000),
-            absgrad=self.config.get("absgrad", False),
+            self.config,
         )
         self.strategy_state = self.strategy.initialize_state(scene_scale=1.0)
+        self.density_regularizer = DensityRegularizer(self.config)
 
         # Setup Differentiable Loss Module
         self.loss_fn = JointLoss(
@@ -677,12 +672,16 @@ class Trainer:
 
             # 3. Compute loss
             with self.precision.autocast():
-                loss = self.loss_fn(
+                image_loss = self.loss_fn(
                     result.rgb,
                     rgb_gt,
                     mask,
                     pixel_weights=device_sample.loss_weight,
                 )
+                density_regularization_loss = self.density_regularizer(
+                    self.gaussians
+                )
+                loss = image_loss + density_regularization_loss
             if not torch.isfinite(loss):
                 raise FloatingPointError(
                     f"non-finite loss at completed step {completed_step}"
@@ -814,6 +813,8 @@ class Trainer:
             metrics = {
                 "step": completed_step,
                 "loss": loss.item(),
+                "image_loss": image_loss.item(),
+                "density_regularization_loss": density_regularization_loss.item(),
                 "num_gaussians": self.gaussians.num_gaussians,
                 "lr_means": self.scheduler.get_last_lr()[0],
                 "sample_index": sample_idx,

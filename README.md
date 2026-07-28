@@ -51,17 +51,23 @@ freeze. Authority và execution plan:
 - [active execution plan](docs/superpowers/plans/2026-07-27-chair-bonsai-deep-optimization.md)
 - [closed-phase summary](docs/superpowers/history/2026-07-27-optimization-phase-closure.md)
 
-Harness mới giữ lịch optimizer 30k nhưng dừng research ở 15k, dùng internal
+Research thông thường giữ lịch optimizer 30k nhưng dừng ở 15k, dùng internal
 holdout và không lưu checkpoint:
 
 ```bash
 bash scripts/run_chair_bonsai_research.sh <chair|bonsai> <candidate-id>
 ```
 
-Các candidate E3 trong spec chưa executable cho tới khi implementation và test
-được thêm vào registry. Phase 1 targeted-holdout/diagnostic đã implement và
-qua CPU contract; cần bounded CUDA smoke trên L4 trước khi authorize GPU
-screen.
+Chair MCMC là ngoại lệ full-horizon vì relocation còn chạy tới 25k. Wrapper
+khóa candidate, cap 2M và rolling recovery 3k:
+
+```bash
+bash scripts/run_chair_mcmc_research.sh
+```
+
+Không cần chạy E3-30k trước. Chỉ chạy fresh E3-30k nếu MCMC-30k vượt rõ E3-15k
+lower-bound và cần paired confirmation để tách gain do phương pháp khỏi gain do
+thêm step.
 
 ## Cài đặt không dùng Docker
 

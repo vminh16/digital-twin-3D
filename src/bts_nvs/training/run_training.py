@@ -39,6 +39,9 @@ from bts_nvs.models.initialization import initialize_from_manifest
 from bts_nvs.models.optimizer import setup_optimizers
 from bts_nvs.evaluation.pose_strata import build_pose_strata, save_pose_strata
 from bts_nvs.experiments.candidates import candidate_training_overrides
+from bts_nvs.experiments.density_policies import (
+    is_full_horizon_research_candidate,
+)
 from bts_nvs.experiments.experiment import (
     ACTIVE_RESEARCH_SCENE_IDS,
     COHORT_SCENE_IDS,
@@ -63,6 +66,7 @@ from bts_nvs.training.resources import (
     require_no_swap,
 )
 from bts_nvs.training.precision import TrainingPrecision
+from bts_nvs.training.mcmc_preflight import run_mcmc_density_preflight
 
 
 CONFIRMATION_SNAPSHOT_REPORTS = (
@@ -393,6 +397,27 @@ def validate_generic_experiment_args(args) -> None:
         return
 
     if experiment.stage is ExperimentStage.RESEARCH:
+        full_horizon = is_full_horizon_research_candidate(candidate_id)
+        expected_recovery = Path(args.output_dir) / "checkpoints" / "recovery.pt"
+        recovery_is_valid = args.resume is None or (
+            Path(args.resume).resolve() == expected_recovery.resolve()
+        )
+        if full_horizon:
+            if (
+                not common_runtime
+                or args.max_steps != 30_000
+                or args.stop_step != 30_000
+                or not args.internal_holdout
+                or args.checkpoint_every != 3_000
+                or not args.rolling_checkpoint
+                or not recovery_is_valid
+            ):
+                raise ValueError(
+                    "full-horizon research requires a factor-1, seed-0, "
+                    "30000-step internal-holdout run with cached images, pinned "
+                    "transfer, and 3000-step rolling recovery"
+                )
+            return
         if (
             not common_runtime
             or args.max_steps != 30_000
@@ -578,6 +603,9 @@ def should_save_checkpoints(args) -> bool:
         return args.experiment_stage in (
             ExperimentStage.CONFIRM.value,
             ExperimentStage.PRODUCTION.value,
+        ) or (
+            args.experiment_stage == ExperimentStage.RESEARCH.value
+            and is_full_horizon_research_candidate(args.candidate_id)
         )
     return (
         not args.profile_input
@@ -1110,6 +1138,8 @@ def main():
         else None
     )
     run_cuda_preflight(args.optimizer_backend, args.precision)
+    if is_full_horizon_research_candidate(args.candidate_id):
+        run_mcmc_density_preflight(args.optimizer_backend)
 
     scene_root = Path(args.scene_dir)
     manifest_dir = (

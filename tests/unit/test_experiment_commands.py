@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from bts_nvs.experiments.commands import build_training_command
+from bts_nvs.experiments.density_policies import MCMC_CANDIDATE_ID
 from bts_nvs.experiments.experiment import Experiment, ExperimentStage
 
 
@@ -123,6 +124,37 @@ def test_research_command_uses_30k_schedule_stopped_at_15k_without_checkpoint(
     assert "--checkpoint_every" not in options
     assert "--rolling_checkpoint" not in options
     assert "--resume" not in options
+
+
+def test_mcmc_research_runs_full_horizon_with_rolling_recovery(
+    tmp_path: Path,
+) -> None:
+    paths = _paths(tmp_path)
+    experiment = Experiment(
+        stage=ExperimentStage.RESEARCH,
+        scene_id="chair",
+        candidate_id=MCMC_CANDIDATE_ID,
+    )
+    recovery = paths["output_dir"] / "checkpoints" / "recovery.pt"
+
+    fresh = _option_values(_build(tmp_path, experiment, stop_step=30_000))
+    resumed = _option_values(
+        _build(
+            tmp_path,
+            experiment,
+            stop_step=30_000,
+            resume_path=recovery,
+        )
+    )
+
+    assert fresh["--max_steps"] == "30000"
+    assert fresh["--stop_step"] == "30000"
+    assert fresh["--internal_holdout"] is True
+    assert fresh["--checkpoint_every"] == "3000"
+    assert fresh["--rolling_checkpoint"] is True
+    assert "--authorized_candidate_id" not in fresh
+    assert "--resume" not in fresh
+    assert resumed["--resume"] == str(recovery)
 
 
 def test_confirmation_15k_command_uses_30k_schedule_and_rolling_recovery(

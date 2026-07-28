@@ -10,6 +10,10 @@ import yaml
 from bts_nvs.evaluation.experiment_report import build_experiment_report
 from bts_nvs.experiments.artifacts import append_failure, validate_run_artifacts
 from bts_nvs.experiments.candidates import candidate_settings
+from bts_nvs.experiments.density_policies import (
+    MCMC_CANDIDATE_ID,
+    is_full_horizon_research_candidate,
+)
 from bts_nvs.experiments.experiment import Experiment, ExperimentStage
 from bts_nvs.training.checkpoint import save_checkpoint
 from bts_nvs.training.trainer import compute_config_sha256
@@ -250,7 +254,10 @@ def _write_run(
                     diagnostic_renders / Path(name).with_suffix(".png").name
                 ).write_bytes(b"")
 
-    if experiment.stage in (ExperimentStage.CONFIRM, ExperimentStage.PRODUCTION):
+    if experiment.stage in (
+        ExperimentStage.CONFIRM,
+        ExperimentStage.PRODUCTION,
+    ) or is_full_horizon_research_candidate(experiment.candidate_id):
         save_checkpoint(
             run / "checkpoints" / "recovery.pt",
             target_step,
@@ -322,11 +329,31 @@ def test_research_validation_accepts_15k_evidence_without_model_checkpoint(
         result.integrity_passed = False
 
 
+def test_mcmc_research_validation_requires_30k_and_recovery_checkpoint(
+    tmp_path: Path,
+) -> None:
+    experiment = Experiment(
+        ExperimentStage.RESEARCH,
+        "chair",
+        MCMC_CANDIDATE_ID,
+    )
+    run, config_sha256 = _write_run(tmp_path, experiment, step=30_000)
+
+    result = _validate(run, experiment, config_sha256, step=30_000)
+
+    assert result.experiment_report is not None
+    assert result.experiment_report["step"] == 30_000
+    assert (run / "checkpoints" / "recovery.pt").is_file()
+    with pytest.raises(ValueError, match="research step"):
+        _validate(run, experiment, config_sha256, step=15_000)
+
+
 @pytest.mark.parametrize(
     "candidate_id",
     (
         "E3-chair-observation-scale-v1",
         "E4-chair-observation-scale-absgrad-v1",
+        MCMC_CANDIDATE_ID,
     ),
 )
 def test_chair_observation_candidates_require_improving_initialization_diagnostics(
@@ -338,13 +365,14 @@ def test_chair_observation_candidates_require_improving_initialization_diagnosti
         "chair",
         candidate_id,
     )
-    run, config_sha256 = _write_run(tmp_path, experiment, step=15_000)
+    step = 30_000 if candidate_id == MCMC_CANDIDATE_ID else 15_000
+    run, config_sha256 = _write_run(tmp_path, experiment, step=step)
 
     assert _validate(
         run,
         experiment,
         config_sha256,
-        step=15_000,
+        step=step,
     ).experiment_report is not None
 
     diagnostics_path = run / "initialization_diagnostics.json"
@@ -352,11 +380,11 @@ def test_chair_observation_candidates_require_improving_initialization_diagnosti
     diagnostics["selected_color_mae_mean"] = diagnostics["legacy_color_mae_mean"]
     _write_json(diagnostics_path, diagnostics)
     with pytest.raises(ValueError, match="initialization.*color"):
-        _validate(run, experiment, config_sha256, step=15_000)
+        _validate(run, experiment, config_sha256, step=step)
 
     diagnostics_path.unlink()
     with pytest.raises(FileNotFoundError, match="initialization_diagnostics"):
-        _validate(run, experiment, config_sha256, step=15_000)
+        _validate(run, experiment, config_sha256, step=step)
 
 
 def test_production_has_an_explicit_minimal_contract_without_holdout_reports(

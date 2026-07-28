@@ -15,6 +15,7 @@ from bts_nvs.experiments.experiment import (
     validate_paired_wall_time_ratio,
     validate_peak_vram_mb,
 )
+from bts_nvs.experiments.density_policies import MCMC_CANDIDATE_ID
 
 
 def test_schema_locks_cohort_stages_horizons_and_resource_limits() -> None:
@@ -258,6 +259,7 @@ def test_research_stage_is_locked_to_the_active_auxiliary_scenes() -> None:
     (
         "E3-chair-observation-scale-v1",
         "E4-chair-observation-scale-absgrad-v1",
+        MCMC_CANDIDATE_ID,
     ),
 )
 def test_chair_observation_scale_candidates_are_research_only(

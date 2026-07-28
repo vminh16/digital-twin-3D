@@ -228,8 +228,16 @@ regularization, improving robustness to initialization
 `gsplat 1.4.0` contains `MCMCStrategy`, but a faithful candidate also changes
 loss regularization, optimizer updates and the entire density policy.
 
-**Decision:** both are valid fallback families, but neither is the minimum
-causal change for the first screen.
+After E4 was rejected, MCMC became the next compute-aware chair candidate.
+`E5-chair-observation-scale-mcmc-v1` uses the paper configuration applicable
+to Deep Blending-style evaluation: cap 2M from the E3 final population,
+noise LR `5e5`, opacity regularization `0.001`, scale regularization `0.01`,
+and relocation through 25k. It therefore requires a full 30k run; a 15k
+selection gate would not test the complete method.
+
+E3-30k is conditional rather than upfront: E5-30k must first beat the existing
+E3-15k evidence clearly. Only then is the paired E3-30k control worth its
+compute.
 
 ### 3.5 Sparse depth, 2DGS and planar geometry
 

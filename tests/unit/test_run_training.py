@@ -10,6 +10,7 @@ import torch
 
 import bts_nvs.training.run_training as run_training
 from bts_nvs.data.sparse_subset import ObservationMappingDiagnostics
+from bts_nvs.experiments.density_policies import MCMC_CANDIDATE_ID
 
 
 def _args(**changes):
@@ -757,6 +758,39 @@ def test_generic_research_locks_30k_schedule_stopped_at_15k_without_checkpoint()
         with pytest.raises(ValueError, match="research"):
             run_training.validate_generic_experiment_args(
                 _args(**(vars(research) | change))
+            )
+
+
+def test_mcmc_research_requires_full_horizon_and_rolling_recovery(tmp_path):
+    output = tmp_path / "mcmc"
+    valid = _generic_args(
+        "research",
+        MCMC_CANDIDATE_ID,
+        output_dir=str(output),
+        max_steps=30_000,
+        stop_step=30_000,
+        checkpoint_every=3_000,
+        rolling_checkpoint=True,
+    )
+
+    run_training.validate_generic_experiment_args(valid)
+    assert run_training.training_target_step(valid) == 30_000
+    assert run_training.should_save_checkpoints(valid) is True
+
+    recovery = output / "checkpoints" / "recovery.pt"
+    resumed = _args(**(vars(valid) | {"resume": str(recovery)}))
+    run_training.validate_generic_experiment_args(resumed)
+
+    for change in (
+        {"stop_step": 15_000},
+        {"checkpoint_every": 6_000},
+        {"rolling_checkpoint": False},
+        {"internal_holdout": False},
+        {"resume": str(output / "checkpoints" / "other.pt")},
+    ):
+        with pytest.raises(ValueError, match="full-horizon research"):
+            run_training.validate_generic_experiment_args(
+                _args(**(vars(valid) | change))
             )
 
 

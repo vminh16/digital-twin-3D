@@ -140,6 +140,27 @@ Execution:
 7. Register and run `E4-chair-observation-scale-absgrad-v1` against E3 only if
    the mapping control passes but a giant-radius sentinel failure remains.
 
+E3 repaired the initialization defect. E4 was then rejected at 15k because it
+fit train cameras better while reducing holdout Score50 by `1.4725`, increasing
+spurious edges and growing the final population by 65%.
+
+### Phase 2A2 — chair MCMC full horizon
+
+1. Register `E5-chair-observation-scale-mcmc-v1` as chair/research-only.
+2. Retain E3 observation mapping and local-Laplacian supervision.
+3. Replace DefaultStrategy with MCMC, cap at 2M, noise LR `5e5`, opacity
+   regularization `0.001`, scale regularization `0.01`, and relocation through
+   25k.
+4. Run E5 fresh to 30k with the same targeted holdout and rolling recovery
+   every 3k.
+5. Compare E5-30k first against the existing E3-15k lower bound. If it does not
+   gain at least `+0.75` mean Score50 while keeping LPIPS, hard stratum and the
+   870/885 tail pair non-regressing, reject it without running E3-30k.
+6. Only after that lower-bound gate passes, spend a fresh E3-30k run for the
+   paired causal comparison required before MVP authorization.
+7. On the paired 30k comparison, require `+0.5` Score50 at up to `1.5x` wall
+   time, or `+1.0` at `1.5x–2.0x`; reject above `2.0x`.
+
 ### Phase 2B — bonsai
 
 1. Apply the same paired-gate correction and pin sentinels
@@ -166,9 +187,8 @@ Pixel-GS to this first screen.
 
 ### Phase 2 stop and compute policy
 
-- Minimum initial screen: chair observation mapping and bonsai c2f:
-  `2 x 15k = 30k` scene-steps, about 62 minutes of estimated L4 training plus
-  validation.
+- Chair MCMC spends 30k scene-steps first. E3-30k is conditional, saving 30k
+  when MCMC cannot beat the already available E3-15k lower bound.
 - Conditional chair AbsGrad or bonsai sparse depth adds one 15k run only after
   its preceding causal gate passes.
 - Stop a ladder immediately after a failed causal gate; do not compensate by
@@ -178,7 +198,8 @@ Pixel-GS to this first screen.
 
 ## Phase 3 — confirmation
 
-For each selected scene winner:
+For each selected scene winner, except that E5 uses its full-horizon research
+run as the candidate side of the conditional paired comparison:
 
 - train fresh incumbent and candidate at 30k on the same targeted holdout;
 - preserve 15k and 30k reports;
@@ -203,10 +224,9 @@ At most two candidates proceed.
 Decision path before full-data production:
 
 ```text
-2 required mechanism screens x 15k
-up to 2 conditional screens x 15k
-2 paired confirmation runs x 30k
-= 90k to 120k new scene-steps to select winners
+chair E5 lower-bound gate: 30k
+conditional chair E3 paired control: +30k
+bonsai ladder remains separately gated
 ```
 
 If both winners pass, two fresh full-data production runs add 60k steps, for a

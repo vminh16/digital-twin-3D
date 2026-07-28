@@ -1,7 +1,7 @@
 # Chair and bonsai deep-optimization authority
 
-**Status:** ACTIVE — Phase 2A chair control validated; chair E4 AbsGrad
-implemented locally, paired L4 run pending.
+**Status:** ACTIVE — chair E4 rejected; compute-aware MCMC full-horizon
+candidate implemented, L4 run pending.
 
 **Plan ID:** `scene-opt-v3-chair-bonsai`
 
@@ -83,6 +83,18 @@ Candidate ladder:
    - run only if giant-radius sentinel failure remains.
    - allow only `stage=research, scene=chair`; confirm and production reject
      this ID.
+   - paired 15k evidence rejects it: holdout Score50 `-1.4725`, PSNR
+     `-0.9794 dB`, SSIM `-0.02293`, with 2/20 Score wins despite lower train
+     loss and 65% more final Gaussians.
+3. `E5-chair-observation-scale-mcmc-v1` — implemented full-horizon research
+   candidate.
+   - inherit E3 observation mapping and local-Laplacian supervision;
+   - replace DefaultStrategy with gsplat MCMC relocation/SGLD;
+   - cap at 2M Gaussians, use noise LR `5e5`, relocate through step 25k;
+   - add opacity regularization `0.001` and scale regularization `0.01`;
+   - require a fresh 30k internal-holdout run with rolling recovery every 3k;
+   - allow only `stage=research, scene=chair`; confirm and production reject
+     this ID until a new decision artifact authorizes a later candidate.
 
 Exact Pixel-GS is a second-line method. An ellipse-area or tile-count proxy is
 not allowed to use the Pixel-GS name because current `gsplat` does not expose
@@ -134,14 +146,24 @@ The 30k schedule with a 15k stop preserves the production learning-rate
 trajectory. It replaces the old practice of setting `max_steps=7000`, which
 made a screen follow a different means-LR schedule from production.
 
-The only operational wrapper is:
+The operational wrappers are:
 
 ```bash
 bash scripts/run_chair_bonsai_research.sh <chair|bonsai> <candidate-id>
+bash scripts/run_chair_mcmc_research.sh
 ```
 
-Reserved E3 candidate IDs must fail before GPU allocation until their code,
-contracts and tests are merged into the registry.
+The MCMC wrapper is an explicit exception to the 15k research runtime:
+
+```text
+candidate       = E5-chair-observation-scale-mcmc-v1
+stop_step       = 30000
+checkpoint      = rolling recovery every 3000
+Gaussian cap    = 2000000
+```
+
+The exception is necessary because its relocation policy remains active to
+25k. It must not relax the 15k/no-checkpoint contract for other candidates.
 
 ## 5. Validation design
 
@@ -195,7 +217,19 @@ Mean improvement cannot override a failed tail gate.
 
 ## 6. Step and production policy
 
-- 15k research evidence selects mechanisms only.
+- 15k research evidence selects ordinary mechanisms only. E5 MCMC requires
+  30k because its transition policy remains active after 15k.
+- E3-30k is not an upfront prerequisite. First compare E5-30k against the
+  existing E3-15k lower bound. If E5 does not win clearly, reject it without
+  spending a fresh E3-30k run.
+- The lower-bound gate means `Delta Score50 >= +0.75`, mean LPIPS no worse,
+  hard-stratum Score50 no worse, and no regression on the 870/885 tail pair.
+- If E5 clears that lower-bound gate, a fresh E3-30k paired control becomes
+  mandatory before attributing the gain to MCMC or authorizing an MVP.
+- The old `1.25x` screen-time rule is not applied across a 30k-vs-15k
+  comparison. On the eventual paired 30k comparison: up to `1.5x` wall time
+  requires at least `+0.5` Score50; `1.5x–2.0x` requires at least `+1.0`;
+  above `2.0x` is rejected for this deadline.
 - A winner receives a fresh paired 30k internal-holdout confirmation.
 - Production is a separate fresh 30k full-data run with no internal holdout.
 - A 30k winner may receive one explicit 5–10k low-LR polish experiment only
@@ -209,13 +243,12 @@ Mean improvement cannot override a failed tail gate.
 ```text
 Phase 0  CLOSED  close old phases; add research stage and unified wrapper
 Phase 1  CLOSED  two complete L4 incumbent runs and reports validated
-Phase 2  PLANNED paired chair/bonsai mechanism screens
-Phase 3  PENDING paired 30k confirmation
+Phase 2A CLOSED   chair E3/E4 paired mechanism evidence
+Phase 2B ACTIVE   chair E5 MCMC full-horizon lower-bound gate
+Phase 3  PENDING  conditional fresh E3-30k paired confirmation
 Phase 4  PENDING full-data production, rerender and new submission assembly
 ```
 
-`E3-chair-observation-scale-v1` is executable only as a chair research control.
-All other Phase 2 candidate IDs remain reserved until their implementation,
-contracts and tests are merged. The former `E3-*-scale-guard-*` names are
-superseded and must not be registered. The detailed run order and stop gates
-are in the active execution plan.
+E3, E4 and E5 remain chair/research-only IDs. E5 is executable only through its
+locked full-horizon wrapper. The former `E3-*-scale-guard-*` names are
+superseded and must not be registered.

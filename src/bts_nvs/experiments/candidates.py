@@ -3,6 +3,10 @@ from __future__ import annotations
 from dataclasses import replace
 
 from bts_nvs.experiments.contracts import CandidateSettings
+from bts_nvs.experiments.density_policies import (
+    MCMC_CANDIDATE_ID,
+    density_policy_overrides,
+)
 
 
 CANDIDATE_IDS = (
@@ -14,12 +18,14 @@ CANDIDATE_IDS = (
     "E2-appearance-sh4-v1",
     "E3-chair-observation-scale-v1",
     "E4-chair-observation-scale-absgrad-v1",
+    MCMC_CANDIDATE_ID,
 )
 
 CHAIR_RESEARCH_CANDIDATE_IDS = frozenset(
     (
         "E3-chair-observation-scale-v1",
         "E4-chair-observation-scale-absgrad-v1",
+        MCMC_CANDIDATE_ID,
     )
 )
 
@@ -136,6 +142,13 @@ _CANDIDATES = {
         pixel_weight_mode="local-laplacian",
         observation_mapping_mode="continuous-reprojection",
     ),
+    MCMC_CANDIDATE_ID: replace(
+        _BASELINE,
+        candidate_id=MCMC_CANDIDATE_ID,
+        refine_stop_step=25_000,
+        pixel_weight_mode="local-laplacian",
+        observation_mapping_mode="continuous-reprojection",
+    ),
 }
 
 
@@ -151,4 +164,6 @@ def candidate_settings(candidate_id: str) -> CandidateSettings:
 def candidate_training_overrides(
     candidate_id: str,
 ) -> dict[str, bool | float | int | str]:
-    return candidate_settings(candidate_id).training_overrides()
+    overrides = candidate_settings(candidate_id).training_overrides()
+    overrides.update(density_policy_overrides(candidate_id))
+    return overrides

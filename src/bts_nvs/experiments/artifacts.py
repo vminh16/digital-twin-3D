@@ -11,6 +11,9 @@ import yaml
 
 from bts_nvs.evaluation.experiment_report import build_experiment_report
 from bts_nvs.experiments.candidates import candidate_settings
+from bts_nvs.experiments.density_policies import (
+    is_full_horizon_research_candidate,
+)
 from bts_nvs.experiments.experiment import (
     Experiment,
     ExperimentStage,
@@ -98,7 +101,7 @@ def validate_run_artifacts(
         raise ValueError("metrics final Gaussian count does not match summary")
     _validate_checkpoint_policy(
         run,
-        experiment.stage,
+        experiment,
         target_step,
         manifest_sha256,
         config_sha256,
@@ -217,8 +220,13 @@ def _validate_target_step(experiment: Experiment, step: int) -> None:
         if step not in (15_000, 30_000):
             raise ValueError("confirm step must be 15000 or 30000")
     elif experiment.stage is ExperimentStage.RESEARCH:
-        if step != 15_000:
-            raise ValueError("research step must be 15000")
+        expected = (
+            30_000
+            if is_full_horizon_research_candidate(experiment.candidate_id)
+            else 15_000
+        )
+        if step != expected:
+            raise ValueError(f"research step must be {expected}")
     elif step != experiment.horizon:
         raise ValueError(f"{experiment.stage.value} step must be {experiment.horizon}")
 
@@ -339,27 +347,32 @@ def _validate_metric_stream(path: Path, expected_step: int) -> tuple[int, int]:
 
 def _validate_checkpoint_policy(
     run: Path,
-    stage: ExperimentStage,
+    experiment: Experiment,
     step: int,
     manifest_sha256: str,
     config_sha256: str,
 ) -> None:
+    stage = experiment.stage
     model_paths = {
         path.relative_to(run)
         for path in run.rglob("*")
         if path.is_file() and path.suffix.lower() in _MODEL_SUFFIXES
     }
+    checkpointed_research = (
+        stage is ExperimentStage.RESEARCH
+        and is_full_horizon_research_candidate(experiment.candidate_id)
+    )
     if stage in (
         ExperimentStage.REFERENCE,
         ExperimentStage.SCREEN,
         ExperimentStage.RESEARCH,
-    ):
+    ) and not checkpointed_research:
         if model_paths:
             raise ValueError(f"{stage.value} must not contain model checkpoints")
         return
     if model_paths != {_RECOVERY_PATH}:
         raise ValueError(
-            "confirm/production must contain only checkpoints/recovery.pt"
+            "checkpointed runs must contain only checkpoints/recovery.pt"
         )
     validate_recovery_checkpoint(
         run / _RECOVERY_PATH,

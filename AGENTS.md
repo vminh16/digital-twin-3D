@@ -91,6 +91,12 @@ HCM0644 HCM0674 HCM0540 HCM0539 HCM0421 chair bonsai
   `E4-chair-observation-scale-absgrad-v1` đã được triển khai chỉ cho
   `chair/research`; confirm và production phải từ chối cả hai. Không được dùng
   tên trong docs để bypass preflight.
+- E4 đã bị paired holdout bác bỏ tại 15k. Candidate
+  `E5-chair-observation-scale-mcmc-v1` là ngoại lệ research full-horizon 30k:
+  cap 2M, relocation tới 25k, rolling recovery mỗi 3k và internal holdout.
+  Chạy bằng `scripts/run_chair_mcmc_research.sh`. E3-30k chỉ được chi compute
+  sau khi E5-30k vượt rõ lower-bound E3-15k; E5 vẫn bị cấm ở confirm/production
+  cho tới khi có decision artifact mới.
 
 ## Closed hybrid submission
 

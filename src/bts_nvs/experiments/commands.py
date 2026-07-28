@@ -4,6 +4,9 @@ import sys
 from pathlib import Path
 
 from bts_nvs.experiments.candidates import candidate_settings
+from bts_nvs.experiments.density_policies import (
+    is_full_horizon_research_candidate,
+)
 from bts_nvs.experiments.experiment import Experiment, ExperimentStage
 
 
@@ -33,7 +36,7 @@ def build_training_command(
 
     output = Path(output_dir)
     resume = None if resume_path is None else Path(resume_path)
-    _validate_stage_run(experiment.stage, stop_step, resume, output)
+    _validate_stage_run(experiment, stop_step, resume, output)
     candidate_id = candidate_settings(experiment.candidate_id).candidate_id
 
     command = [
@@ -62,11 +65,26 @@ def build_training_command(
     ]
     if experiment.stage is not ExperimentStage.PRODUCTION:
         command.append("--internal_holdout")
-    if experiment.stage in (ExperimentStage.CONFIRM, ExperimentStage.PRODUCTION):
+    rolling_recovery = experiment.stage in (
+        ExperimentStage.CONFIRM,
+        ExperimentStage.PRODUCTION,
+    ) or (
+        experiment.stage is ExperimentStage.RESEARCH
+        and is_full_horizon_research_candidate(experiment.candidate_id)
+    )
+    if rolling_recovery:
+        if experiment.stage in (
+            ExperimentStage.CONFIRM,
+            ExperimentStage.PRODUCTION,
+        ):
+            command.extend(
+                (
+                    "--authorized_candidate_id",
+                    candidate_id,
+                )
+            )
         command.extend(
             (
-                "--authorized_candidate_id",
-                candidate_id,
                 "--checkpoint_every",
                 "3000",
                 "--rolling_checkpoint",
@@ -100,16 +118,30 @@ def _validate_stop_step(stop_step: int) -> None:
 
 
 def _validate_stage_run(
-    stage: ExperimentStage,
+    experiment: Experiment,
     stop_step: int,
     resume_path: Path | None,
     output_dir: Path,
 ) -> None:
+    stage = experiment.stage
     if stage in (ExperimentStage.REFERENCE, ExperimentStage.SCREEN):
         if stop_step != 7_000 or resume_path is not None:
             raise ValueError(f"{stage.value} requires a fresh 7000-step run")
         return
     if stage is ExperimentStage.RESEARCH:
+        if is_full_horizon_research_candidate(experiment.candidate_id):
+            expected_recovery = output_dir / _RECOVERY_PATH
+            if stop_step != 30_000:
+                raise ValueError("full-horizon research requires stop_step 30000")
+            if resume_path is not None and (
+                resume_path.resolve(strict=False)
+                != expected_recovery.resolve(strict=False)
+            ):
+                raise ValueError(
+                    "full-horizon research resume_path must be "
+                    "output_dir/checkpoints/recovery.pt"
+                )
+            return
         if stop_step != 15_000 or resume_path is not None:
             raise ValueError(
                 "research requires a fresh 15000-step run under the 30000-step schedule"

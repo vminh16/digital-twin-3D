@@ -10,6 +10,7 @@ from bts_nvs.experiments.candidates import (
     candidate_training_overrides,
 )
 from bts_nvs.experiments.contracts import CandidateSettings
+from bts_nvs.experiments.density_policies import MCMC_CANDIDATE_ID
 
 
 def _settings(**overrides) -> CandidateSettings:
@@ -43,6 +44,7 @@ def test_registry_locks_first_executable_candidates() -> None:
         "E2-appearance-sh4-v1",
         "E3-chair-observation-scale-v1",
         "E4-chair-observation-scale-absgrad-v1",
+        MCMC_CANDIDATE_ID,
     )
     baseline = candidate_settings("B0-reference")
     absgrad = candidate_settings("E1-density-absgrad-t04-v1")
@@ -54,6 +56,7 @@ def test_registry_locks_first_executable_candidates() -> None:
     chair_absgrad = candidate_settings(
         "E4-chair-observation-scale-absgrad-v1"
     )
+    chair_mcmc = candidate_settings(MCMC_CANDIDATE_ID)
 
     assert absgrad == replace(
         baseline,
@@ -92,6 +95,11 @@ def test_registry_locks_first_executable_candidates() -> None:
         candidate_id="E4-chair-observation-scale-absgrad-v1",
         absgrad=True,
         grow_grad2d=0.0004,
+    )
+    assert chair_mcmc == replace(
+        chair_mapping,
+        candidate_id=MCMC_CANDIDATE_ID,
+        refine_stop_step=25_000,
     )
 
 
@@ -132,6 +140,19 @@ def test_training_overrides_are_complete_fresh_plain_values() -> None:
     assert candidate_training_overrides(
         "E1-density-absgrad-t04-v1"
     )["grow_grad2d"] == pytest.approx(0.0004)
+
+
+def test_mcmc_candidate_adds_a_faithful_bounded_density_policy() -> None:
+    overrides = candidate_training_overrides(MCMC_CANDIDATE_ID)
+
+    assert overrides["density_strategy"] == "mcmc"
+    assert overrides["mcmc_cap_max"] == 2_000_000
+    assert overrides["mcmc_noise_lr"] == pytest.approx(500_000.0)
+    assert overrides["mcmc_opacity_reg"] == pytest.approx(0.001)
+    assert overrides["mcmc_scale_reg"] == pytest.approx(0.01)
+    assert overrides["refine_stop_step"] == 25_000
+    assert overrides["pixel_weight_mode"] == "local-laplacian"
+    assert overrides["observation_mapping_mode"] == "continuous-reprojection"
 
 
 @pytest.mark.parametrize(
