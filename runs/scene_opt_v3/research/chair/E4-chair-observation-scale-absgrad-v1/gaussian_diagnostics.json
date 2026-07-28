@@ -1,0 +1,198 @@
+{
+  "density_control": {
+    "event_count": 145,
+    "net_change": 3185975,
+    "observed_net_added": 4800803,
+    "observed_net_removed": 1614828
+  },
+  "diagnostic_only": true,
+  "image_count": 20,
+  "images": {
+    "frame_000020.jpg": {
+      "projected_radius_max": 28021.0,
+      "projected_radius_p50": 9.0,
+      "projected_radius_p95": 24.0,
+      "projected_radius_p99": 37.0,
+      "radius_above_threshold_count": 691,
+      "visible_gaussians": 2253261
+    },
+    "frame_000110.jpg": {
+      "projected_radius_max": 13349.0,
+      "projected_radius_p50": 8.0,
+      "projected_radius_p95": 23.0,
+      "projected_radius_p99": 33.0,
+      "radius_above_threshold_count": 1087,
+      "visible_gaussians": 2242081
+    },
+    "frame_000170.jpg": {
+      "projected_radius_max": 28385.0,
+      "projected_radius_p50": 8.0,
+      "projected_radius_p95": 22.0,
+      "projected_radius_p99": 35.0,
+      "radius_above_threshold_count": 1094,
+      "visible_gaussians": 2348920
+    },
+    "frame_000215.jpg": {
+      "projected_radius_max": 11290.0,
+      "projected_radius_p50": 8.0,
+      "projected_radius_p95": 22.0,
+      "projected_radius_p99": 33.0,
+      "radius_above_threshold_count": 971,
+      "visible_gaussians": 2411923
+    },
+    "frame_000260.jpg": {
+      "projected_radius_max": 13829.0,
+      "projected_radius_p50": 9.0,
+      "projected_radius_p95": 23.0,
+      "projected_radius_p99": 36.0,
+      "radius_above_threshold_count": 1056,
+      "visible_gaussians": 2371250
+    },
+    "frame_000315.jpg": {
+      "projected_radius_max": 6741.0,
+      "projected_radius_p50": 8.0,
+      "projected_radius_p95": 22.0,
+      "projected_radius_p99": 34.0,
+      "radius_above_threshold_count": 1338,
+      "visible_gaussians": 2288774
+    },
+    "frame_000350.jpg": {
+      "projected_radius_max": 7929.0,
+      "projected_radius_p50": 8.0,
+      "projected_radius_p95": 22.0,
+      "projected_radius_p99": 34.0,
+      "radius_above_threshold_count": 1328,
+      "visible_gaussians": 2165844
+    },
+    "frame_000390.jpg": {
+      "projected_radius_max": 13570.0,
+      "projected_radius_p50": 8.0,
+      "projected_radius_p95": 25.0,
+      "projected_radius_p99": 37.0,
+      "radius_above_threshold_count": 1174,
+      "visible_gaussians": 2083362
+    },
+    "frame_000435.jpg": {
+      "projected_radius_max": 2941.0,
+      "projected_radius_p50": 9.0,
+      "projected_radius_p95": 29.0,
+      "projected_radius_p99": 44.0,
+      "radius_above_threshold_count": 862,
+      "visible_gaussians": 1836894
+    },
+    "frame_000475.jpg": {
+      "projected_radius_max": 3460.0,
+      "projected_radius_p50": 10.0,
+      "projected_radius_p95": 28.0,
+      "projected_radius_p99": 41.0,
+      "radius_above_threshold_count": 762,
+      "visible_gaussians": 2061838
+    },
+    "frame_000525.jpg": {
+      "projected_radius_max": 17436.0,
+      "projected_radius_p50": 11.0,
+      "projected_radius_p95": 32.0,
+      "projected_radius_p99": 48.0,
+      "radius_above_threshold_count": 770,
+      "visible_gaussians": 1724048
+    },
+    "frame_000700.jpg": {
+      "projected_radius_max": 42244.0,
+      "projected_radius_p50": 11.0,
+      "projected_radius_p95": 34.0,
+      "projected_radius_p99": 54.0,
+      "radius_above_threshold_count": 1571,
+      "visible_gaussians": 1614715
+    },
+    "frame_000765.jpg": {
+      "projected_radius_max": 4423.0,
+      "projected_radius_p50": 11.0,
+      "projected_radius_p95": 35.0,
+      "projected_radius_p99": 58.0,
+      "radius_above_threshold_count": 1778,
+      "visible_gaussians": 1567927
+    },
+    "frame_000870.jpg": {
+      "projected_radius_max": 5708.0,
+      "projected_radius_p50": 12.0,
+      "projected_radius_p95": 51.0,
+      "projected_radius_p99": 89.0,
+      "radius_above_threshold_count": 3376,
+      "visible_gaussians": 1279863
+    },
+    "frame_000885.jpg": {
+      "projected_radius_max": 12395.0,
+      "projected_radius_p50": 13.0,
+      "projected_radius_p95": 48.0,
+      "projected_radius_p99": 83.0,
+      "radius_above_threshold_count": 2652,
+      "visible_gaussians": 1315934
+    },
+    "frame_000955.jpg": {
+      "projected_radius_max": 396626.0,
+      "projected_radius_p50": 13.0,
+      "projected_radius_p95": 41.0,
+      "projected_radius_p99": 65.0,
+      "radius_above_threshold_count": 1033,
+      "visible_gaussians": 1227503
+    },
+    "frame_001020.jpg": {
+      "projected_radius_max": 30726.0,
+      "projected_radius_p50": 12.0,
+      "projected_radius_p95": 38.0,
+      "projected_radius_p99": 62.0,
+      "radius_above_threshold_count": 1508,
+      "visible_gaussians": 1340819
+    },
+    "frame_001095.jpg": {
+      "projected_radius_max": 43319.0,
+      "projected_radius_p50": 12.0,
+      "projected_radius_p95": 35.0,
+      "projected_radius_p99": 58.0,
+      "radius_above_threshold_count": 1742,
+      "visible_gaussians": 1555717
+    },
+    "frame_001150.jpg": {
+      "projected_radius_max": 12528.0,
+      "projected_radius_p50": 9.0,
+      "projected_radius_p95": 32.0,
+      "projected_radius_p99": 55.0,
+      "radius_above_threshold_count": 1635,
+      "visible_gaussians": 1304364
+    },
+    "frame_001185.jpg": {
+      "projected_radius_max": 2917.0,
+      "projected_radius_p50": 9.0,
+      "projected_radius_p95": 38.0,
+      "projected_radius_p99": 62.0,
+      "radius_above_threshold_count": 1351,
+      "visible_gaussians": 1282824
+    }
+  },
+  "projected_radius": {
+    "projected_radius_max": 396626.0,
+    "projected_radius_p95": 51.0,
+    "projected_radius_p99": 89.0,
+    "quantile_aggregation": "max_of_per_view_quantile_v1",
+    "radius_above_threshold_count": 10522,
+    "radius_above_threshold_opacity_fraction": 0.0032077827490866184,
+    "radius_above_threshold_opacity_mass": 2680.5849609375,
+    "radius_threshold_pixels": 128.0
+  },
+  "scale_opacity": {
+    "opacity_max": 1.0,
+    "opacity_p50": 0.10058773308992386,
+    "opacity_p95": 0.9466497898101807,
+    "opacity_p99": 0.9898563623428345,
+    "scale3d_max": 7.0460124015808105,
+    "scale3d_p50": 0.004415222443640232,
+    "scale3d_p95": 0.012918097898364067,
+    "scale3d_p99": 0.03507499396800995,
+    "scale_above_threshold_count": 7767,
+    "scale_above_threshold_opacity_fraction": 0.0028879560995846987,
+    "scale_above_threshold_opacity_mass": 2413.32177734375,
+    "scale_threshold": 0.1
+  },
+  "scene_id": "chair",
+  "schema_version": 1
+}

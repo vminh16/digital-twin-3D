@@ -1,0 +1,23 @@
+{
+  "color_comparison_point_count": 74478,
+  "fit_observation_count": 346212,
+  "legacy_color_mae_mean": 77.10766937887698,
+  "legacy_color_mae_median": 65.66666666666667,
+  "legacy_color_mae_p90": 157.76666666666762,
+  "legacy_reprojection_p50_px": 268.03919617178576,
+  "legacy_reprojection_p95_px": 329.5710625199503,
+  "legacy_scale": [
+    2.0,
+    2.0
+  ],
+  "mapped_reprojection_p50_px": 0.6394450616651544,
+  "mapped_reprojection_p95_px": 1.7797581049807265,
+  "mode": "continuous-reprojection",
+  "scale": [
+    1.500019729570586,
+    1.5000193516818943
+  ],
+  "selected_color_mae_mean": 33.291929607848395,
+  "selected_color_mae_median": 32.0,
+  "selected_color_mae_p90": 58.0
+}
