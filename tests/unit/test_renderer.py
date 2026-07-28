@@ -8,6 +8,7 @@ import torch
 from bts_nvs.cameras.intrinsics import CameraIntrinsics
 from bts_nvs.models.gaussian_parameters import GaussianParameters
 from bts_nvs.rendering import gsplat_renderer
+from bts_nvs.rendering import sensitivity_renderer
 from bts_nvs.rendering.render_result import RenderResult
 
 
@@ -122,6 +123,78 @@ def test_renderer_forwards_absgrad_and_rasterize_mode(monkeypatch) -> None:
 
     assert captured["absgrad"] is True
     assert captured["rasterize_mode"] == "classic"
+
+
+def test_renderer_uses_explicit_colors_without_spherical_harmonics(
+    monkeypatch,
+) -> None:
+    captured = {}
+
+    def fake_rasterization(**kwargs):
+        captured.update(kwargs)
+        return (
+            torch.zeros((1, 16, 16, 3)),
+            torch.zeros((1, 16, 16, 1)),
+            {"means2d": torch.zeros((1, 1, 2))},
+        )
+
+    gaussians = _gaussians()
+    colors = torch.full((1, 3), 0.25)
+    monkeypatch.setattr(gsplat_renderer, "rasterization", fake_rasterization)
+    gsplat_renderer.render_gaussians(
+        gaussians,
+        torch.eye(4),
+        _intrinsics(),
+        active_sh_degree=0,
+        override_colors=colors,
+    )
+
+    assert captured["colors"] is colors
+    assert captured["sh_degree"] is None
+
+    with pytest.raises(ValueError, match="cannot be combined"):
+        gsplat_renderer.render_gaussians(
+            gaussians,
+            torch.eye(4),
+            _intrinsics(),
+            active_sh_degree=0,
+            gaussian_mask=torch.tensor([True]),
+            override_colors=colors,
+        )
+
+
+def test_sensitivity_contribution_is_exact_render_weight(monkeypatch) -> None:
+    gaussians = _gaussians()
+    gaussians.enable_perceptual_sensitivity()
+
+    def fake_render(
+        gaussians,
+        viewmat,
+        intrinsics,
+        active_sh_degree,
+        **kwargs,
+    ):
+        colors = kwargs["override_colors"]
+        value = colors[:, 0].sum()
+        rgb = value.expand(intrinsics.height, intrinsics.width, 3)
+        alpha = torch.ones((intrinsics.height, intrinsics.width, 1))
+        return RenderResult(rgb, alpha, info={})
+
+    monkeypatch.setattr(sensitivity_renderer, "render_gaussians", fake_render)
+    result, contribution = sensitivity_renderer.render_sensitivity(
+        gaussians,
+        torch.eye(4),
+        _intrinsics(),
+    )
+
+    expected = torch.full(
+        (gaussians.num_gaussians,),
+        float(_intrinsics().width * _intrinsics().height),
+    )
+    torch.testing.assert_close(contribution, expected)
+    result.rgb.mean().backward()
+    assert gaussians.sensitivity_logits.grad is not None
+    assert torch.isfinite(gaussians.sensitivity_logits.grad).all()
 
 
 def test_renderer_applies_explicit_gaussian_mask(monkeypatch) -> None:

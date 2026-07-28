@@ -2,8 +2,8 @@
 
 **Authority:** `../specs/2026-07-27-chair-bonsai-deep-optimization.md`
 
-**Status:** ACTIVE — chair E3 paired control complete; E4 AbsGrad implemented,
-paired L4 run pending.
+**Status:** ACTIVE — E5 MCMC rejected; E6 perceptual staged research
+implemented, L4 15k run pending.
 
 ## Success criteria
 
@@ -248,5 +248,18 @@ bash scripts/run_chair_bonsai_research.sh bonsai E2-appearance-sh4-v1
 
 The E2 commands reproduce the closed Phase 1 incumbents. Chair E3 is the
 completed Phase 2 control and chair E4 is its executable AbsGrad comparison.
-Remaining Phase 2 IDs stay reserved until their implementation, contracts and
-tests are merged.
+E5 is closed as rejected. E6 is the only active Phase 2 candidate; all other
+unregistered Phase 2 IDs remain reserved.
+### Chair E6 staged research
+
+1. Generate and hash sensitivity maps from the locked internal-train split.
+2. Train `E6-chair-observation-scale-perceptual-v1` on the fixed 30k schedule,
+   stopping with rolling recovery at 15k.
+3. Reject before resume if mean Score50 gains less than `+0.50`, LPIPS or hard
+   stratum regresses, either 870/885 drops by more than `0.25`, spurious edges
+   increase, or scale/radius opacity tails exceed E3.
+4. Resume the same run to 30k only after the 15k mechanism gate passes.
+5. Require `+0.75` Score50 against E3-15k with non-regressing LPIPS,
+   hard/worst-decile and 870/885 before spending a fresh E3-30k paired control.
+6. On paired 30k evidence, require approximately `+1.0` Score50 before any
+   production authorization.

@@ -12,6 +12,7 @@ _LEARNING_RATES = {
     "opacities": 5.0e-2,
     "sh0": 2.5e-3,
     "shN": 1.25e-4,
+    "sensitivity_logits": 5.0e-2,
 }
 
 
@@ -32,6 +33,7 @@ def setup_optimizers(
             **adam_options,
         )
         for name, lr in _LEARNING_RATES.items()
+        if name in parameters
     }
 
 

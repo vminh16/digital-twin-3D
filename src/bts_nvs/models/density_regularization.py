@@ -26,18 +26,18 @@ class DensityRegularizer:
 
     def __init__(self, config: Mapping[str, Any]) -> None:
         mode = config.get("density_strategy", "default")
-        if mode not in {"default", "mcmc"}:
+        if mode not in {"default", "mcmc", "perceptual"}:
             raise ValueError(f"unsupported density strategy: {mode}")
         self.mode = mode
         self.opacity_weight = _weight(config, "mcmc_opacity_reg")
         self.scale_weight = _weight(config, "mcmc_scale_reg")
-        if mode == "default" and (
+        if mode != "mcmc" and (
             self.opacity_weight != 0.0 or self.scale_weight != 0.0
         ):
             raise ValueError("MCMC regularization requires density_strategy=mcmc")
 
     def __call__(self, gaussians: GaussianParameters) -> torch.Tensor:
-        if self.mode == "default":
+        if self.mode != "mcmc":
             return gaussians.means.new_zeros(())
         opacity = torch.sigmoid(gaussians.opacities).mean()
         scale = torch.exp(gaussians.scales).mean()

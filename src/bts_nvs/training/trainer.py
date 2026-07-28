@@ -20,10 +20,12 @@ from bts_nvs.cameras.poses import camera_center_from_world_to_camera
 from bts_nvs.data.dataset import SceneDataset
 from bts_nvs.models.density_regularization import DensityRegularizer
 from bts_nvs.models.gaussian_parameters import GaussianParameters
+from bts_nvs.models.perceptual_loss import perceptual_sensitivity_loss
 from bts_nvs.models.loss import JointLoss
 from bts_nvs.models.optimizer import setup_mean_scheduler, setup_optimizers
 from bts_nvs.rendering.density_strategy_factory import build_density_strategy
 from bts_nvs.rendering.gsplat_renderer import render_gaussians
+from bts_nvs.rendering.sensitivity_renderer import render_sensitivity
 from bts_nvs.training.backend_qualification import (
     AUDIT_STEPS,
     DENSITY_EVENT_STEPS,
@@ -222,6 +224,7 @@ class Trainer:
         config: Dict[str, Any],
         manifest_json_path: str | Path,
         device: Optional[torch.device] = None,
+        sensitivity_maps: dict[str, np.ndarray] | None = None,
     ) -> None:
         """Initializes output paths, saves environmental data, and builds optimizer group.
 
@@ -237,6 +240,17 @@ class Trainer:
         self.dataset = dataset
         self.output_dir = Path(output_dir)
         self.config = dict(config)
+        self.perceptual_enabled = (
+            self.config.get("density_strategy") == "perceptual"
+        )
+        if self.perceptual_enabled:
+            if not self.config.get("internal_holdout", False):
+                raise ValueError("perceptual training requires internal holdout")
+            if sensitivity_maps is None:
+                raise ValueError("perceptual training requires sensitivity maps")
+            self.gaussians.enable_perceptual_sensitivity()
+        elif sensitivity_maps is not None:
+            raise ValueError("sensitivity maps require perceptual density strategy")
         self.manifest_json_path = Path(manifest_json_path)
         self.max_steps = self.config.get("max_steps", 30000)
         if (
@@ -282,6 +296,22 @@ class Trainer:
         self.precision = TrainingPrecision(precision_mode, self.device)
 
         self.gaussians.to(self.device)
+        self.sensitivity_maps = (
+            {
+                name: torch.from_numpy(np.asarray(value)).contiguous()
+                for name, value in sensitivity_maps.items()
+            }
+            if sensitivity_maps is not None
+            else {}
+        )
+        if self.perceptual_enabled:
+            dataset_names = tuple(
+                self.dataset[index].image_name for index in range(len(self.dataset))
+            )
+            if tuple(self.sensitivity_maps) != dataset_names:
+                raise ValueError(
+                    "sensitivity maps must exactly match internal train images"
+                )
         self.input_pipeline = TrainingInputPipeline(
             self.device,
             pinned_transfer=bool(self.config.get("pinned_transfer", False)),
@@ -483,7 +513,7 @@ class Trainer:
         self.active_sh_degree = checkpoint_state["active_sh_degree"]
 
         # 1. Resize GaussianParameters module parameters to match target shapes
-        for name in ["means", "scales", "quats", "opacities", "sh0", "shN"]:
+        for name in self.gaussians.parameter_names:
             param_val = checkpoint_state["gaussians"][name]
             setattr(
                 self.gaussians,
@@ -661,6 +691,20 @@ class Trainer:
                     absgrad=self.config.get("absgrad", False),
                     rasterize_mode=self.config.get("rasterize_mode", "classic"),
                 )
+                sensitivity_result = None
+                if (
+                    self.perceptual_enabled
+                    and completed_step <= self.config["refine_stop_step"]
+                ):
+                    sensitivity_result, contribution = render_sensitivity(
+                        self.gaussians,
+                        viewmat,
+                        sample.intrinsics,
+                        rasterize_mode=self.config.get(
+                            "rasterize_mode", "classic"
+                        ),
+                    )
+                    result.info["perceptual_contribution"] = contribution
             t_fwd = time.perf_counter() - t_fwd_start
 
             # 2. Strategy pre-backward step (step + 1 because strategy step is 1-based)
@@ -681,7 +725,30 @@ class Trainer:
                 density_regularization_loss = self.density_regularizer(
                     self.gaussians
                 )
-                loss = image_loss + density_regularization_loss
+                sensitivity_loss = image_loss.new_zeros(())
+                if sensitivity_result is not None:
+                    sensitivity_target = self.sensitivity_maps[
+                        device_sample.image_name
+                    ].to(
+                        device=self.device,
+                        dtype=torch.float32,
+                        non_blocking=bool(
+                            self.config.get("pinned_transfer", False)
+                        ),
+                    ).div_(255.0)
+                    sensitivity_loss = perceptual_sensitivity_loss(
+                        sensitivity_result.rgb[..., 0],
+                        sensitivity_target,
+                        mask,
+                    )
+                    weight = float(self.config["perceptual_loss_weight"])
+                    loss = (
+                        (1.0 - weight) * image_loss
+                        + weight * sensitivity_loss
+                        + density_regularization_loss
+                    )
+                else:
+                    loss = image_loss + density_regularization_loss
             if not torch.isfinite(loss):
                 raise FloatingPointError(
                     f"non-finite loss at completed step {completed_step}"
@@ -815,6 +882,7 @@ class Trainer:
                 "loss": loss.item(),
                 "image_loss": image_loss.item(),
                 "density_regularization_loss": density_regularization_loss.item(),
+                "sensitivity_loss": sensitivity_loss.item(),
                 "num_gaussians": self.gaussians.num_gaussians,
                 "lr_means": self.scheduler.get_last_lr()[0],
                 "sample_index": sample_idx,

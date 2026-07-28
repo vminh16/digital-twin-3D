@@ -1,7 +1,7 @@
 # Chair and bonsai deep-optimization authority
 
-**Status:** ACTIVE — chair E4 rejected; compute-aware MCMC full-horizon
-candidate implemented, L4 run pending.
+**Status:** ACTIVE — chair E5 rejected; E6 perceptual staged research
+implemented, L4 15k run pending.
 
 **Plan ID:** `scene-opt-v3-chair-bonsai`
 
@@ -244,11 +244,40 @@ Mean improvement cannot override a failed tail gate.
 Phase 0  CLOSED  close old phases; add research stage and unified wrapper
 Phase 1  CLOSED  two complete L4 incumbent runs and reports validated
 Phase 2A CLOSED   chair E3/E4 paired mechanism evidence
-Phase 2B ACTIVE   chair E5 MCMC full-horizon lower-bound gate
+Phase 2B CLOSED   chair E5 MCMC rejected at lower-bound gate
+Phase 2C ACTIVE   chair E6 perceptual staged research
 Phase 3  PENDING  conditional fresh E3-30k paired confirmation
 Phase 4  PENDING full-data production, rerender and new submission assembly
 ```
 
-E3, E4 and E5 remain chair/research-only IDs. E5 is executable only through its
-locked full-horizon wrapper. The former `E3-*-scale-guard-*` names are
+E3, E4, E5 and E6 remain chair/research-only IDs. E5 and E6 are executable
+only through their locked wrappers. The former `E3-*-scale-guard-*` names are
 superseded and must not be registered.
+## E6 perceptual densification
+
+E5 completed 30k but failed its lower-bound gate, so E3-30k remains unspent.
+The next registered candidate is
+`E6-chair-observation-scale-perceptual-v1`, restricted to `chair/research`.
+
+E6 keeps the E3 observation mapping, local-Laplacian RGB loss, SH3 and holdout.
+It adds deterministic binary sensitivity maps from internal-train images only,
+one learned sensitivity logit per Gaussian, a BCE sensitivity render branch,
+high/medium sensitivity-guided density control, clone opacity decline with
+exponent `1.2`, and a hard safety cap of `2.1M` Gaussians. Sensitivity maps use
+gamma `1.5`, Sobel threshold `0.05`, `5x5` average pooling and threshold `0.3`.
+
+The gsplat port measures each sampled-view Gaussian contribution as the
+derivative of the summed sensitivity render with respect to Gaussian
+sensitivity color. This is the accumulated alpha-compositing weight supported
+by the installed renderer; it is not claimed to be byte-equivalent to the
+official custom CUDA `render_imp` implementation.
+
+E6 uses a 30k optimizer schedule with a durable 15k stop:
+
+```bash
+bash scripts/run_chair_perceptual_research.sh
+E6_STOP_STEP=30000 bash scripts/run_chair_perceptual_research.sh
+```
+
+The second command is authorized only after review of the 15k gate. Depth
+reinitialization, Spectral-GS, MCMC and GaussianSpa are forbidden in E6.

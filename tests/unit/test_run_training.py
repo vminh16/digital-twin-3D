@@ -11,6 +11,7 @@ import torch
 import bts_nvs.training.run_training as run_training
 from bts_nvs.data.sparse_subset import ObservationMappingDiagnostics
 from bts_nvs.experiments.density_policies import MCMC_CANDIDATE_ID
+from bts_nvs.experiments.perceptual_policy import PERCEPTUAL_CANDIDATE_ID
 
 
 def _args(**changes):
@@ -792,6 +793,39 @@ def test_mcmc_research_requires_full_horizon_and_rolling_recovery(tmp_path):
             run_training.validate_generic_experiment_args(
                 _args(**(vars(valid) | change))
             )
+
+
+def test_perceptual_research_requires_staged_rolling_recovery(tmp_path):
+    output = tmp_path / "perceptual"
+    first = _generic_args(
+        "research",
+        PERCEPTUAL_CANDIDATE_ID,
+        output_dir=str(output),
+        max_steps=30_000,
+        stop_step=15_000,
+        checkpoint_every=3_000,
+        rolling_checkpoint=True,
+    )
+
+    run_training.validate_generic_experiment_args(first)
+    assert run_training.should_save_checkpoints(first) is True
+
+    recovery = output / "checkpoints" / "recovery.pt"
+    resumed = _args(
+        **(
+            vars(first)
+            | {
+                "stop_step": 30_000,
+                "resume": str(recovery),
+            }
+        )
+    )
+    run_training.validate_generic_experiment_args(resumed)
+
+    with pytest.raises(ValueError, match="perceptual research"):
+        run_training.validate_generic_experiment_args(
+            _args(**(vars(first) | {"stop_step": 30_000}))
+        )
 
 
 def test_generic_confirmation_locks_30k_schedule_and_rolling_recovery(tmp_path):

@@ -15,6 +15,10 @@ import torch
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from bts_nvs.data.dataset import SceneDataset, estimate_image_cache_bytes
+from bts_nvs.data.perceptual_sensitivity import (
+    SensitivityMapSet,
+    prepare_sensitivity_artifact,
+)
 from bts_nvs.data.holdout import (
     HoldoutSplit,
     holdout_identity_sha256,
@@ -38,10 +42,14 @@ from bts_nvs.models.gaussian_parameters import GaussianParameters
 from bts_nvs.models.initialization import initialize_from_manifest
 from bts_nvs.models.optimizer import setup_optimizers
 from bts_nvs.evaluation.pose_strata import build_pose_strata, save_pose_strata
+from bts_nvs.evaluation.perceptual_diagnostics import (
+    build_perceptual_diagnostics,
+)
 from bts_nvs.experiments.candidates import candidate_training_overrides
 from bts_nvs.experiments.density_policies import (
     is_full_horizon_research_candidate,
 )
+from bts_nvs.experiments.perceptual_policy import is_perceptual_candidate
 from bts_nvs.experiments.experiment import (
     ACTIVE_RESEARCH_SCENE_IDS,
     COHORT_SCENE_IDS,
@@ -397,6 +405,30 @@ def validate_generic_experiment_args(args) -> None:
         return
 
     if experiment.stage is ExperimentStage.RESEARCH:
+        if is_perceptual_candidate(candidate_id):
+            expected_recovery = (
+                Path(args.output_dir) / "checkpoints" / "recovery.pt"
+            )
+            recovery_is_valid = args.resume is None or (
+                Path(args.resume).resolve() == expected_recovery.resolve()
+            )
+            if (
+                not common_runtime
+                or args.max_steps != 30_000
+                or args.stop_step not in (15_000, 30_000)
+                or not args.internal_holdout
+                or args.checkpoint_every != 3_000
+                or not args.rolling_checkpoint
+                or not recovery_is_valid
+                or (args.stop_step == 15_000 and args.resume is not None)
+                or (args.stop_step == 30_000 and args.resume is None)
+            ):
+                raise ValueError(
+                    "perceptual research requires a factor-1, seed-0, "
+                    "30000-step schedule stopped fresh at 15000 or resumed "
+                    "to 30000, with internal holdout and rolling recovery"
+                )
+            return
         full_horizon = is_full_horizon_research_candidate(candidate_id)
         expected_recovery = Path(args.output_dir) / "checkpoints" / "recovery.pt"
         recovery_is_valid = args.resume is None or (
@@ -547,7 +579,14 @@ def validate_confirmation_recovery(
     config_hash: str,
     expected_step: int,
 ) -> None:
-    if args.experiment_stage != ExperimentStage.CONFIRM.value:
+    checkpointed = (
+        args.experiment_stage == ExperimentStage.CONFIRM.value
+        or (
+            args.experiment_stage == ExperimentStage.RESEARCH.value
+            and is_perceptual_candidate(args.candidate_id)
+        )
+    )
+    if not checkpointed:
         return
     validate_recovery_checkpoint(
         Path(args.output_dir) / "checkpoints" / "recovery.pt",
@@ -564,16 +603,20 @@ def validate_confirmation_resume(
     manifest_hash: str,
     config_hash: str,
 ) -> None:
-    if (
-        args.experiment_stage != ExperimentStage.CONFIRM.value
-        or args.resume is None
-    ):
+    resumable = (
+        args.experiment_stage == ExperimentStage.CONFIRM.value
+        or (
+            args.experiment_stage == ExperimentStage.RESEARCH.value
+            and is_perceptual_candidate(args.candidate_id)
+        )
+    )
+    if not resumable or args.resume is None:
         return
     expected_recovery = Path(args.output_dir) / "checkpoints" / "recovery.pt"
     if Path(args.resume).resolve() != expected_recovery.resolve():
-        raise ValueError("confirm resume must use output checkpoints/recovery.pt")
+        raise ValueError("resume must use output checkpoints/recovery.pt")
     if training_target_step(args) != 30_000:
-        raise ValueError("confirm resume must target step 30000")
+        raise ValueError("resume must target step 30000")
     validate_confirmation_recovery(
         args,
         manifest_hash=manifest_hash,
@@ -605,7 +648,10 @@ def should_save_checkpoints(args) -> bool:
             ExperimentStage.PRODUCTION.value,
         ) or (
             args.experiment_stage == ExperimentStage.RESEARCH.value
-            and is_full_horizon_research_candidate(args.candidate_id)
+            and (
+                is_full_horizon_research_candidate(args.candidate_id)
+                or is_perceptual_candidate(args.candidate_id)
+            )
         )
     return (
         not args.profile_input
@@ -1054,6 +1100,11 @@ def generate_generic_experiment_reports(
     )
     if gaussian_diagnostics is not None:
         report_arguments["gaussian_diagnostics"] = gaussian_diagnostics
+    if is_perceptual_candidate(args.candidate_id):
+        write_json_record(
+            output / "perceptual_diagnostics.json",
+            build_perceptual_diagnostics(trainer, output),
+        )
     experiment = build_experiment_report(**report_arguments)
     save_experiment_report(experiment, output / "experiment_report.json")
     return experiment
@@ -1084,9 +1135,13 @@ def prepare_initial_validation(args, trainer, validation_dataset):
 
 
 def preserve_confirmation_snapshot(args) -> Path | None:
-    if (
+    perceptual_research = (
+        args.experiment_stage == ExperimentStage.RESEARCH.value
+        and is_perceptual_candidate(args.candidate_id)
+    )
+    if training_target_step(args) != 15_000 or (
         args.experiment_stage != ExperimentStage.CONFIRM.value
-        or training_target_step(args) != 15_000
+        and not perceptual_research
     ):
         return None
 
@@ -1102,7 +1157,15 @@ def preserve_confirmation_snapshot(args) -> Path | None:
         prefix=f".{destination.name}.",
     ) as temporary:
         staging = Path(temporary)
-        for name in CONFIRMATION_SNAPSHOT_REPORTS:
+        report_names = CONFIRMATION_SNAPSHOT_REPORTS + (
+            (
+                "gaussian_diagnostics.json",
+                "perceptual_diagnostics.json",
+            )
+            if perceptual_research
+            else ()
+        )
+        for name in report_names:
             source = output / name
             if not source.is_file():
                 raise FileNotFoundError(
@@ -1116,6 +1179,16 @@ def preserve_confirmation_snapshot(args) -> Path | None:
                 f"required confirmation renders do not exist: {render_source}"
             )
         shutil.copytree(render_source, staging / "validation_renders")
+        if perceptual_research:
+            diagnostic_source = output / "diagnostic_filtered_renders"
+            if not diagnostic_source.is_dir():
+                raise FileNotFoundError(
+                    "required perceptual diagnostic renders do not exist"
+                )
+            shutil.copytree(
+                diagnostic_source,
+                staging / "diagnostic_filtered_renders",
+            )
         os.replace(staging, destination)
 
     return destination
@@ -1260,6 +1333,12 @@ def main():
             else None
         ),
     )
+    sensitivity_maps: SensitivityMapSet | None = None
+    if is_perceptual_candidate(args.candidate_id):
+        sensitivity_maps = prepare_sensitivity_artifact(
+            dataset,
+            Path(args.output_dir) / "perceptual_sensitivity",
+        )
     gaussians = initialize_from_manifest(
         initialization_manifest,
         max_sh_degree=int(candidate_overrides["max_sh_degree"]),
@@ -1268,6 +1347,15 @@ def main():
 
     # 5. Build Config baseline B0, including preprocessing identity.
     config = build_training_config(args, manifest, resize, split=split)
+    if sensitivity_maps is not None:
+        config.update(
+            {
+                "perceptual_sensitivity_sha256": (
+                    sensitivity_maps.manifest_sha256
+                ),
+                "perceptual_scene_sensitivity": sensitivity_maps.scene_mean,
+            }
+        )
 
     # 6. Instantiate Trainer
     trainer = Trainer(
@@ -1276,6 +1364,9 @@ def main():
         output_dir=args.output_dir,
         config=config,
         manifest_json_path=manifest_json,
+        sensitivity_maps=(
+            sensitivity_maps.maps if sensitivity_maps is not None else None
+        ),
     )
 
     # 7. Check for resume

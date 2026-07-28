@@ -14,12 +14,12 @@ class GaussianParameterMap(MutableMapping[str, nn.Parameter]):
         self._owner = owner
 
     def __getitem__(self, name: str) -> nn.Parameter:
-        if name not in _PARAMETER_NAMES:
+        if name not in self._owner.parameter_names:
             raise KeyError(name)
         return getattr(self._owner, name)
 
     def __setitem__(self, name: str, parameter: nn.Parameter) -> None:
-        if name not in _PARAMETER_NAMES:
+        if name not in self._owner.parameter_names:
             raise KeyError(name)
         if not isinstance(parameter, nn.Parameter):
             raise TypeError("Gaussian parameters must be torch.nn.Parameter instances")
@@ -29,10 +29,10 @@ class GaussianParameterMap(MutableMapping[str, nn.Parameter]):
         raise TypeError("Gaussian parameters cannot be deleted")
 
     def __iter__(self) -> Iterator[str]:
-        return iter(_PARAMETER_NAMES)
+        return iter(self._owner.parameter_names)
 
     def __len__(self) -> int:
-        return len(_PARAMETER_NAMES)
+        return len(self._owner.parameter_names)
 
 
 class GaussianParameters(nn.Module):
@@ -105,6 +105,25 @@ class GaussianParameters(nn.Module):
         self.opacities = nn.Parameter(opacities.float())
         self.sh0 = nn.Parameter(sh0.float())
         self.shN = nn.Parameter(shN.float())
+
+    @property
+    def parameter_names(self) -> tuple[str, ...]:
+        if hasattr(self, "sensitivity_logits"):
+            return _PARAMETER_NAMES + ("sensitivity_logits",)
+        return _PARAMETER_NAMES
+
+    def enable_perceptual_sensitivity(self) -> None:
+        if hasattr(self, "sensitivity_logits"):
+            raise ValueError("perceptual sensitivity is already enabled")
+        self.register_parameter(
+            "sensitivity_logits",
+            nn.Parameter(torch.zeros(self.num_gaussians, device=self.means.device)),
+        )
+
+    def get_sensitivities(self) -> torch.Tensor:
+        if not hasattr(self, "sensitivity_logits"):
+            raise RuntimeError("perceptual sensitivity is not enabled")
+        return torch.sigmoid(self.sensitivity_logits)
 
     def parameter_map(self) -> GaussianParameterMap:
         """Return the canonical mutable mapping expected by gsplat strategies."""

@@ -11,6 +11,7 @@ from bts_nvs.experiments.candidates import (
 )
 from bts_nvs.experiments.contracts import CandidateSettings
 from bts_nvs.experiments.density_policies import MCMC_CANDIDATE_ID
+from bts_nvs.experiments.perceptual_policy import PERCEPTUAL_CANDIDATE_ID
 
 
 def _settings(**overrides) -> CandidateSettings:
@@ -45,6 +46,7 @@ def test_registry_locks_first_executable_candidates() -> None:
         "E3-chair-observation-scale-v1",
         "E4-chair-observation-scale-absgrad-v1",
         MCMC_CANDIDATE_ID,
+        PERCEPTUAL_CANDIDATE_ID,
     )
     baseline = candidate_settings("B0-reference")
     absgrad = candidate_settings("E1-density-absgrad-t04-v1")
@@ -57,6 +59,7 @@ def test_registry_locks_first_executable_candidates() -> None:
         "E4-chair-observation-scale-absgrad-v1"
     )
     chair_mcmc = candidate_settings(MCMC_CANDIDATE_ID)
+    chair_perceptual = candidate_settings(PERCEPTUAL_CANDIDATE_ID)
 
     assert absgrad == replace(
         baseline,
@@ -100,6 +103,10 @@ def test_registry_locks_first_executable_candidates() -> None:
         chair_mapping,
         candidate_id=MCMC_CANDIDATE_ID,
         refine_stop_step=25_000,
+    )
+    assert chair_perceptual == replace(
+        chair_mapping,
+        candidate_id=PERCEPTUAL_CANDIDATE_ID,
     )
 
 
@@ -153,6 +160,18 @@ def test_mcmc_candidate_adds_a_faithful_bounded_density_policy() -> None:
     assert overrides["refine_stop_step"] == 25_000
     assert overrides["pixel_weight_mode"] == "local-laplacian"
     assert overrides["observation_mapping_mode"] == "continuous-reprojection"
+
+
+def test_perceptual_candidate_keeps_e3_base_and_adds_locked_policy() -> None:
+    overrides = candidate_training_overrides(PERCEPTUAL_CANDIDATE_ID)
+
+    assert overrides["pixel_weight_mode"] == "local-laplacian"
+    assert overrides["observation_mapping_mode"] == "continuous-reprojection"
+    assert overrides["density_strategy"] == "perceptual"
+    assert overrides["perceptual_high_threshold"] == pytest.approx(0.9)
+    assert overrides["perceptual_medium_interval"] == 1_500
+    assert overrides["perceptual_cap_max"] == 2_100_000
+    assert overrides["refine_stop_step"] == 15_000
 
 
 @pytest.mark.parametrize(

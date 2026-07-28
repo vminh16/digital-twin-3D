@@ -8,6 +8,7 @@ from bts_nvs.experiments.density_policies import (
     is_full_horizon_research_candidate,
 )
 from bts_nvs.experiments.experiment import Experiment, ExperimentStage
+from bts_nvs.experiments.perceptual_policy import is_perceptual_candidate
 
 
 _OPTIMIZER_BACKENDS = frozenset(("adam", "adam-fused"))
@@ -70,7 +71,10 @@ def build_training_command(
         ExperimentStage.PRODUCTION,
     ) or (
         experiment.stage is ExperimentStage.RESEARCH
-        and is_full_horizon_research_candidate(experiment.candidate_id)
+        and (
+            is_full_horizon_research_candidate(experiment.candidate_id)
+            or is_perceptual_candidate(experiment.candidate_id)
+        )
     )
     if rolling_recovery:
         if experiment.stage in (
@@ -129,6 +133,23 @@ def _validate_stage_run(
             raise ValueError(f"{stage.value} requires a fresh 7000-step run")
         return
     if stage is ExperimentStage.RESEARCH:
+        if is_perceptual_candidate(experiment.candidate_id):
+            expected_recovery = output_dir / _RECOVERY_PATH
+            if stop_step not in (15_000, 30_000):
+                raise ValueError(
+                    "perceptual research requires stop_step 15000 or 30000"
+                )
+            if stop_step == 15_000 and resume_path is not None:
+                raise ValueError("perceptual 15000-step research must be fresh")
+            if stop_step == 30_000 and (
+                resume_path is None
+                or resume_path.resolve(strict=False)
+                != expected_recovery.resolve(strict=False)
+            ):
+                raise ValueError(
+                    "perceptual 30000-step research must resume output recovery"
+                )
+            return
         if is_full_horizon_research_candidate(experiment.candidate_id):
             expected_recovery = output_dir / _RECOVERY_PATH
             if stop_step != 30_000:

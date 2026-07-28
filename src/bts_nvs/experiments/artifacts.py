@@ -9,6 +9,7 @@ from pathlib import Path
 
 import yaml
 
+from bts_nvs.data.perceptual_sensitivity import validate_sensitivity_artifact
 from bts_nvs.evaluation.experiment_report import build_experiment_report
 from bts_nvs.experiments.candidates import candidate_settings
 from bts_nvs.experiments.density_policies import (
@@ -23,6 +24,7 @@ from bts_nvs.experiments.experiment import (
 from bts_nvs.experiments.observation_mapping_artifacts import (
     validate_observation_mapping_artifact,
 )
+from bts_nvs.experiments.perceptual_policy import is_perceptual_candidate
 from bts_nvs.experiments.provenance import (
     canonical_json_sha256,
     load_json_artifact,
@@ -91,6 +93,32 @@ def validate_run_artifacts(
         validate_observation_mapping_artifact(
             run / "initialization_diagnostics.json"
         )
+    if is_perceptual_candidate(experiment.candidate_id):
+        sensitivity_sha256 = config.get("perceptual_sensitivity_sha256")
+        if not isinstance(sensitivity_sha256, str):
+            raise ValueError("perceptual config is missing sensitivity hash")
+        sensitivity_root = run / "perceptual_sensitivity"
+        sensitivity_manifest = load_json_artifact(
+            sensitivity_root / "sensitivity_manifest.json"
+        )
+        records = sensitivity_manifest.get("images")
+        if not isinstance(records, list):
+            raise ValueError("sensitivity manifest images must be a list")
+        train_names = tuple(
+            record.get("image_name") if isinstance(record, Mapping) else None
+            for record in records
+        )
+        if any(not isinstance(name, str) or not name for name in train_names):
+            raise ValueError("sensitivity manifest has invalid image names")
+        if len(train_names) != config.get("internal_train_count"):
+            raise ValueError(
+                "sensitivity manifest count does not match internal train split"
+            )
+        validate_sensitivity_artifact(
+            sensitivity_root,
+            sensitivity_sha256,
+            train_names,
+        )
     del config
     _validate_provenance(run, manifest_sha256)
     summary = _load_summary(run / "summary.json", target_step)
@@ -112,7 +140,7 @@ def validate_run_artifacts(
     if experiment.stage is not ExperimentStage.PRODUCTION:
         if holdout_sha256 is None:
             raise ValueError("holdout_sha256 is required for internal-holdout stages")
-        report_root = _report_root(run, experiment.stage, target_step)
+        report_root = _report_root(run, experiment, target_step)
         report = _validate_holdout_artifacts(
             report_root,
             experiment,
@@ -220,13 +248,17 @@ def _validate_target_step(experiment: Experiment, step: int) -> None:
         if step not in (15_000, 30_000):
             raise ValueError("confirm step must be 15000 or 30000")
     elif experiment.stage is ExperimentStage.RESEARCH:
-        expected = (
-            30_000
-            if is_full_horizon_research_candidate(experiment.candidate_id)
-            else 15_000
-        )
-        if step != expected:
-            raise ValueError(f"research step must be {expected}")
+        if is_perceptual_candidate(experiment.candidate_id):
+            if step not in (15_000, 30_000):
+                raise ValueError("perceptual research step must be 15000 or 30000")
+        else:
+            expected = (
+                30_000
+                if is_full_horizon_research_candidate(experiment.candidate_id)
+                else 15_000
+            )
+            if step != expected:
+                raise ValueError(f"research step must be {expected}")
     elif step != experiment.horizon:
         raise ValueError(f"{experiment.stage.value} step must be {experiment.horizon}")
 
@@ -360,7 +392,10 @@ def _validate_checkpoint_policy(
     }
     checkpointed_research = (
         stage is ExperimentStage.RESEARCH
-        and is_full_horizon_research_candidate(experiment.candidate_id)
+        and (
+            is_full_horizon_research_candidate(experiment.candidate_id)
+            or is_perceptual_candidate(experiment.candidate_id)
+        )
     )
     if stage in (
         ExperimentStage.REFERENCE,
@@ -383,8 +418,14 @@ def _validate_checkpoint_policy(
     )
 
 
-def _report_root(run: Path, stage: ExperimentStage, step: int) -> Path:
-    if stage is ExperimentStage.CONFIRM and step == 15_000:
+def _report_root(run: Path, experiment: Experiment, step: int) -> Path:
+    if step == 15_000 and (
+        experiment.stage is ExperimentStage.CONFIRM
+        or (
+            experiment.stage is ExperimentStage.RESEARCH
+            and is_perceptual_candidate(experiment.candidate_id)
+        )
+    ):
         return run / "snapshots" / "step_000015000"
     return run
 
@@ -409,6 +450,8 @@ def _validate_holdout_artifacts(
         if experiment.stage is ExperimentStage.RESEARCH
         else ()
     )
+    if is_perceptual_candidate(experiment.candidate_id):
+        required_reports += ("perceptual_diagnostics.json",)
     for name in required_reports:
         path = root / name
         if not path.is_file():
@@ -653,6 +696,8 @@ def _reject_production_holdout_artifacts(run: Path) -> None:
         (
             run / "gaussian_diagnostics.json",
             run / "initialization_diagnostics.json",
+            run / "perceptual_diagnostics.json",
+            run / "perceptual_sensitivity",
             run / "validation_renders",
             run / "diagnostic_filtered_renders",
             run / "snapshots",

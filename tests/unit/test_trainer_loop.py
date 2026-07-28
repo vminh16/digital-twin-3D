@@ -346,6 +346,82 @@ def test_trainer_forwards_local_loss_weights(
     )
 
 
+def test_perceptual_trainer_uses_dual_branch_loss_and_contribution(
+    tmp_path: Path,
+    manifest_artifact: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed: dict[str, object] = {}
+
+    class _Strategy:
+        def initialize_state(self, scene_scale=1.0):
+            return {}
+
+        def step_pre_backward(self, *, state, step, info):
+            observed["contribution"] = info["perceptual_contribution"].clone()
+
+        def step_post_backward(self, **kwargs):
+            return None
+
+    def fake_sensitivity(gaussians, viewmat, intrinsics, **kwargs):
+        value = gaussians.get_sensitivities().mean()
+        rgb = value.expand(intrinsics.height, intrinsics.width, 3)
+        alpha = torch.ones((intrinsics.height, intrinsics.width, 1))
+        contribution = torch.arange(
+            1,
+            gaussians.num_gaussians + 1,
+            dtype=gaussians.means.dtype,
+        )
+        return RenderResult(rgb, alpha, info={}), contribution
+
+    monkeypatch.setattr(trainer_module, "render_gaussians", _differentiable_render)
+    monkeypatch.setattr(trainer_module, "render_sensitivity", fake_sensitivity)
+    monkeypatch.setattr(
+        trainer_module,
+        "build_density_strategy",
+        lambda *args, **kwargs: _Strategy(),
+    )
+    config = _config(max_steps=1)
+    config.update(
+        candidate_training_overrides(
+            "E6-chair-observation-scale-perceptual-v1"
+        )
+    )
+    config.update(
+        {
+            "internal_holdout": True,
+            "perceptual_scene_sensitivity": 0.5,
+        }
+    )
+    dataset = _MockDataset()
+    trainer = Trainer(
+        gaussians=_gaussians(),
+        dataset=dataset,
+        output_dir=tmp_path / "perceptual",
+        config=config,
+        manifest_json_path=manifest_artifact,
+        sensitivity_maps={
+            "img_0.png": np.zeros((16, 16), dtype=np.uint8),
+            "img_1.png": np.full((16, 16), 255, dtype=np.uint8),
+        },
+        device=torch.device("cpu"),
+    )
+
+    trainer.train(stop_step=1, checkpoint_every=1)
+
+    assert "sensitivity_logits" in trainer.optimizers
+    assert trainer.sensitivity_maps["img_0.png"].dtype == torch.uint8
+    assert trainer.sensitivity_maps["img_0.png"].device.type == "cpu"
+    torch.testing.assert_close(
+        observed["contribution"],
+        torch.arange(1, 6, dtype=torch.float32),
+    )
+    metric = json.loads(
+        (tmp_path / "perceptual" / "metrics.jsonl").read_text()
+    )
+    assert metric["sensitivity_loss"] > 0.0
+
+
 def test_trainer_accepts_sh4_candidate_model(
     tmp_path: Path,
     manifest_artifact: Path,

@@ -22,6 +22,7 @@ def render_gaussians(
     absgrad: bool = False,
     rasterize_mode: str = "classic",
     gaussian_mask: torch.Tensor | None = None,
+    override_colors: torch.Tensor | None = None,
 ) -> RenderResult:
     """Render one pinhole camera in normalized world coordinates.
 
@@ -57,6 +58,18 @@ def render_gaussians(
         scales = gaussians.get_scales()[mask]
         opacities = gaussians.get_opacities()[mask]
         colors = gaussians.get_shs()[mask]
+    if override_colors is not None:
+        if gaussian_mask is not None:
+            raise ValueError("override_colors cannot be combined with gaussian_mask")
+        colors = torch.as_tensor(
+            override_colors,
+            dtype=gaussians.means.dtype,
+            device=gaussians.means.device,
+        )
+        if colors.shape != (gaussians.num_gaussians, 3):
+            raise ValueError("override_colors must have shape (N, 3)")
+        if not torch.isfinite(colors).all():
+            raise ValueError("override_colors must be finite")
 
     device = gaussians.means.device
     dtype = gaussians.means.dtype
@@ -99,7 +112,7 @@ def render_gaussians(
         far_plane=1e10,
         radius_clip=0.0,
         eps2d=0.3,
-        sh_degree=active_sh_degree,
+        sh_degree=None if override_colors is not None else active_sh_degree,
         packed=True,
         tile_size=16,
         backgrounds=background,

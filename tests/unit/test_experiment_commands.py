@@ -7,6 +7,7 @@ import pytest
 
 from bts_nvs.experiments.commands import build_training_command
 from bts_nvs.experiments.density_policies import MCMC_CANDIDATE_ID
+from bts_nvs.experiments.perceptual_policy import PERCEPTUAL_CANDIDATE_ID
 from bts_nvs.experiments.experiment import Experiment, ExperimentStage
 
 
@@ -155,6 +156,37 @@ def test_mcmc_research_runs_full_horizon_with_rolling_recovery(
     assert "--authorized_candidate_id" not in fresh
     assert "--resume" not in fresh
     assert resumed["--resume"] == str(recovery)
+
+
+def test_perceptual_research_stops_at_15k_then_resumes_to_30k(
+    tmp_path: Path,
+) -> None:
+    paths = _paths(tmp_path)
+    experiment = Experiment(
+        stage=ExperimentStage.RESEARCH,
+        scene_id="chair",
+        candidate_id=PERCEPTUAL_CANDIDATE_ID,
+    )
+    recovery = paths["output_dir"] / "checkpoints" / "recovery.pt"
+
+    first = _option_values(_build(tmp_path, experiment, stop_step=15_000))
+    resumed = _option_values(
+        _build(
+            tmp_path,
+            experiment,
+            stop_step=30_000,
+            resume_path=recovery,
+        )
+    )
+
+    assert first["--max_steps"] == "30000"
+    assert first["--checkpoint_every"] == "3000"
+    assert first["--rolling_checkpoint"] is True
+    assert "--resume" not in first
+    assert resumed["--resume"] == str(recovery)
+
+    with pytest.raises(ValueError, match="must resume"):
+        _build(tmp_path, experiment, stop_step=30_000)
 
 
 def test_confirmation_15k_command_uses_30k_schedule_and_rolling_recovery(

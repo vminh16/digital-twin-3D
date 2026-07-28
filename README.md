@@ -65,8 +65,18 @@ khóa candidate, cap 2M và rolling recovery 3k:
 bash scripts/run_chair_mcmc_research.sh
 ```
 
-Không cần chạy E3-30k trước. Chỉ chạy fresh E3-30k nếu MCMC-30k vượt rõ E3-15k
-lower-bound và cần paired confirmation để tách gain do phương pháp khỏi gain do
+Chair E6 Perceptual-GS core chạy theo hai mốc trên cùng lịch optimizer 30k:
+
+```bash
+bash scripts/run_chair_perceptual_research.sh
+E6_STOP_STEP=30000 bash scripts/run_chair_perceptual_research.sh
+```
+
+Lệnh thứ hai chỉ hợp lệ sau khi artifact 15k đã được review và dùng đúng rolling
+recovery của run E6. Candidate này vẫn là `chair/research` only.
+
+Không cần chạy E3-30k trước E6. Chỉ chi compute cho fresh E3-30k nếu E6-30k
+qua gate và cần paired confirmation để tách gain do phương pháp khỏi gain do
 thêm step.
 
 ## Cài đặt không dùng Docker

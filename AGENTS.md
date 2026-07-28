@@ -97,6 +97,13 @@ HCM0644 HCM0674 HCM0540 HCM0539 HCM0421 chair bonsai
   Chạy bằng `scripts/run_chair_mcmc_research.sh`. E3-30k chỉ được chi compute
   sau khi E5-30k vượt rõ lower-bound E3-15k; E5 vẫn bị cấm ở confirm/production
   cho tới khi có decision artifact mới.
+- E5 MCMC 30k đã không qua lower-bound gate và không được promote. Candidate
+  `E6-chair-observation-scale-perceptual-v1` là Perceptual-GS core port,
+  `chair/research` only: sensitivity maps chỉ từ internal-train, dual render,
+  sensitivity-guided densification, opacity decline và cap 2.1M. E6 chạy fresh
+  tới 15k bằng `scripts/run_chair_perceptual_research.sh`; chỉ resume cùng run
+  tới 30k với `E6_STOP_STEP=30000` sau khi review gate 15k. Depth
+  reinitialization, Spectral-GS và GaussianSpa không thuộc E6.
 
 ## Closed hybrid submission
 
