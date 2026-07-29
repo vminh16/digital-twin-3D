@@ -8,6 +8,7 @@ from bts_nvs.experiments.density_policies import (
     density_policy_overrides,
 )
 from bts_nvs.experiments.perceptual_policy import (
+    PERCEPTUAL_ADC_CANDIDATE_ID,
     PERCEPTUAL_CANDIDATE_ID,
     perceptual_policy_overrides,
 )
@@ -24,6 +25,7 @@ CANDIDATE_IDS = (
     "E4-chair-observation-scale-absgrad-v1",
     MCMC_CANDIDATE_ID,
     PERCEPTUAL_CANDIDATE_ID,
+    PERCEPTUAL_ADC_CANDIDATE_ID,
 )
 
 CHAIR_RESEARCH_CANDIDATE_IDS = frozenset(
@@ -32,6 +34,7 @@ CHAIR_RESEARCH_CANDIDATE_IDS = frozenset(
         "E4-chair-observation-scale-absgrad-v1",
         MCMC_CANDIDATE_ID,
         PERCEPTUAL_CANDIDATE_ID,
+        PERCEPTUAL_ADC_CANDIDATE_ID,
     )
 )
 
@@ -158,6 +161,12 @@ _CANDIDATES = {
     PERCEPTUAL_CANDIDATE_ID: replace(
         _BASELINE,
         candidate_id=PERCEPTUAL_CANDIDATE_ID,
+        pixel_weight_mode="local-laplacian",
+        observation_mapping_mode="continuous-reprojection",
+    ),
+    PERCEPTUAL_ADC_CANDIDATE_ID: replace(
+        _BASELINE,
+        candidate_id=PERCEPTUAL_ADC_CANDIDATE_ID,
         pixel_weight_mode="local-laplacian",
         observation_mapping_mode="continuous-reprojection",
     ),

@@ -245,12 +245,13 @@ Phase 0  CLOSED  close old phases; add research stage and unified wrapper
 Phase 1  CLOSED  two complete L4 incumbent runs and reports validated
 Phase 2A CLOSED   chair E3/E4 paired mechanism evidence
 Phase 2B CLOSED   chair E5 MCMC rejected at lower-bound gate
-Phase 2C ACTIVE   chair E6 perceptual staged research
+Phase 2C CLOSED   chair E6 perceptual under-densification rejected
+Phase 2D ACTIVE   chair E7 corrected perceptual ADC staged research
 Phase 3  PENDING  conditional fresh E3-30k paired confirmation
 Phase 4  PENDING full-data production, rerender and new submission assembly
 ```
 
-E3, E4, E5 and E6 remain chair/research-only IDs. E5 and E6 are executable
+E3 through E7 remain chair/research-only IDs. E5, E6 and E7 are executable
 only through their locked wrappers. The former `E3-*-scale-guard-*` names are
 superseded and must not be registered.
 ## E6 perceptual densification
@@ -281,3 +282,55 @@ E6_STOP_STEP=30000 bash scripts/run_chair_perceptual_research.sh
 
 The second command is authorized only after review of the 15k gate. Depth
 reinitialization, Spectral-GS, MCMC and GaussianSpa are forbidden in E6.
+
+## E7 corrected perceptual ADC
+
+E6 15k is rejected and must not be resumed as the authoritative
+Perceptual-GS test. It ended with about 297k Gaussians because its `_grow_gs`
+override replaced standard 100-step ADC with HD/MD-only events. The official
+implementation retains normal `densify_and_prune` and ORs perceptual masks
+into clone/split at the 1000/1500-step events:
+
+- paper: <https://arxiv.org/html/2506.12400>
+- official training loop:
+  <https://github.com/eezkni/Perceptual-GS/blob/main/train.py>
+- official density control:
+  <https://github.com/eezkni/Perceptual-GS/blob/main/scene/gaussian_model.py>
+
+`E7-chair-perceptual-adc-corrected-v1` is a fresh `chair/research` candidate
+with these locked invariants:
+
+1. Keep the E3 continuous observation mapping, local-Laplacian loss, SH3,
+   fixed internal holdout and 30k optimizer horizon.
+2. Preserve standard gradient ADC at every 100-step refine event.
+3. At HD/MD events, OR contribution-qualified sensitivity masks into the
+   standard clone/split masks. Perceptual additions do not require the
+   positional gradient threshold a second time.
+4. Compute each event contribution as the maximum over all internal-train
+   views. The gsplat derivative remains the accumulated alpha-compositing
+   weight adapter described for E6.
+5. Keep the published thresholds and intervals: sensitivity `0.9/0.3`,
+   contribution `25/10`, intervals `1000/1500`, BCE weight `0.1`, opacity
+   exponent `1.2`.
+6. Keep the local L4 safety cap at 2.1M. If capacity is exhausted, baseline ADC
+   has first claim before perceptual-only additions.
+7. Scene-adaptive depth reinitialization remains out of scope. The paper's
+   `w/o SDR` ablation isolates the corrected density mechanism with materially
+   less implementation risk.
+
+Run the fresh 15k mechanism gate with:
+
+```bash
+bash scripts/run_chair_perceptual_adc_research.sh
+```
+
+Only after review may the same run resume to 30k:
+
+```bash
+E7_STOP_STEP=30000 bash scripts/run_chair_perceptual_adc_research.sh
+```
+
+At 15k, reject the implementation if it remains below 1.2M Gaussians or if
+the event contribution/ADC diagnostics are absent. Continue only when LPIPS
+and easy-view tail no longer show E6's clear regression, the hard stratum
+retains its gain, and scale/projected-radius tails do not worsen.

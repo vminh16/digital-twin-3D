@@ -35,6 +35,19 @@ def build_perceptual_diagnostics(trainer, output_dir: str | Path) -> dict[str, o
             if value > 0.0:
                 losses.append(value)
     state = trainer.strategy_state
+    density = {
+        "clone_count": int(state.get("perceptual_clone_count", 0)),
+        "split_count": int(state.get("perceptual_split_count", 0)),
+        "cap_hit_step": state.get("perceptual_cap_hit_step"),
+        "cap_max": int(trainer.config["perceptual_cap_max"]),
+    }
+    if "adc_clone_count" in state:
+        density.update(
+            {
+                "adc_clone_count": int(state["adc_clone_count"]),
+                "adc_split_count": int(state["adc_split_count"]),
+            }
+        )
     return {
         "schema_version": 1,
         "candidate_id": trainer.config["candidate_id"],
@@ -50,10 +63,5 @@ def build_perceptual_diagnostics(trainer, output_dir: str | Path) -> dict[str, o
         "sensitivity_min": float(sensitivity.min()),
         "sensitivity_max": float(sensitivity.max()),
         "bins": {name: summarize(mask) for name, mask in bins.items()},
-        "density": {
-            "clone_count": int(state.get("perceptual_clone_count", 0)),
-            "split_count": int(state.get("perceptual_split_count", 0)),
-            "cap_hit_step": state.get("perceptual_cap_hit_step"),
-            "cap_max": int(trainer.config["perceptual_cap_max"]),
-        },
+        "density": density,
     }

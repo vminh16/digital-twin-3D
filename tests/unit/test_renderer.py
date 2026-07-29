@@ -197,6 +197,38 @@ def test_sensitivity_contribution_is_exact_render_weight(monkeypatch) -> None:
     assert torch.isfinite(gaussians.sensitivity_logits.grad).all()
 
 
+def test_perceptual_contribution_sweep_takes_per_gaussian_view_max(
+    monkeypatch,
+) -> None:
+    gaussians = _gaussians()
+    contributions = iter(
+        (
+            torch.tensor([1.0]),
+            torch.tensor([3.0]),
+            torch.tensor([2.0]),
+        )
+    )
+
+    def fake_sensitivity(*args, **kwargs):
+        return object(), next(contributions)
+
+    monkeypatch.setattr(
+        sensitivity_renderer,
+        "render_sensitivity",
+        fake_sensitivity,
+    )
+    maximum = sensitivity_renderer.max_perceptual_contribution(
+        gaussians,
+        (
+            (torch.eye(4), _intrinsics()),
+            (torch.eye(4), _intrinsics()),
+            (torch.eye(4), _intrinsics()),
+        ),
+    )
+
+    torch.testing.assert_close(maximum, torch.tensor([3.0]))
+
+
 def test_renderer_applies_explicit_gaussian_mask(monkeypatch) -> None:
     captured = {}
 

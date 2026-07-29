@@ -25,7 +25,11 @@ from bts_nvs.models.loss import JointLoss
 from bts_nvs.models.optimizer import setup_mean_scheduler, setup_optimizers
 from bts_nvs.rendering.density_strategy_factory import build_density_strategy
 from bts_nvs.rendering.gsplat_renderer import render_gaussians
-from bts_nvs.rendering.sensitivity_renderer import render_sensitivity
+from bts_nvs.rendering.perceptual_events import is_perceptual_density_event
+from bts_nvs.rendering.sensitivity_renderer import (
+    max_perceptual_contribution,
+    render_sensitivity,
+)
 from bts_nvs.training.backend_qualification import (
     AUDIT_STEPS,
     DENSITY_EVENT_STEPS,
@@ -240,8 +244,13 @@ class Trainer:
         self.dataset = dataset
         self.output_dir = Path(output_dir)
         self.config = dict(config)
-        self.perceptual_enabled = (
-            self.config.get("density_strategy") == "perceptual"
+        density_strategy = self.config.get("density_strategy")
+        self.perceptual_enabled = density_strategy in {
+            "perceptual",
+            "perceptual-adc",
+        }
+        self.perceptual_full_view_contribution = (
+            density_strategy == "perceptual-adc"
         )
         if self.perceptual_enabled:
             if not self.config.get("internal_holdout", False):
@@ -427,6 +436,37 @@ class Trainer:
         # Start state
         self.start_step = 0
         self.active_sh_degree = 0
+
+    def _perceptual_contribution_views(self):
+        normalization = self.dataset.manifest.normalization_transform
+        for index in range(len(self.dataset)):
+            world_to_camera, intrinsics = self.dataset.camera_geometry(index)
+            normalized = _normalize_world_to_camera(
+                world_to_camera,
+                normalization,
+            )
+            yield torch.from_numpy(normalized).to(self.device), intrinsics
+
+    def _attach_perceptual_event_contribution(
+        self,
+        info: dict[str, Any],
+        step: int,
+    ) -> None:
+        if not self.perceptual_full_view_contribution:
+            return
+        if step >= self.config["refine_stop_step"]:
+            return
+        if not is_perceptual_density_event(
+            step,
+            high_interval=self.config["perceptual_high_interval"],
+            medium_interval=self.config["perceptual_medium_interval"],
+        ):
+            return
+        info["perceptual_contribution"] = max_perceptual_contribution(
+            self.gaussians,
+            self._perceptual_contribution_views(),
+            rasterize_mode=self.config.get("rasterize_mode", "classic"),
+        )
 
     @torch.no_grad()
     def evaluate_train_view(
@@ -703,8 +743,12 @@ class Trainer:
                         rasterize_mode=self.config.get(
                             "rasterize_mode", "classic"
                         ),
+                        compute_contribution=(
+                            not self.perceptual_full_view_contribution
+                        ),
                     )
-                    result.info["perceptual_contribution"] = contribution
+                    if contribution is not None:
+                        result.info["perceptual_contribution"] = contribution
             t_fwd = time.perf_counter() - t_fwd_start
 
             # 2. Strategy pre-backward step (step + 1 because strategy step is 1-based)
@@ -817,6 +861,10 @@ class Trainer:
 
             # 6. Strategy post-backward step (updates params/optimizers in-place)
             t_strategy_start = time.perf_counter()
+            self._attach_perceptual_event_contribution(
+                result.info,
+                completed_step,
+            )
             gaussians_before_density = self.gaussians.num_gaussians
             self.strategy.step_post_backward(
                 state=self.strategy_state,

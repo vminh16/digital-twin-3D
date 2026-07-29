@@ -104,6 +104,15 @@ HCM0644 HCM0674 HCM0540 HCM0539 HCM0421 chair bonsai
   tới 15k bằng `scripts/run_chair_perceptual_research.sh`; chỉ resume cùng run
   tới 30k với `E6_STOP_STEP=30000` sau khi review gate 15k. Depth
   reinitialization, Spectral-GS và GaussianSpa không thuộc E6.
+- E6 15k không được promote: nó thay ADC 100-step bằng HD/MD event và kết thúc
+  chỉ với khoảng 297k Gaussian, nên không phải phép kiểm định hợp lệ của
+  Perceptual-GS công bố. Candidate
+  `E7-chair-perceptual-adc-corrected-v1` là corrected research-only port: giữ
+  ADC chuẩn mỗi 100 step, OR thêm HD/MD không qua gradient gate lần hai, và lấy
+  max contribution trên toàn bộ internal-train views tại event. E7 phải chạy
+  fresh bằng `scripts/run_chair_perceptual_adc_research.sh`; chỉ resume 30k với
+  `E7_STOP_STEP=30000` sau review gate 15k. Cap 2.1M ưu tiên ADC nền; SDR vẫn
+  nằm ngoài E7.
 
 ## Closed hybrid submission
 

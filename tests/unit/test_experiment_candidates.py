@@ -11,7 +11,10 @@ from bts_nvs.experiments.candidates import (
 )
 from bts_nvs.experiments.contracts import CandidateSettings
 from bts_nvs.experiments.density_policies import MCMC_CANDIDATE_ID
-from bts_nvs.experiments.perceptual_policy import PERCEPTUAL_CANDIDATE_ID
+from bts_nvs.experiments.perceptual_policy import (
+    PERCEPTUAL_ADC_CANDIDATE_ID,
+    PERCEPTUAL_CANDIDATE_ID,
+)
 
 
 def _settings(**overrides) -> CandidateSettings:
@@ -47,6 +50,7 @@ def test_registry_locks_first_executable_candidates() -> None:
         "E4-chair-observation-scale-absgrad-v1",
         MCMC_CANDIDATE_ID,
         PERCEPTUAL_CANDIDATE_ID,
+        PERCEPTUAL_ADC_CANDIDATE_ID,
     )
     baseline = candidate_settings("B0-reference")
     absgrad = candidate_settings("E1-density-absgrad-t04-v1")
@@ -60,6 +64,7 @@ def test_registry_locks_first_executable_candidates() -> None:
     )
     chair_mcmc = candidate_settings(MCMC_CANDIDATE_ID)
     chair_perceptual = candidate_settings(PERCEPTUAL_CANDIDATE_ID)
+    chair_perceptual_adc = candidate_settings(PERCEPTUAL_ADC_CANDIDATE_ID)
 
     assert absgrad == replace(
         baseline,
@@ -107,6 +112,10 @@ def test_registry_locks_first_executable_candidates() -> None:
     assert chair_perceptual == replace(
         chair_mapping,
         candidate_id=PERCEPTUAL_CANDIDATE_ID,
+    )
+    assert chair_perceptual_adc == replace(
+        chair_mapping,
+        candidate_id=PERCEPTUAL_ADC_CANDIDATE_ID,
     )
 
 
@@ -172,6 +181,17 @@ def test_perceptual_candidate_keeps_e3_base_and_adds_locked_policy() -> None:
     assert overrides["perceptual_medium_interval"] == 1_500
     assert overrides["perceptual_cap_max"] == 2_100_000
     assert overrides["refine_stop_step"] == 15_000
+
+
+def test_perceptual_adc_candidate_preserves_e3_and_selects_corrected_strategy() -> None:
+    overrides = candidate_training_overrides(PERCEPTUAL_ADC_CANDIDATE_ID)
+
+    assert overrides["pixel_weight_mode"] == "local-laplacian"
+    assert overrides["observation_mapping_mode"] == "continuous-reprojection"
+    assert overrides["density_strategy"] == "perceptual-adc"
+    assert overrides["perceptual_high_interval"] == 1_000
+    assert overrides["perceptual_medium_interval"] == 1_500
+    assert overrides["perceptual_cap_max"] == 2_100_000
 
 
 @pytest.mark.parametrize(

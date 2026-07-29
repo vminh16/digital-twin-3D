@@ -422,6 +422,49 @@ def test_perceptual_trainer_uses_dual_branch_loss_and_contribution(
     assert metric["sensitivity_loss"] > 0.0
 
 
+def test_corrected_perceptual_trainer_sweeps_only_at_density_event(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    trainer = Trainer.__new__(Trainer)
+    trainer.perceptual_full_view_contribution = True
+    trainer.config = {
+        "refine_stop_step": 15_000,
+        "perceptual_high_interval": 1_000,
+        "perceptual_medium_interval": 1_500,
+        "rasterize_mode": "classic",
+    }
+    trainer.gaussians = object()
+    trainer._perceptual_contribution_views = lambda: iter(("all-views",))
+    calls = []
+
+    def fake_sweep(gaussians, views, **kwargs):
+        calls.append((gaussians, tuple(views), kwargs))
+        return torch.tensor([7.0])
+
+    monkeypatch.setattr(
+        trainer_module,
+        "max_perceptual_contribution",
+        fake_sweep,
+    )
+    non_event_info = {}
+    trainer._attach_perceptual_event_contribution(non_event_info, 700)
+    event_info = {}
+    trainer._attach_perceptual_event_contribution(event_info, 1_000)
+
+    assert non_event_info == {}
+    torch.testing.assert_close(
+        event_info["perceptual_contribution"],
+        torch.tensor([7.0]),
+    )
+    assert calls == [
+        (
+            trainer.gaussians,
+            ("all-views",),
+            {"rasterize_mode": "classic"},
+        )
+    ]
+
+
 def test_trainer_accepts_sh4_candidate_model(
     tmp_path: Path,
     manifest_artifact: Path,

@@ -26,7 +26,7 @@ class DensityRegularizer:
 
     def __init__(self, config: Mapping[str, Any]) -> None:
         mode = config.get("density_strategy", "default")
-        if mode not in {"default", "mcmc", "perceptual"}:
+        if mode not in {"default", "mcmc", "perceptual", "perceptual-adc"}:
             raise ValueError(f"unsupported density strategy: {mode}")
         self.mode = mode
         self.opacity_weight = _weight(config, "mcmc_opacity_reg")

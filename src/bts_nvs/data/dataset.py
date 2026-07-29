@@ -195,6 +195,23 @@ class SceneDataset:
             )
         return self._build_sample(self._indices[index])
 
+    def camera_geometry(
+        self,
+        index: int,
+    ) -> tuple[np.ndarray, CameraIntrinsics]:
+        manifest_index = self._indices[index]
+        intrinsics = self.manifest.train_intrinsics[manifest_index]
+        if self.resize is not None:
+            width, height = self.resize
+            intrinsics = intrinsics.resized(width=width, height=height)
+        return (
+            np.asarray(
+                self.manifest.train_world_to_camera[manifest_index],
+                dtype=np.float64,
+            ).copy(),
+            intrinsics,
+        )
+
     def _build_sample(self, index: int) -> CameraSample:
         path = self.scene_root / self.manifest.train_image_paths[index]
         with Image.open(path) as source:

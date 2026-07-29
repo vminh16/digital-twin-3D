@@ -5,6 +5,7 @@ from dataclasses import asdict, dataclass
 
 
 PERCEPTUAL_CANDIDATE_ID = "E6-chair-observation-scale-perceptual-v1"
+PERCEPTUAL_ADC_CANDIDATE_ID = "E7-chair-perceptual-adc-corrected-v1"
 
 
 @dataclass(frozen=True)
@@ -22,8 +23,8 @@ class PerceptualDensityPolicy:
     perceptual_cap_max: int = 2_100_000
 
     def __post_init__(self) -> None:
-        if self.density_strategy != "perceptual":
-            raise ValueError("density_strategy must be perceptual")
+        if self.density_strategy not in {"perceptual", "perceptual-adc"}:
+            raise ValueError("density_strategy must be perceptual or perceptual-adc")
         finite_fields = (
             "perceptual_loss_weight",
             "perceptual_sensitivity_lr",
@@ -67,15 +68,22 @@ class PerceptualDensityPolicy:
 
 
 _POLICY = PerceptualDensityPolicy()
+_ADC_POLICY = PerceptualDensityPolicy(density_strategy="perceptual-adc")
 
 
 def perceptual_policy_overrides(
     candidate_id: str,
 ) -> dict[str, float | int | str]:
-    if candidate_id == PERCEPTUAL_CANDIDATE_ID:
-        return _POLICY.training_overrides()
-    return {}
+    policies = {
+        PERCEPTUAL_CANDIDATE_ID: _POLICY,
+        PERCEPTUAL_ADC_CANDIDATE_ID: _ADC_POLICY,
+    }
+    policy = policies.get(candidate_id)
+    return policy.training_overrides() if policy is not None else {}
 
 
 def is_perceptual_candidate(candidate_id: str | None) -> bool:
-    return candidate_id == PERCEPTUAL_CANDIDATE_ID
+    return candidate_id in {
+        PERCEPTUAL_CANDIDATE_ID,
+        PERCEPTUAL_ADC_CANDIDATE_ID,
+    }
