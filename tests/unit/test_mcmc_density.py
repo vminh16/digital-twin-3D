@@ -142,3 +142,11 @@ def test_perceptual_density_has_exact_zero_mcmc_regularization() -> None:
                 "mcmc_opacity_reg": 0.001,
             }
         )
+
+
+def test_spectral_density_has_exact_zero_mcmc_regularization() -> None:
+    gaussians = _gaussians()
+    loss = DensityRegularizer({"density_strategy": "spectral"})(gaussians)
+
+    assert loss.shape == ()
+    assert loss.item() == 0.0
