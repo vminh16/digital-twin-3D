@@ -14,6 +14,7 @@ from bts_nvs.rendering.perceptual_adc_strategy import (
 from bts_nvs.rendering.perceptual_density_strategy import (
     GsplatPerceptualStrategy,
 )
+from bts_nvs.rendering.spectral_density_strategy import GsplatSpectralStrategy
 
 
 def build_density_strategy(
@@ -25,6 +26,7 @@ def build_density_strategy(
     | GsplatMCMCStrategy
     | GsplatPerceptualStrategy
     | GsplatPerceptualADCStrategy
+    | GsplatSpectralStrategy
 ):
     mode = config.get("density_strategy", "default")
     common = {
@@ -84,6 +86,20 @@ def build_density_strategy(
             medium_contribution=config["perceptual_medium_contribution"],
             opacity_exponent=config["perceptual_opacity_exponent"],
             scene_sensitivity=config["perceptual_scene_sensitivity"],
+            prune_opa=config.get("prune_opa", 0.005),
+            grow_grad2d=config.get("grow_grad2d", 0.0002),
+            grow_scale3d=config.get("grow_scale3d", 0.01),
+            reset_every=config.get("reset_every", 3_000),
+            **common,
+        )
+    if mode == "spectral":
+        return GsplatSpectralStrategy(
+            gaussians,
+            optimizers,
+            cap_max=config["spectral_cap_max"],
+            entropy_threshold=config["spectral_entropy_threshold"],
+            split_k=config["spectral_split_k"],
+            split_k0=config["spectral_split_k0"],
             prune_opa=config.get("prune_opa", 0.005),
             grow_grad2d=config.get("grow_grad2d", 0.0002),
             grow_scale3d=config.get("grow_scale3d", 0.01),

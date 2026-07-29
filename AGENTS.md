@@ -73,7 +73,8 @@ HCM0644 HCM0674 HCM0540 HCM0539 HCM0421 chair bonsai
   tạo candidate/baseline ID mới.
 - Modules 1–3, Stage A, Stage B1, five-scene screen, bốn production override,
   rerender và submission v2 đã hoàn tất. Durable history nằm tại
-  `docs/superpowers/history/2026-07-27-optimization-phase-closure.md`.
+  `docs/superpowers/history/2026-07-29-project-diagnosis-and-experiment-report.md`.
+  Bản closure ngày 2026-07-27 chỉ còn là provenance ngắn.
 - Research authority hiện tại là
   `docs/superpowers/specs/2026-07-27-chair-bonsai-deep-optimization.md`.
   Chỉ `chair` và `bonsai` được mở cho `scene_opt_v3`; năm scene còn lại bị
@@ -109,10 +110,20 @@ HCM0644 HCM0674 HCM0540 HCM0539 HCM0421 chair bonsai
   Perceptual-GS công bố. Candidate
   `E7-chair-perceptual-adc-corrected-v1` là corrected research-only port: giữ
   ADC chuẩn mỗi 100 step, OR thêm HD/MD không qua gradient gate lần hai, và lấy
-  max contribution trên toàn bộ internal-train views tại event. E7 phải chạy
-  fresh bằng `scripts/run_chair_perceptual_adc_research.sh`; chỉ resume 30k với
-  `E7_STOP_STEP=30000` sau review gate 15k. Cap 2.1M ưu tiên ADC nền; SDR vẫn
-  nằm ngoài E7.
+  max contribution trên toàn bộ internal-train views tại event. E7 15k đã pass
+  mechanism gate nhưng fail quality/tail gate: Score50 chỉ `+0.0647` so với
+  E3, SSIM và spurious-edge regression, radius/scale tail tăng mạnh. Không
+  resume E7, không chạy E3-30k confirmation và không promote E4–E7.
+- Candidate active cuối cho chair là
+  `E8-chair-observation-scale-spectral-split-v1`; implementation và local
+  tests đã pass, hiện chỉ được phép fresh `chair/research` 15k. E8 giữ E3
+  và standard ADC, thêm gradient-independent 3D shape-aware split cho
+  Gaussian có spectral entropy dưới 0.5; không gồm Spectral-GS 2D filter,
+  perceptual logic hay global pruning. Chạy bằng
+  `scripts/run_chair_spectral_research.sh`; CUDA split preflight là bắt buộc.
+  Resume 30k và production đều cần decision artifact mới. Nếu E8 fail ở bất
+  kỳ gate nào, fallback là toàn bộ folder chair từ
+  `MVP-hybrid-4scene-q99-v1`, không được trộn frame.
 
 ## Closed hybrid submission
 

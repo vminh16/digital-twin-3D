@@ -1,7 +1,8 @@
 # Chair and bonsai deep-optimization authority
 
-**Status:** ACTIVE — chair E5 rejected; E6 perceptual staged research
-implemented, L4 15k run pending.
+**Status:** ACTIVE — chair E4–E7 rejected; E8 3D shape-aware spectral
+splitting is implemented and authorized for one fresh 15k research gate.
+No chair candidate is authorized for resume or production.
 
 **Plan ID:** `scene-opt-v3-chair-bonsai`
 
@@ -246,14 +247,17 @@ Phase 1  CLOSED  two complete L4 incumbent runs and reports validated
 Phase 2A CLOSED   chair E3/E4 paired mechanism evidence
 Phase 2B CLOSED   chair E5 MCMC rejected at lower-bound gate
 Phase 2C CLOSED   chair E6 perceptual under-densification rejected
-Phase 2D ACTIVE   chair E7 corrected perceptual ADC staged research
+Phase 2D CLOSED   chair E7 corrected ADC rejected at 15k quality/tail gate
+Phase 2E READY    chair E8 implementation complete; fresh L4 15k gate pending
 Phase 3  PENDING  conditional fresh E3-30k paired confirmation
 Phase 4  PENDING full-data production, rerender and new submission assembly
 ```
 
-E3 through E7 remain chair/research-only IDs. E5, E6 and E7 are executable
-only through their locked wrappers. The former `E3-*-scale-guard-*` names are
-superseded and must not be registered.
+E3 through E8 remain chair/research-only IDs. E5, E6 and E7 are executable
+only through their locked historical wrappers. E8 code, artifact contract and
+CPU tests pass; its wrapper runs a mandatory CUDA split preflight before
+loading the scene. The former `E3-*-scale-guard-*` names are superseded and
+must not be registered.
 ## E6 perceptual densification
 
 E5 completed 30k but failed its lower-bound gate, so E3-30k remains unspent.
@@ -334,3 +338,141 @@ At 15k, reject the implementation if it remains below 1.2M Gaussians or if
 the event contribution/ADC diagnostics are absent. Continue only when LPIPS
 and easy-view tail no longer show E6's clear regression, the hard stratum
 retains its gain, and scale/projected-radius tails do not worsen.
+
+E7 completed 15k with 1.662M Gaussians and complete ADC/perceptual diagnostics,
+so the corrected mechanism is operational. It nevertheless failed promotion:
+Score50 was only `+0.0647` versus E3 with CI crossing zero, SSIM and
+spurious-edge regressed, runtime was `1.384x`, projected-radius p99 rose
+`81 -> 124 px`, and scale p99 rose `0.0350 -> 0.0762`. Frame 20 developed a
+new large blur blob and sentinel 870 did not improve. E7 must not resume to
+30k; E3-30k confirmation remains unspent.
+
+## E8 3D shape-aware spectral splitting
+
+Candidate ID:
+
+```text
+E8-chair-observation-scale-spectral-split-v1
+```
+
+E8 tests the smallest causal part of Spectral-GS that directly addresses the
+observed chair failure. Spectral-GS identifies low-spectral-entropy,
+high-condition-number Gaussians as needle-like primitives that gradient-based
+ADC can miss, and replaces isotropic split shrinkage with shape-aware
+splitting. E8 ports only the paper's 3D split. The 2D view-consistent filter is
+out of scope because it changes the rasterizer and would prevent attribution
+of the first result.
+
+Primary method sources:
+
+- paper: <https://arxiv.org/abs/2409.12771>
+- project: <https://letianhuang.github.io/spectralgs/>
+- supplemental proofs and algorithm:
+  <https://letianhuang.github.io/assets/pdf/SpectralGS_supple.pdf>
+
+Locked invariants:
+
+1. Inherit E3 continuous observation mapping, local-Laplacian loss, SH3,
+   targeted holdout, seed 0 and the 30k optimizer trajectory.
+2. Preserve standard ADC every 100 steps from 500 through 15k.
+3. At the same refinement events, independently select Gaussians with raw 3D
+   covariance spectral entropy below `0.5`; selection does not require a
+   positional-gradient threshold.
+4. Compute
+   `p_i = s_i^2 / sum_j(s_j^2)` and
+   `H = -sum_i p_i log(p_i)` in FP32 with a finite epsilon. Record
+   `kappa = max(s_i^2) / min(s_i^2)` as a diagnostic, not as a second tuning
+   threshold.
+5. Apply the anisotropic child-scale construction in Spectral-GS equations
+   10–12 with the published `k=0.6` and `k0=1.0`. Child positions are sampled
+   from the parent PDF. A unit test must prove finite children and
+   `kappa(child) <= kappa(parent)` within numerical tolerance.
+6. Standard ADC has first claim on a Gaussian and on the 2.1M safety budget.
+   Spectral splitting only handles additional low-entropy parents; one parent
+   can be split at most once per event.
+7. Keep existing opacity pruning. Do not add entropy loss, opacity L1,
+   Perceptual-GS, MCMC, GaussianSpa, global scale pruning or the Spectral-GS
+   2D filter.
+8. Restrict the ID to `scene=chair, stage=research`. Confirm and production
+   reject it until a new paired decision artifact exists.
+
+Required module boundaries:
+
+```text
+experiments/spectral_policy.py       candidate constants and locked policy
+rendering/spectral_math.py           entropy, condition number, child scales
+rendering/spectral_density_strategy.py standard ADC plus spectral split
+evaluation/spectral_diagnostics.py   mechanism and spectral-tail artifact
+scripts/run_chair_spectral_research.sh thin locked orchestration
+```
+
+Do not add E8 branches to the trainer beyond density-strategy construction and
+final diagnostic emission. `spectral_math.py` must remain independent of the
+training loop and gsplat optimizer mutation.
+
+The fresh first run uses a durable 15k stop and rolling recovery:
+
+```bash
+bash scripts/run_chair_spectral_research.sh
+```
+
+Implementation result:
+
+- policy, spectral math, density strategy and diagnostics are separate modules;
+- standard ADC and gradient-independent spectral splitting have distinct
+  counters and share a hard 2.1M operation budget;
+- child scales implement equations 10–11 and abort if child condition number
+  exceeds the parent;
+- artifact validation requires `spectral_diagnostics.json`;
+- the wrapper is hard-locked to fresh 15k;
+- local unit suite passes; the real CUDA split preflight runs automatically on
+  the L4 before the scene is loaded.
+
+The wrapper must lock the candidate ID, scene, factor 1, seed 0, targeted
+holdout, `max_steps=30000`, initial `stop_step=15000`, cap 2.1M and output
+root. A 30k resume argument may exist in code but is forbidden until the 15k
+decision is recorded.
+
+The 15k mechanism gate requires:
+
+- standard ADC and spectral split counters are present and nonzero;
+- all entropy/condition values and child-scale checks are finite;
+- final population is at most 2.1M and the cap is not silently bypassed;
+- opacity mass below entropy `0.5` decreases by at least 25% versus E3;
+- condition-number p99, scale p99 and projected-radius p99 do not worsen
+  versus E3.
+
+The 15k quality gate additionally requires paired E8−E3:
+
+- Score50 at least `+0.50`, with bootstrap CI not materially tilted toward
+  regression;
+- mean LPIPS no worse and SSIM regression no larger than `0.001`;
+- hard-stratum and worst-decile Score50 no worse;
+- spurious-edge and symmetric-edge do not worsen;
+- frames 20, 525, 870 and 885 do not lose more than `0.25` Score50, and no new
+  blob/veil appears in visual audit;
+- wall time at most `1.25x` E3 and peak VRAM below 23 GB.
+
+Failure of any mechanism, tail or catastrophic-frame gate rejects E8 at 15k;
+mean gain cannot override it. Only a passing 15k decision may resume the same
+run to 30k. E8-30k must first beat E3-15k by at least `+0.75` Score50 with all
+tail gates intact before spending a fresh paired E3-30k control. Production
+authorization requires the final paired 30k comparison, not a 15k result.
+
+### E8 fallback contract
+
+The closed `MVP-hybrid-4scene-q99-v1` remains the recovery source. If E8 fails
+implementation, 15k, 30k lower-bound, paired 30k, production validation or
+rerender validation:
+
+1. do not authorize or resume the failed stage;
+2. do not use E3 as a production fallback; it is a research control;
+3. restore the complete byte-identical chair folder rendered from
+   `runs/scene_opt_v2/production_mvp/scenes/chair`;
+4. keep the existing bonsai, HCM0421, HCM0539 and three B0 fallback folders
+   unchanged;
+5. never mix E8 and incumbent frames within one scene.
+
+E8 may replace chair only after a fresh full-data 30k production run without
+internal holdout produces a complete checkpoint and every exact test pose
+passes filename, codec, dimension and non-blank validation.

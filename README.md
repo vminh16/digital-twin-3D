@@ -47,9 +47,9 @@ không có per-scene metric để dùng làm tín hiệu tuning.
 Plan active hiện chỉ tối ưu sâu `chair` và `bonsai`. Năm scene còn lại bị
 freeze. Authority và execution plan:
 
+- [consolidated project diagnosis and experiment history](docs/superpowers/history/2026-07-29-project-diagnosis-and-experiment-report.md)
 - [chair/bonsai deep-optimization authority](docs/superpowers/specs/2026-07-27-chair-bonsai-deep-optimization.md)
 - [active execution plan](docs/superpowers/plans/2026-07-27-chair-bonsai-deep-optimization.md)
-- [closed-phase summary](docs/superpowers/history/2026-07-27-optimization-phase-closure.md)
 
 Research thông thường giữ lịch optimizer 30k nhưng dừng ở 15k, dùng internal
 holdout và không lưu checkpoint:
@@ -65,19 +65,23 @@ khóa candidate, cap 2M và rolling recovery 3k:
 bash scripts/run_chair_mcmc_research.sh
 ```
 
-Chair E6 Perceptual-GS core chạy theo hai mốc trên cùng lịch optimizer 30k:
+Chair E6 bị reject vì implementation thay standard ADC và chỉ kết thúc với
+khoảng 297k Gaussian. E7 đã sửa ADC và chạy fresh tới 15k, nhưng cũng bị
+reject: Score50 chỉ `+0.0647` so với E3, SSIM/spurious-edge và scale/radius
+tail xấu hơn. Không resume E6/E7 và không chi E3-30k confirmation.
+
+Candidate active cuối cho chair là
+`E8-chair-observation-scale-spectral-split-v1`: chỉ port 3D shape-aware
+splitting, giữ nguyên E3 và không thêm 2D filter/perceptual logic.
+Implementation và local test đã hoàn tất; wrapper chạy CUDA preflight rồi mới
+train fresh 15k trên L4:
 
 ```bash
-bash scripts/run_chair_perceptual_research.sh
-E6_STOP_STEP=30000 bash scripts/run_chair_perceptual_research.sh
+bash scripts/run_chair_spectral_research.sh
 ```
 
-Lệnh thứ hai chỉ hợp lệ sau khi artifact 15k đã được review và dùng đúng rolling
-recovery của run E6. Candidate này vẫn là `chair/research` only.
-
-Không cần chạy E3-30k trước E6. Chỉ chi compute cho fresh E3-30k nếu E6-30k
-qua gate và cần paired confirmation để tách gain do phương pháp khỏi gain do
-thêm step.
+Nếu E8 fail ở bất kỳ gate nào, MVP dùng nguyên folder chair của
+`MVP-hybrid-4scene-q99-v1`; không trộn output theo frame.
 
 ## Cài đặt không dùng Docker
 

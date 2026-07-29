@@ -8,6 +8,7 @@ import pytest
 from bts_nvs.experiments.commands import build_training_command
 from bts_nvs.experiments.density_policies import MCMC_CANDIDATE_ID
 from bts_nvs.experiments.perceptual_policy import PERCEPTUAL_CANDIDATE_ID
+from bts_nvs.experiments.spectral_policy import SPECTRAL_CANDIDATE_ID
 from bts_nvs.experiments.experiment import Experiment, ExperimentStage
 
 
@@ -183,6 +184,35 @@ def test_perceptual_research_stops_at_15k_then_resumes_to_30k(
     assert first["--checkpoint_every"] == "3000"
     assert first["--rolling_checkpoint"] is True
     assert "--resume" not in first
+    assert resumed["--resume"] == str(recovery)
+
+    with pytest.raises(ValueError, match="must resume"):
+        _build(tmp_path, experiment, stop_step=30_000)
+
+
+def test_spectral_research_uses_staged_rolling_recovery(tmp_path: Path) -> None:
+    paths = _paths(tmp_path)
+    experiment = Experiment(
+        stage=ExperimentStage.RESEARCH,
+        scene_id="chair",
+        candidate_id=SPECTRAL_CANDIDATE_ID,
+    )
+    recovery = paths["output_dir"] / "checkpoints" / "recovery.pt"
+
+    first = _option_values(_build(tmp_path, experiment, stop_step=15_000))
+    resumed = _option_values(
+        _build(
+            tmp_path,
+            experiment,
+            stop_step=30_000,
+            resume_path=recovery,
+        )
+    )
+
+    assert first["--stop_step"] == "15000"
+    assert first["--rolling_checkpoint"] is True
+    assert "--resume" not in first
+    assert resumed["--stop_step"] == "30000"
     assert resumed["--resume"] == str(recovery)
 
     with pytest.raises(ValueError, match="must resume"):

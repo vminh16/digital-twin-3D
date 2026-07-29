@@ -15,6 +15,7 @@ from bts_nvs.experiments.perceptual_policy import (
     PERCEPTUAL_ADC_CANDIDATE_ID,
     PERCEPTUAL_CANDIDATE_ID,
 )
+from bts_nvs.experiments.spectral_policy import SPECTRAL_CANDIDATE_ID
 
 
 def _settings(**overrides) -> CandidateSettings:
@@ -51,6 +52,7 @@ def test_registry_locks_first_executable_candidates() -> None:
         MCMC_CANDIDATE_ID,
         PERCEPTUAL_CANDIDATE_ID,
         PERCEPTUAL_ADC_CANDIDATE_ID,
+        SPECTRAL_CANDIDATE_ID,
     )
     baseline = candidate_settings("B0-reference")
     absgrad = candidate_settings("E1-density-absgrad-t04-v1")

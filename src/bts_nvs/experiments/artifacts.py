@@ -11,7 +11,10 @@ import yaml
 
 from bts_nvs.data.perceptual_sensitivity import validate_sensitivity_artifact
 from bts_nvs.evaluation.experiment_report import build_experiment_report
-from bts_nvs.experiments.candidates import candidate_settings
+from bts_nvs.experiments.candidates import (
+    candidate_settings,
+    is_staged_research_candidate,
+)
 from bts_nvs.experiments.density_policies import (
     is_full_horizon_research_candidate,
 )
@@ -25,6 +28,10 @@ from bts_nvs.experiments.observation_mapping_artifacts import (
     validate_observation_mapping_artifact,
 )
 from bts_nvs.experiments.perceptual_policy import is_perceptual_candidate
+from bts_nvs.experiments.spectral_policy import is_spectral_candidate
+from bts_nvs.evaluation.spectral_diagnostics import (
+    validate_spectral_diagnostics,
+)
 from bts_nvs.experiments.provenance import (
     canonical_json_sha256,
     load_json_artifact,
@@ -119,7 +126,16 @@ def validate_run_artifacts(
             sensitivity_sha256,
             train_names,
         )
-    del config
+    spectral_threshold = (
+        float(config["spectral_entropy_threshold"])
+        if is_spectral_candidate(experiment.candidate_id)
+        else None
+    )
+    spectral_cap = (
+        int(config["spectral_cap_max"])
+        if is_spectral_candidate(experiment.candidate_id)
+        else None
+    )
     _validate_provenance(run, manifest_sha256)
     summary = _load_summary(run / "summary.json", target_step)
     peak_gaussians, final_gaussians = _validate_metric_stream(
@@ -152,6 +168,8 @@ def validate_run_artifacts(
             summary,
             peak_gaussians,
             final_gaussians,
+            spectral_threshold,
+            spectral_cap,
         )
         if b0_report is not None:
             paired_ratio = _paired_time_ratio(report, b0_report)
@@ -248,9 +266,9 @@ def _validate_target_step(experiment: Experiment, step: int) -> None:
         if step not in (15_000, 30_000):
             raise ValueError("confirm step must be 15000 or 30000")
     elif experiment.stage is ExperimentStage.RESEARCH:
-        if is_perceptual_candidate(experiment.candidate_id):
+        if is_staged_research_candidate(experiment.candidate_id):
             if step not in (15_000, 30_000):
-                raise ValueError("perceptual research step must be 15000 or 30000")
+                raise ValueError("staged research step must be 15000 or 30000")
         else:
             expected = (
                 30_000
@@ -394,7 +412,7 @@ def _validate_checkpoint_policy(
         stage is ExperimentStage.RESEARCH
         and (
             is_full_horizon_research_candidate(experiment.candidate_id)
-            or is_perceptual_candidate(experiment.candidate_id)
+            or is_staged_research_candidate(experiment.candidate_id)
         )
     )
     if stage in (
@@ -423,7 +441,7 @@ def _report_root(run: Path, experiment: Experiment, step: int) -> Path:
         experiment.stage is ExperimentStage.CONFIRM
         or (
             experiment.stage is ExperimentStage.RESEARCH
-            and is_perceptual_candidate(experiment.candidate_id)
+            and is_staged_research_candidate(experiment.candidate_id)
         )
     ):
         return run / "snapshots" / "step_000015000"
@@ -441,6 +459,8 @@ def _validate_holdout_artifacts(
     summary: Mapping[str, object],
     peak_gaussians: int,
     final_gaussians: int,
+    spectral_threshold: float | None,
+    spectral_cap: int | None,
 ) -> dict[str, object]:
     if not root.is_dir():
         raise FileNotFoundError(f"required report directory does not exist: {root}")
@@ -452,6 +472,8 @@ def _validate_holdout_artifacts(
     )
     if is_perceptual_candidate(experiment.candidate_id):
         required_reports += ("perceptual_diagnostics.json",)
+    if is_spectral_candidate(experiment.candidate_id):
+        required_reports += ("spectral_diagnostics.json",)
     for name in required_reports:
         path = root / name
         if not path.is_file():
@@ -463,6 +485,15 @@ def _validate_holdout_artifacts(
     pose = records["pose_strata.json"]
     report = records["experiment_report.json"]
     gaussian_diagnostics = records.get("gaussian_diagnostics.json")
+    if is_spectral_candidate(experiment.candidate_id):
+        if spectral_threshold is None or spectral_cap is None:
+            raise ValueError("spectral artifact contract is missing")
+        validate_spectral_diagnostics(
+            records["spectral_diagnostics.json"],
+            candidate_id=experiment.candidate_id,
+            threshold=spectral_threshold,
+            cap_max=spectral_cap,
+        )
     expected_resources = {
         "total_time_seconds": float(summary["total_time_seconds"]),
         "max_vram_mb": float(summary["max_vram_mb"]),
@@ -697,6 +728,7 @@ def _reject_production_holdout_artifacts(run: Path) -> None:
             run / "gaussian_diagnostics.json",
             run / "initialization_diagnostics.json",
             run / "perceptual_diagnostics.json",
+            run / "spectral_diagnostics.json",
             run / "perceptual_sensitivity",
             run / "validation_renders",
             run / "diagnostic_filtered_renders",

@@ -2,8 +2,9 @@
 
 **Authority:** `../specs/2026-07-27-chair-bonsai-deep-optimization.md`
 
-**Status:** ACTIVE — E5 MCMC rejected; E6 perceptual staged research
-implemented, L4 15k run pending.
+**Status:** ACTIVE — E4–E7 rejected; E8 spectral split implementation and
+local tests are complete. Fresh L4 15k evidence is pending; no chair candidate
+is authorized for resume or production.
 
 ## Success criteria
 
@@ -235,22 +236,28 @@ evidence before production and avoids committing compute to an unidentified
 failure mode. The 70k shortcut remains unauthorized. Run one GPU process at a
 time.
 
-## Current command boundary
+## Registered command provenance
 
-Only registered candidates may be invoked:
+These entrypoints reproduce registered historical candidates. None is
+currently authorized for a new chair run:
 
 ```bash
 bash scripts/run_chair_bonsai_research.sh chair E2-loss-local-laplacian-v1
 bash scripts/run_chair_bonsai_research.sh chair E3-chair-observation-scale-v1
 bash scripts/run_chair_bonsai_research.sh chair E4-chair-observation-scale-absgrad-v1
 bash scripts/run_chair_bonsai_research.sh bonsai E2-appearance-sh4-v1
+bash scripts/run_chair_mcmc_research.sh
+bash scripts/run_chair_perceptual_research.sh
+bash scripts/run_chair_perceptual_adc_research.sh
 ```
 
 The E2 commands reproduce the closed Phase 1 incumbents. Chair E3 is the
-completed Phase 2 control and chair E4 is its executable AbsGrad comparison.
-E5 is closed as rejected. E6 is the only active Phase 2 candidate; all other
+completed Phase 2 control. E4 and E5 are closed as rejected. E6 is closed as
+an under-densified implementation. E7 passed its mechanism gate but failed
+quality, compute and tail gates. E4–E7 must not be resumed or promoted; all
 unregistered Phase 2 IDs remain reserved.
-### Chair E6 staged research
+
+### Closed chair E6 staged research
 
 1. Generate and hash sensitivity maps from the locked internal-train split.
 2. Train `E6-chair-observation-scale-perceptual-v1` on the fixed 30k schedule,
@@ -263,3 +270,127 @@ unregistered Phase 2 IDs remain reserved.
    hard/worst-decile and 870/885 before spending a fresh E3-30k paired control.
 6. On paired 30k evidence, require approximately `+1.0` Score50 before any
    production authorization.
+
+E6 failed at step 15k because its growth override replaced standard 100-step
+ADC and ended at about 297k Gaussians. The LPIPS and easy-stratum regressions
+reject the run. These steps remain only as historical provenance.
+
+### Closed chair E7 corrected ADC research
+
+1. Run `E7-chair-perceptual-adc-corrected-v1` fresh with
+   `scripts/run_chair_perceptual_adc_research.sh`.
+2. Keep standard ADC every 100 steps and OR independent HD/MD perceptual masks
+   at the locked 1000/1500-step events.
+3. At 15k, reject the implementation if final population is below 1.2M or ADC,
+   contribution and perceptual event diagnostics are incomplete.
+4. Resume with `E7_STOP_STEP=30000` only if LPIPS/easy tail no longer repeats
+   E6's regression, hard views retain their gain and scale/radius tails remain
+   controlled.
+5. Spend a fresh E3-30k paired control only after E7-30k clears the
+   predeclared lower-bound gate.
+
+E7 completed 15k at 1.662M Gaussians with complete mechanism diagnostics. Its
+paired Score50 gain versus E3 was only `+0.0647`; SSIM, spurious-edge,
+runtime and scale/radius tails failed their gates. Do not run the resume
+command and do not spend E3-30k confirmation.
+
+### Phase 2E — active chair E8 spectral split
+
+Candidate:
+
+```text
+E8-chair-observation-scale-spectral-split-v1
+```
+
+Implementation order:
+
+1. Add `spectral_math.py`:
+   - FP32 spectral entropy and condition number from physical scales;
+   - paper-faithful anisotropic child scales with `k=0.6`, `k0=1.0`;
+   - finite-input validation and deterministic tensor shapes.
+2. Add unit tests before strategy integration:
+   - isotropic entropy equals `ln(3)` and condition number equals one;
+   - increasingly elongated scales reduce entropy and increase condition;
+   - selected children satisfy `kappa_child <= kappa_parent`;
+   - empty masks and near-zero scales remain finite.
+3. Add `spectral_density_strategy.py`:
+   - subclass/compose pinned gsplat DefaultStrategy;
+   - preserve normal ADC and pruning;
+   - OR a low-entropy, gradient-independent split mask at refine events;
+   - give ADC first claim and enforce the 2.1M cap;
+   - expose separate ADC/spectral split counters.
+4. Add `spectral_policy.py`, register E8 and enforce
+   `chair/research`-only scope in training and artifact preflight.
+5. Add `spectral_diagnostics.py` with entropy/condition quantiles, opacity
+   mass below entropy 0.5, split count, cap-hit step and child-condition
+   violations.
+6. Add the thin locked wrapper
+   `scripts/run_chair_spectral_research.sh`.
+7. Run focused CPU tests, affected suite, shell syntax and one bounded CUDA
+   smoke that proves optimizer state remains aligned after spectral splits.
+8. Commit the experiment implementation before spending the fresh L4 run.
+
+Implementation status: complete. The modular policy/math/strategy/diagnostic
+path, staged artifact validation, locked wrapper and automatic L4 CUDA
+preflight are present. Local result: `684 passed, 3 skipped`; the skipped CUDA
+tests require the NVIDIA L4. The next action is the fresh 15k command below,
+not further code expansion.
+
+First compute gate:
+
+```bash
+bash scripts/run_chair_spectral_research.sh
+```
+
+This is a fresh factor-1, seed-0, internal-holdout run on the 30k optimizer
+trajectory, stopped durably at 15k. Estimated compute is approximately one
+E3-15k run plus the covariance-spectrum overhead; one GPU process at a time.
+
+Decision ladder:
+
+```text
+implementation/smoke fail
+  -> fix code only; spend no L4 research run
+
+E8-15k mechanism or quality gate fail
+  -> reject E8; no resume; no E3-30k
+
+E8-15k pass
+  -> resume same E8 run to 30k
+
+E8-30k fails +0.75 lower-bound versus E3-15k
+  -> reject E8; no E3-30k
+
+E8-30k clears lower-bound
+  -> run fresh E3-30k paired control
+
+paired E8-30k fails final quality/tail gate
+  -> reject E8
+
+paired E8-30k passes
+  -> issue decision artifact; run fresh full-data E8 production 30k
+```
+
+Final paired promotion requires at least `+0.50` Score50 over E3-30k, LPIPS
+and SSIM non-regression, hard/worst-tail improvement, no sentinel regression,
+lower spectral/scale/radius tails, runtime at most `1.25x` and VRAM below
+23 GB.
+
+### Atomic MVP fallback
+
+At every failure branch, the submission fallback is the already closed
+`MVP-hybrid-4scene-q99-v1`:
+
+| Failure point | Compute stopped | Chair used for MVP |
+|---|---|---|
+| Code/preflight/CUDA smoke | before L4 run | existing v2 production chair |
+| E8 15k gate | 15k | existing v2 production chair |
+| E8 30k lower-bound | 30k | existing v2 production chair |
+| Paired E3-30k confirmation | 60k candidate/control | existing v2 production chair |
+| Full-data E8 production or rerender | production stage | existing v2 production chair |
+
+Fallback is scene-atomic: copy/rerender the whole chair scene from
+`runs/scene_opt_v2/production_mvp/scenes/chair`. Never choose E8 per frame.
+The five frozen BTS scenes and current bonsai folder remain unchanged. A
+missing E8 checkpoint, incomplete test pose, invalid filename/codec/dimension
+or non-blank failure automatically selects the incumbent chair folder.

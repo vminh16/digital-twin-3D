@@ -1,6 +1,8 @@
 # Optimization phase closure through submission v2
 
-**Status:** historical summary; not an execution authority.
+**Status:** historical summary; superseded as default context by
+`2026-07-29-project-diagnosis-and-experiment-report.md`; not an execution
+authority.
 
 This record replaces the old documents as default context. Git history retains
 their full implementation detail.

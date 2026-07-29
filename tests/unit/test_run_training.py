@@ -12,6 +12,7 @@ import bts_nvs.training.run_training as run_training
 from bts_nvs.data.sparse_subset import ObservationMappingDiagnostics
 from bts_nvs.experiments.density_policies import MCMC_CANDIDATE_ID
 from bts_nvs.experiments.perceptual_policy import PERCEPTUAL_CANDIDATE_ID
+from bts_nvs.experiments.spectral_policy import SPECTRAL_CANDIDATE_ID
 
 
 def _args(**changes):
@@ -825,6 +826,27 @@ def test_perceptual_research_requires_staged_rolling_recovery(tmp_path):
     with pytest.raises(ValueError, match="perceptual research"):
         run_training.validate_generic_experiment_args(
             _args(**(vars(first) | {"stop_step": 30_000}))
+        )
+
+
+def test_spectral_research_requires_fresh_15k_rolling_recovery(tmp_path):
+    output = tmp_path / "spectral"
+    first = _generic_args(
+        "research",
+        SPECTRAL_CANDIDATE_ID,
+        output_dir=str(output),
+        max_steps=30_000,
+        stop_step=15_000,
+        checkpoint_every=3_000,
+        rolling_checkpoint=True,
+    )
+
+    run_training.validate_generic_experiment_args(first)
+    assert run_training.should_save_checkpoints(first) is True
+
+    with pytest.raises(ValueError, match="spectral research"):
+        run_training.validate_generic_experiment_args(
+            _args(**(vars(first) | {"rolling_checkpoint": False}))
         )
 
 

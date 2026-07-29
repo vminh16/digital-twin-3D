@@ -45,11 +45,16 @@ from bts_nvs.evaluation.pose_strata import build_pose_strata, save_pose_strata
 from bts_nvs.evaluation.perceptual_diagnostics import (
     build_perceptual_diagnostics,
 )
-from bts_nvs.experiments.candidates import candidate_training_overrides
+from bts_nvs.evaluation.spectral_diagnostics import build_spectral_diagnostics
+from bts_nvs.experiments.candidates import (
+    candidate_training_overrides,
+    is_staged_research_candidate,
+)
 from bts_nvs.experiments.density_policies import (
     is_full_horizon_research_candidate,
 )
 from bts_nvs.experiments.perceptual_policy import is_perceptual_candidate
+from bts_nvs.experiments.spectral_policy import is_spectral_candidate
 from bts_nvs.experiments.experiment import (
     ACTIVE_RESEARCH_SCENE_IDS,
     COHORT_SCENE_IDS,
@@ -75,6 +80,7 @@ from bts_nvs.training.resources import (
 )
 from bts_nvs.training.precision import TrainingPrecision
 from bts_nvs.training.mcmc_preflight import run_mcmc_density_preflight
+from bts_nvs.training.spectral_preflight import run_spectral_density_preflight
 
 
 CONFIRMATION_SNAPSHOT_REPORTS = (
@@ -405,7 +411,7 @@ def validate_generic_experiment_args(args) -> None:
         return
 
     if experiment.stage is ExperimentStage.RESEARCH:
-        if is_perceptual_candidate(candidate_id):
+        if is_staged_research_candidate(candidate_id):
             expected_recovery = (
                 Path(args.output_dir) / "checkpoints" / "recovery.pt"
             )
@@ -423,8 +429,13 @@ def validate_generic_experiment_args(args) -> None:
                 or (args.stop_step == 15_000 and args.resume is not None)
                 or (args.stop_step == 30_000 and args.resume is None)
             ):
+                staged_name = (
+                    "perceptual"
+                    if is_perceptual_candidate(candidate_id)
+                    else "spectral"
+                )
                 raise ValueError(
-                    "perceptual research requires a factor-1, seed-0, "
+                    f"{staged_name} research requires a factor-1, seed-0, "
                     "30000-step schedule stopped fresh at 15000 or resumed "
                     "to 30000, with internal holdout and rolling recovery"
                 )
@@ -583,7 +594,7 @@ def validate_confirmation_recovery(
         args.experiment_stage == ExperimentStage.CONFIRM.value
         or (
             args.experiment_stage == ExperimentStage.RESEARCH.value
-            and is_perceptual_candidate(args.candidate_id)
+            and is_staged_research_candidate(args.candidate_id)
         )
     )
     if not checkpointed:
@@ -607,7 +618,7 @@ def validate_confirmation_resume(
         args.experiment_stage == ExperimentStage.CONFIRM.value
         or (
             args.experiment_stage == ExperimentStage.RESEARCH.value
-            and is_perceptual_candidate(args.candidate_id)
+            and is_staged_research_candidate(args.candidate_id)
         )
     )
     if not resumable or args.resume is None:
@@ -650,7 +661,7 @@ def should_save_checkpoints(args) -> bool:
             args.experiment_stage == ExperimentStage.RESEARCH.value
             and (
                 is_full_horizon_research_candidate(args.candidate_id)
-                or is_perceptual_candidate(args.candidate_id)
+                or is_staged_research_candidate(args.candidate_id)
             )
         )
     return (
@@ -1105,6 +1116,11 @@ def generate_generic_experiment_reports(
             output / "perceptual_diagnostics.json",
             build_perceptual_diagnostics(trainer, output),
         )
+    if is_spectral_candidate(args.candidate_id):
+        write_json_record(
+            output / "spectral_diagnostics.json",
+            build_spectral_diagnostics(trainer),
+        )
     experiment = build_experiment_report(**report_arguments)
     save_experiment_report(experiment, output / "experiment_report.json")
     return experiment
@@ -1135,13 +1151,13 @@ def prepare_initial_validation(args, trainer, validation_dataset):
 
 
 def preserve_confirmation_snapshot(args) -> Path | None:
-    perceptual_research = (
+    staged_research = (
         args.experiment_stage == ExperimentStage.RESEARCH.value
-        and is_perceptual_candidate(args.candidate_id)
+        and is_staged_research_candidate(args.candidate_id)
     )
     if training_target_step(args) != 15_000 or (
         args.experiment_stage != ExperimentStage.CONFIRM.value
-        and not perceptual_research
+        and not staged_research
     ):
         return None
 
@@ -1157,13 +1173,13 @@ def preserve_confirmation_snapshot(args) -> Path | None:
         prefix=f".{destination.name}.",
     ) as temporary:
         staging = Path(temporary)
+        research_reports = ("gaussian_diagnostics.json",)
+        if is_perceptual_candidate(args.candidate_id):
+            research_reports += ("perceptual_diagnostics.json",)
+        if is_spectral_candidate(args.candidate_id):
+            research_reports += ("spectral_diagnostics.json",)
         report_names = CONFIRMATION_SNAPSHOT_REPORTS + (
-            (
-                "gaussian_diagnostics.json",
-                "perceptual_diagnostics.json",
-            )
-            if perceptual_research
-            else ()
+            research_reports if staged_research else ()
         )
         for name in report_names:
             source = output / name
@@ -1179,11 +1195,11 @@ def preserve_confirmation_snapshot(args) -> Path | None:
                 f"required confirmation renders do not exist: {render_source}"
             )
         shutil.copytree(render_source, staging / "validation_renders")
-        if perceptual_research:
+        if staged_research:
             diagnostic_source = output / "diagnostic_filtered_renders"
             if not diagnostic_source.is_dir():
                 raise FileNotFoundError(
-                    "required perceptual diagnostic renders do not exist"
+                    "required staged-research diagnostic renders do not exist"
                 )
             shutil.copytree(
                 diagnostic_source,
@@ -1213,6 +1229,8 @@ def main():
     run_cuda_preflight(args.optimizer_backend, args.precision)
     if is_full_horizon_research_candidate(args.candidate_id):
         run_mcmc_density_preflight(args.optimizer_backend)
+    if is_spectral_candidate(args.candidate_id):
+        run_spectral_density_preflight(args.optimizer_backend)
 
     scene_root = Path(args.scene_dir)
     manifest_dir = (
