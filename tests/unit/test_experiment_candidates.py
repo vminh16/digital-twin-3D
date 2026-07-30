@@ -6,8 +6,10 @@ import pytest
 
 from bts_nvs.experiments.candidates import (
     CANDIDATE_IDS,
+    E3_FULL_HORIZON_CONTROL_ID,
     candidate_settings,
     candidate_training_overrides,
+    is_full_horizon_research_candidate,
 )
 from bts_nvs.experiments.contracts import CandidateSettings
 from bts_nvs.experiments.density_policies import MCMC_CANDIDATE_ID
@@ -48,6 +50,7 @@ def test_registry_locks_first_executable_candidates() -> None:
         "E2-loss-local-laplacian-v1",
         "E2-appearance-sh4-v1",
         "E3-chair-observation-scale-v1",
+        E3_FULL_HORIZON_CONTROL_ID,
         "E4-chair-observation-scale-absgrad-v1",
         MCMC_CANDIDATE_ID,
         PERCEPTUAL_CANDIDATE_ID,
@@ -61,6 +64,7 @@ def test_registry_locks_first_executable_candidates() -> None:
     weighted = candidate_settings("E2-loss-local-laplacian-v1")
     sh4 = candidate_settings("E2-appearance-sh4-v1")
     chair_mapping = candidate_settings("E3-chair-observation-scale-v1")
+    chair_mapping_30k = candidate_settings(E3_FULL_HORIZON_CONTROL_ID)
     chair_absgrad = candidate_settings(
         "E4-chair-observation-scale-absgrad-v1"
     )
@@ -100,6 +104,11 @@ def test_registry_locks_first_executable_candidates() -> None:
         candidate_id="E3-chair-observation-scale-v1",
         observation_mapping_mode="continuous-reprojection",
     )
+    assert chair_mapping_30k == replace(
+        chair_mapping,
+        candidate_id=E3_FULL_HORIZON_CONTROL_ID,
+    )
+    assert is_full_horizon_research_candidate(E3_FULL_HORIZON_CONTROL_ID)
     assert chair_absgrad == replace(
         chair_mapping,
         candidate_id="E4-chair-observation-scale-absgrad-v1",

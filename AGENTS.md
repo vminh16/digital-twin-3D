@@ -114,15 +114,16 @@ HCM0644 HCM0674 HCM0540 HCM0539 HCM0421 chair bonsai
   mechanism gate nhưng fail quality/tail gate: Score50 chỉ `+0.0647` so với
   E3, SSIM và spurious-edge regression, radius/scale tail tăng mạnh. Không
   resume E7, không chạy E3-30k confirmation và không promote E4–E7.
-- Candidate active cuối cho chair là
-  `E8-chair-observation-scale-spectral-split-v1`; implementation và local
-  tests đã pass, hiện chỉ được phép fresh `chair/research` 15k. E8 giữ E3
-  và standard ADC, thêm gradient-independent 3D shape-aware split cho
-  Gaussian có spectral entropy dưới 0.5; không gồm Spectral-GS 2D filter,
-  perceptual logic hay global pruning. Chạy bằng
-  `scripts/run_chair_spectral_research.sh`; CUDA split preflight là bắt buộc.
-  Resume 30k và production đều cần decision artifact mới. Nếu E8 fail ở bất
-  kỳ gate nào, fallback là toàn bộ folder chair từ
+- E8 15k đã bị reject: paired E8−E3 có Score50 `-0.1372`, SSIM `-0.00405`,
+  hard Score50 `-0.2238`; frame 525 và 870 cũng fail sentinel gate. Không
+  resume hoặc promote E8.
+- Vì compute không còn là ràng buộc quyết định, phép kiểm định active là fresh
+  full-horizon `E3-chair-observation-scale-30k-control-v1`, cùng E3 method,
+  seed và internal holdout với E5. Chạy bằng
+  `scripts/run_chair_e3_30k_control.sh`; output riêng, rolling recovery 3k.
+  Đây chỉ là research control. E5 vẫn bị cấm ở production cho tới khi paired
+  E5-30k versus E3-30k được review và có decision artifact mới. Nếu E5 không
+  thắng, fallback vẫn là toàn bộ folder chair từ
   `MVP-hybrid-4scene-q99-v1`, không được trộn frame.
 
 ## Closed hybrid submission

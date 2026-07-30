@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from bts_nvs.experiments.candidates import E3_FULL_HORIZON_CONTROL_ID
 from bts_nvs.experiments.commands import build_training_command
 from bts_nvs.experiments.density_policies import MCMC_CANDIDATE_ID
 from bts_nvs.experiments.perceptual_policy import PERCEPTUAL_CANDIDATE_ID
@@ -157,6 +158,40 @@ def test_mcmc_research_runs_full_horizon_with_rolling_recovery(
     assert "--authorized_candidate_id" not in fresh
     assert "--resume" not in fresh
     assert resumed["--resume"] == str(recovery)
+
+
+def test_e3_control_runs_fresh_30k_with_rolling_recovery(
+    tmp_path: Path,
+) -> None:
+    experiment = Experiment(
+        stage=ExperimentStage.RESEARCH,
+        scene_id="chair",
+        candidate_id=E3_FULL_HORIZON_CONTROL_ID,
+    )
+
+    options = _option_values(_build(tmp_path, experiment, stop_step=30_000))
+
+    assert options["--max_steps"] == "30000"
+    assert options["--stop_step"] == "30000"
+    assert options["--internal_holdout"] is True
+    assert options["--checkpoint_every"] == "3000"
+    assert options["--rolling_checkpoint"] is True
+    assert "--resume" not in options
+
+
+def test_historical_e3_remains_a_fresh_15k_run(tmp_path: Path) -> None:
+    experiment = Experiment(
+        stage=ExperimentStage.RESEARCH,
+        scene_id="chair",
+        candidate_id="E3-chair-observation-scale-v1",
+    )
+
+    options = _option_values(_build(tmp_path, experiment, stop_step=15_000))
+
+    assert options["--stop_step"] == "15000"
+    assert "--rolling_checkpoint" not in options
+    with pytest.raises(ValueError, match="fresh 15000-step"):
+        _build(tmp_path, experiment, stop_step=30_000)
 
 
 def test_perceptual_research_stops_at_15k_then_resumes_to_30k(

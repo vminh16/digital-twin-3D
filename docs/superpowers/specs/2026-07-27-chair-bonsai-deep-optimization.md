@@ -1,14 +1,22 @@
 # Chair and bonsai deep-optimization authority
 
-**Status:** ACTIVE — chair E4–E7 rejected; E8 3D shape-aware spectral
-splitting is implemented and authorized for one fresh 15k research gate.
-No chair candidate is authorized for resume or production.
+**Status:** ACTIVE — chair E4–E8 rejected. A fresh E3 30k full-horizon
+control is authorized to remove the horizon confound from E5-30k. No chair
+candidate is authorized for production.
 
 **Plan ID:** `scene-opt-v3-chair-bonsai`
 
 This is the only active research authority after submission
 `MVP-hybrid-4scene-q99-v1`. `AGENTS.md` remains authoritative for data,
 evaluation, production and output contracts.
+
+The active control ID is
+`E3-chair-observation-scale-30k-control-v1`. It is method-identical to E3,
+uses the same seed and targeted internal holdout as E5, runs fresh to 30k with
+rolling recovery every 3k, and writes to a separate candidate directory.
+Run it with `bash scripts/run_chair_e3_30k_control.sh`. It is not a production
+candidate. E5 production remains forbidden until the paired 30k result is
+reviewed and recorded.
 
 ## 1. Closed starting point
 

@@ -5,10 +5,8 @@ from pathlib import Path
 
 from bts_nvs.experiments.candidates import (
     candidate_settings,
-    is_staged_research_candidate,
-)
-from bts_nvs.experiments.density_policies import (
     is_full_horizon_research_candidate,
+    is_staged_research_candidate,
 )
 from bts_nvs.experiments.experiment import Experiment, ExperimentStage
 

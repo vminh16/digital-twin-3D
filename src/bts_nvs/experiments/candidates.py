@@ -6,6 +6,7 @@ from bts_nvs.experiments.contracts import CandidateSettings
 from bts_nvs.experiments.density_policies import (
     MCMC_CANDIDATE_ID,
     density_policy_overrides,
+    is_full_horizon_research_candidate as is_mcmc_full_horizon_candidate,
 )
 from bts_nvs.experiments.perceptual_policy import (
     PERCEPTUAL_ADC_CANDIDATE_ID,
@@ -19,6 +20,8 @@ from bts_nvs.experiments.spectral_policy import (
     spectral_policy_overrides,
 )
 
+E3_FULL_HORIZON_CONTROL_ID = "E3-chair-observation-scale-30k-control-v1"
+
 
 CANDIDATE_IDS = (
     "B0-reference",
@@ -28,6 +31,7 @@ CANDIDATE_IDS = (
     "E2-loss-local-laplacian-v1",
     "E2-appearance-sh4-v1",
     "E3-chair-observation-scale-v1",
+    E3_FULL_HORIZON_CONTROL_ID,
     "E4-chair-observation-scale-absgrad-v1",
     MCMC_CANDIDATE_ID,
     PERCEPTUAL_CANDIDATE_ID,
@@ -38,6 +42,7 @@ CANDIDATE_IDS = (
 CHAIR_RESEARCH_CANDIDATE_IDS = frozenset(
     (
         "E3-chair-observation-scale-v1",
+        E3_FULL_HORIZON_CONTROL_ID,
         "E4-chair-observation-scale-absgrad-v1",
         MCMC_CANDIDATE_ID,
         PERCEPTUAL_CANDIDATE_ID,
@@ -151,6 +156,12 @@ _CANDIDATES = {
         pixel_weight_mode="local-laplacian",
         observation_mapping_mode="continuous-reprojection",
     ),
+    E3_FULL_HORIZON_CONTROL_ID: replace(
+        _BASELINE,
+        candidate_id=E3_FULL_HORIZON_CONTROL_ID,
+        pixel_weight_mode="local-laplacian",
+        observation_mapping_mode="continuous-reprojection",
+    ),
     "E4-chair-observation-scale-absgrad-v1": replace(
         _BASELINE,
         candidate_id="E4-chair-observation-scale-absgrad-v1",
@@ -209,4 +220,10 @@ def candidate_training_overrides(
 def is_staged_research_candidate(candidate_id: str | None) -> bool:
     return is_perceptual_candidate(candidate_id) or is_spectral_candidate(
         candidate_id
+    )
+
+
+def is_full_horizon_research_candidate(candidate_id: str | None) -> bool:
+    return candidate_id == E3_FULL_HORIZON_CONTROL_ID or (
+        is_mcmc_full_horizon_candidate(candidate_id)
     )

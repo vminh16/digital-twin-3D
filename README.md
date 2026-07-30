@@ -70,18 +70,19 @@ khoảng 297k Gaussian. E7 đã sửa ADC và chạy fresh tới 15k, nhưng cũ
 reject: Score50 chỉ `+0.0647` so với E3, SSIM/spurious-edge và scale/radius
 tail xấu hơn. Không resume E6/E7 và không chi E3-30k confirmation.
 
-Candidate active cuối cho chair là
-`E8-chair-observation-scale-spectral-split-v1`: chỉ port 3D shape-aware
-splitting, giữ nguyên E3 và không thêm 2D filter/perceptual logic.
-Implementation và local test đã hoàn tất; wrapper chạy CUDA preflight rồi mới
-train fresh 15k trên L4:
+E8 spectral split đã bị paired gate 15k bác bỏ: Score50 `-0.1372`, SSIM
+`-0.00405` và hard Score50 `-0.2238` so với E3-15k. Không resume E8.
+
+Do compute không còn là ràng buộc quyết định, E5 MCMC được mở lại để kiểm định
+causal bằng một E3 control cùng horizon. Chạy fresh E3 30k, internal holdout
+và rolling recovery bằng:
 
 ```bash
-bash scripts/run_chair_spectral_research.sh
+bash scripts/run_chair_e3_30k_control.sh
 ```
 
-Nếu E8 fail ở bất kỳ gate nào, MVP dùng nguyên folder chair của
-`MVP-hybrid-4scene-q99-v1`; không trộn output theo frame.
+Đây là research control, không phải MVP production. E5 vẫn chưa được phép
+production cho tới khi paired E5-30k so với E3-30k được chốt.
 
 ## Cài đặt không dùng Docker
 

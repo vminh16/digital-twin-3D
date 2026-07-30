@@ -9,10 +9,12 @@ import yaml
 
 from bts_nvs.evaluation.experiment_report import build_experiment_report
 from bts_nvs.experiments.artifacts import append_failure, validate_run_artifacts
-from bts_nvs.experiments.candidates import candidate_settings
+from bts_nvs.experiments.candidates import (
+    candidate_settings,
+    is_full_horizon_research_candidate,
+)
 from bts_nvs.experiments.density_policies import (
     MCMC_CANDIDATE_ID,
-    is_full_horizon_research_candidate,
 )
 from bts_nvs.experiments.experiment import Experiment, ExperimentStage
 from bts_nvs.training.checkpoint import save_checkpoint

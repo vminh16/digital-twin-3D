@@ -48,10 +48,8 @@ from bts_nvs.evaluation.perceptual_diagnostics import (
 from bts_nvs.evaluation.spectral_diagnostics import build_spectral_diagnostics
 from bts_nvs.experiments.candidates import (
     candidate_training_overrides,
-    is_staged_research_candidate,
-)
-from bts_nvs.experiments.density_policies import (
     is_full_horizon_research_candidate,
+    is_staged_research_candidate,
 )
 from bts_nvs.experiments.perceptual_policy import is_perceptual_candidate
 from bts_nvs.experiments.spectral_policy import is_spectral_candidate

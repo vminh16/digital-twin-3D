@@ -13,10 +13,8 @@ from bts_nvs.data.perceptual_sensitivity import validate_sensitivity_artifact
 from bts_nvs.evaluation.experiment_report import build_experiment_report
 from bts_nvs.experiments.candidates import (
     candidate_settings,
-    is_staged_research_candidate,
-)
-from bts_nvs.experiments.density_policies import (
     is_full_horizon_research_candidate,
+    is_staged_research_candidate,
 )
 from bts_nvs.experiments.experiment import (
     Experiment,

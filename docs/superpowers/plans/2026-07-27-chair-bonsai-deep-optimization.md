@@ -2,9 +2,9 @@
 
 **Authority:** `../specs/2026-07-27-chair-bonsai-deep-optimization.md`
 
-**Status:** ACTIVE — E4–E7 rejected; E8 spectral split implementation and
-local tests are complete. Fresh L4 15k evidence is pending; no chair candidate
-is authorized for resume or production.
+**Status:** ACTIVE — E4–E8 rejected. Fresh
+`E3-chair-observation-scale-30k-control-v1` is the active paired control for
+E5-30k; no chair candidate is authorized for production.
 
 ## Success criteria
 
